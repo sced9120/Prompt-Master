@@ -1,0 +1,10 @@
+{
+  "name": "saeteuk-helper",
+  "version": "3.0.0",
+  "description": "학교생활기록부 특기사항 작성 도우미 — 프롬프트 조립형 구글 시트 도구",
+  "private": true,
+  "scripts": {
+    "test": "node test/engine.test.js && node test/schema.test.js"
+  },
+  "license": "MIT"
+}
