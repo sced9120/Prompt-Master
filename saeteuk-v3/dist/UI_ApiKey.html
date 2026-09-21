@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; padding:18px; font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; color:#1f2328; }
+  h2 { margin:0 0 4px; font-size:16px; }
+  .sub { color:#6b7280; font-size:12px; margin-bottom:16px; }
+  label { display:block; font-weight:600; font-size:12px; margin:14px 0 4px; }
+  input { width:100%; padding:8px 10px; border:1px solid #dfe3e8; border-radius:6px; font:inherit; }
+  .hint { font-size:11px; color:#6b7280; margin-top:4px; }
+  .hint a { color:#2e5aac; }
+  .box { background:#f7f8fa; border:1px solid #dfe3e8; border-radius:8px; padding:12px; margin-top:18px; font-size:12px; }
+  .box b { display:block; margin-bottom:4px; }
+  .actions { display:flex; gap:8px; margin-top:18px; }
+  button { font:inherit; padding:9px 16px; border-radius:6px; border:1px solid #dfe3e8; background:#fff; cursor:pointer; }
+  button.primary { background:#2e5aac; border-color:#2e5aac; color:#fff; font-weight:600; }
+  .status { margin-top:12px; font-size:12px; }
+  .status.ok { color:#1b5e20; } .status.err { color:#b3261e; }
+  .saved { color:#1b5e20; font-weight:600; font-size:11px; }
+</style>
+</head>
+<body>
+
+<h2>AI 연결 설정</h2>
+<div class="sub">키는 <b>내 구글 계정에만</b> 저장됩니다. 이 파일을 다른 선생님과 공유해도 키는 넘어가지 않고, 시트 어디에도 기록되지 않습니다.</div>
+
+<label>Gemini API 키 <? if (has.gemini) { ?><span class="saved">· 저장됨</span><? } ?></label>
+<input type="password" id="gemini" placeholder="<?= has.gemini ? '(저장된 키 유지 — 바꾸려면 새로 입력)' : 'AIza...' ?>">
+<div class="hint">aistudio.google.com → Get API key. 무료 등급이 있어 처음 쓰기에 가장 부담이 적습니다.</div>
+
+<label>OpenAI API 키 <? if (has.openai) { ?><span class="saved">· 저장됨</span><? } ?></label>
+<input type="password" id="openai" placeholder="<?= has.openai ? '(저장된 키 유지 — 바꾸려면 새로 입력)' : 'sk-...' ?>">
+<div class="hint">platform.openai.com → API keys → Create new secret key</div>
+
+<label>Anthropic(Claude) API 키 <? if (has.anthropic) { ?><span class="saved">· 저장됨</span><? } ?></label>
+<input type="password" id="anthropic" placeholder="<?= has.anthropic ? '(저장된 키 유지 — 바꾸려면 새로 입력)' : 'sk-ant-...' ?>">
+<div class="hint">console.anthropic.com → API keys</div>
+
+<div class="box">
+  <b>API 키 없이 쓰는 방법</b>
+  구글 워크스페이스 Gemini 또는 Google One AI Premium 구독 계정이라면,
+  빈 셀에 <code>=AI("안녕")</code>을 넣어 답이 나오는지 확인해 보세요.
+  나온다면 모델 드롭다운에서 <b>Gemini(구독)</b>을 고르면 키 없이 동작합니다.
+  다만 활동 만들기 마법사는 API 키가 있어야 합니다.
+</div>
+
+<div class="box">
+  <b>비용과 개인정보</b>
+  · 학생 이름은 기본적으로 AI에 전송되지 않습니다([⚙️ 설정]의 학생 이름 마스킹).<br>
+  · 유료 API는 호출한 만큼 과금됩니다. 체크박스를 켜 둔 채로 두면 재호출될 수 있으니 결과 확인 후 해제하세요.<br>
+  · 학생의 민감한 개인정보(주민등록번호, 가정환경, 건강 정보 등)는 입력하지 마세요.
+</div>
+
+<div class="actions">
+  <button class="primary" id="save">저장</button>
+  <button id="close">닫기</button>
+</div>
+<div class="status" id="status"></div>
+
+<script>
+function val(id) {
+  var v = document.getElementById(id).value.trim();
+  return v === '' ? '__KEEP__' : v;   // 빈칸이면 기존 키 유지
+}
+document.getElementById('save').onclick = function () {
+  var el = document.getElementById('status');
+  el.className = 'status'; el.textContent = '저장 중…';
+  google.script.run
+    .withSuccessHandler(function (m) { el.className = 'status ok'; el.textContent = m; })
+    .withFailureHandler(function (e) { el.className = 'status err'; el.textContent = e.message; })
+    .saveKeys({ gemini: val('gemini'), openai: val('openai'), anthropic: val('anthropic') });
+};
+document.getElementById('close').onclick = function () { google.script.host.close(); };
+</script>
+</body>
+</html>
