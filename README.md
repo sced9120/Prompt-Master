@@ -232,6 +232,6 @@ node test/schema.test.js     # 시트 헤더 ↔ 읽기 코드 정합성 검사 
 
 ## 라이선스
 
-MIT. [LICENSE](LICENSE) 참고. 자유롭게 쓰고 고치고 학교에 배포하셔도 됩니다.
+MIT. [LICENSE](LICENSE) 참고. 자유롭게 쓰고 학교에 배포하셔도 됩니다.
 
 원작 v1·v2: 김해분성고 정현서
