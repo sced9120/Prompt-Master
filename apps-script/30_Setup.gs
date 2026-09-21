@@ -61,29 +61,42 @@ function showVersion() {
 
 /** 전체 설치 (여러 번 실행해도 안전 — 기존 데이터는 보존) */
 function installAll() {
-  installCore_();
+  try {
+    installCore_();
+  } catch (e) {
+    ui_().alert(APP.MENU, e.message, ui_().ButtonSet.OK);
+    return;
+  }
   toast_('설치/복구 완료.', APP.MENU);
   ui_().alert(APP.MENU,
     '구조 설치가 끝났습니다.\n\n이어서 [🚀 시작하기]를 누르면 나머지를 단계별로 안내합니다.',
     ui_().ButtonSet.OK);
 }
 
-/** 알림 없이 시트 구조만 만든다 (온보딩 팝업에서도 호출) */
+/**
+ * 알림 없이 시트 구조만 만든다 (온보딩 팝업에서도 호출).
+ * 단계마다 따로 실행해서, 하나가 실패해도 나머지는 끝까지 만든다.
+ * 실패한 단계가 있으면 마지막에 모아서 알린다.
+ */
 function installCore_() {
   var lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error('다른 작업이 실행 중입니다. 잠시 후 다시 시도하세요.');
+  var steps = [
+    ['🚀 시작하기', buildStart], ['⚙️ 설정', buildConfig], ['🧩 기록종류', buildRecordTypes],
+    ['📚 교과영역', buildSubjects], ['📐 공통규칙', buildCommonRules], ['🗂 활동목록', buildActivityList],
+    ['👤 학생명단', buildRoster], ['✅ 검토', buildReview], ['📖 사용법', buildHelp],
+    ['시트 순서 정리', orderSheets_]
+  ];
+  var failed = [];
   try {
-    buildStart();
-    buildConfig();
-    buildRecordTypes();
-    buildSubjects();
-    buildCommonRules();
-    buildActivityList();
-    buildRoster();
-    buildReview();
-    buildHelp();
-    orderSheets_();
+    steps.forEach(function (st) {
+      try { st[1](); } catch (e) { failed.push('· ' + st[0] + ' — ' + e.message); }
+    });
   } finally { lock.releaseLock(); }
+  if (failed.length) {
+    throw new Error('설치 중 일부를 만들지 못했습니다.\n\n' + failed.join('\n') +
+      '\n\n나머지는 모두 만들었습니다. 이 창을 캡처해 제작자에게 보내 주세요.');
+  }
 }
 
 function orderSheets_() {
@@ -151,7 +164,7 @@ function buildRecordTypes() {
   s.getRange(3, 4, rows.length, 1).insertCheckboxes();
   s.getRange(3, 1, rows.length, head.length).setWrap(true).setVerticalAlignment('top');
   [90, 220, 80, 110, 260, 320, 380, 220].forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
-  s.setFrozenRows(2); s.setFrozenColumns(2);
+  s.setFrozenRows(2);
 }
 
 /* ------------------------------------------------------------ 교과영역 */
@@ -171,7 +184,7 @@ function buildSubjects() {
   s.getRange(3, 3, 200, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(['교과', '공통'], true).build());
   [110, 220, 80, 200, 620].forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
-  s.setFrozenRows(2); s.setFrozenColumns(2);
+  s.setFrozenRows(2);
 }
 
 /* ------------------------------------------------------------ 공통규칙 */
@@ -208,7 +221,7 @@ function buildActivityList() {
   styleHeader_(s, 2, head.length);
   [110, 200, 100, 110, 80, 320, 340, 120, 300, 150, 150]
     .forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
-  s.setFrozenRows(2); s.setFrozenColumns(2);
+  s.setFrozenRows(2);
   s.getRange(3, 1, 300, head.length).setWrap(true).setVerticalAlignment('top');
   refreshActivityValidation_();
 }

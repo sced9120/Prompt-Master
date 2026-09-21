@@ -162,6 +162,17 @@ t('설정 시트들의 안내문은 1행 배너로만 존재', () => {
     });
 });
 
+console.log('\n[병합과 열 고정]');
+t('열 고정을 쓰는 함수는 1행 전체 병합을 쓰지 않음', () => {
+  // 구글 시트는 병합된 셀을 가르는 열 고정을 막는다. v3.0.0 초판의 설치 실패 원인.
+  const bad = [];
+  [...all.matchAll(/function\s+([A-Za-z_$][\w$]*)\s*\(/g)].forEach(m => {
+    const i = m.index, body = all.slice(i, all.indexOf('\n}', i));
+    if (/setFrozenColumns\(\s*[1-9]/.test(body) && /\bbanner_\(|noteRow_\([^,]+,\s*1\s*,/.test(body)) bad.push(m[1]);
+  });
+  ok(!bad.length, '1행을 통째로 병합한 뒤 열을 고정함: ' + bad.join(', ') + ' → splitBanner_ 를 쓰세요');
+});
+
 console.log('\n[메뉴 ↔ 함수]');
 t('모든 메뉴 항목의 핸들러가 정의되어 있음', () => {
   const defined = new Set([...all.matchAll(/function\s+([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]));

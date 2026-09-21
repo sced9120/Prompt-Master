@@ -69,8 +69,8 @@ function buildActivityInputSheet_(key, name, cols, rec) {
     .concat(['생성', '모델', 'AI 결과', '최종본', '바이트', '검증']);
   var n = head.length;
 
-  noteRow_(s, 1, n,
-    '▶ ' + name + '  (' + rec.name + ' · ' + rec.chars + '자 기준)\n' +
+  splitBanner_(s, 3, n,
+    '▶ ' + name + '\n' + rec.name + ' · ' + rec.chars + '자',
     '① 노란 칸에 학생 자료 입력  →  ② [모델] 선택  →  ③ [생성] 체크 또는 메뉴 ⑥ 체크된 행 생성  →  ' +
     '④ AI 결과를 확인하고 [최종본] 칸에 붙여넣어 다듬기  →  ⑤ 체크 해제(재호출·비용 방지)');
   s.getRange(2, 1).setValue('').setFontSize(8);

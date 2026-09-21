@@ -212,27 +212,69 @@ function styleHeader_(sheet, row, lastCol, bg) {
 }
 
 /**
- * 1행에 제목과 안내문을 함께 넣는다.
- * 데이터 영역 아래에 안내문을 두면 readTable_ 이 그 줄을 데이터로 읽어
- * 유령 항목이 생기므로, 설정용 시트의 안내문은 반드시 1행에 둔다.
+ * 시트 머리말 규칙 — 구글 시트의 두 가지 제약을 피한다.
+ *   1) 병합된 셀을 가르는 열 고정은 금지된다.
+ *      → 왼쪽 열을 고정하는 시트는 splitBanner_ 로 [고정 구역]과 [나머지]를 따로 병합한다.
+ *   2) 기존 병합과 일부만 겹치는 병합은 금지된다.
+ *      → 병합하기 전에 그 행의 병합을 먼저 푼다(unmergeRow_).
+ * v3.0.0 초판은 1번을 어겨서 [처음 설치]가 시트를 하나씩만 만들고 멈췄다.
  */
+function unmergeRow_(sheet, row) {
+  sheet.getRange(row, 1, 1, sheet.getMaxColumns()).breakApart();
+}
+
+function ensureCols_(sheet, n) {
+  var max = sheet.getMaxColumns();
+  if (max < n) sheet.insertColumnsAfter(max, n - max);
+}
+
+/** 1행 전체에 제목+안내문 (열 고정을 쓰지 않는 시트용) */
 function banner_(sheet, lastCol, title, note) {
-  var text = note ? (title + '\n' + note) : title;
-  var rng = sheet.getRange(1, 1, 1, Math.max(lastCol, 1));
+  var n = Math.max(lastCol, 1);
+  ensureCols_(sheet, n);
+  unmergeRow_(sheet, 1);
+  var rng = sheet.getRange(1, 1, 1, n);
   rng.merge().setBackground('#eceff1').setWrap(true).setVerticalAlignment('middle');
-  var rt = SpreadsheetApp.newRichTextValue().setText(text)
-    .setTextStyle(0, title.length, SpreadsheetApp.newTextStyle()
-      .setBold(true).setFontSize(13).setForegroundColor('#263238').build());
-  if (note) {
-    rt.setTextStyle(title.length, text.length, SpreadsheetApp.newTextStyle()
-      .setBold(false).setFontSize(10).setForegroundColor('#546e7a').build());
+  var text = note ? (title + '\n' + note) : title;
+  var cell = sheet.getRange(1, 1);
+  try {
+    var rt = SpreadsheetApp.newRichTextValue().setText(text)
+      .setTextStyle(0, title.length, SpreadsheetApp.newTextStyle()
+        .setBold(true).setFontSize(13).setForegroundColor('#263238').build());
+    if (note) {
+      rt.setTextStyle(title.length, text.length, SpreadsheetApp.newTextStyle()
+        .setBold(false).setFontSize(10).setForegroundColor('#546e7a').build());
+    }
+    cell.setRichTextValue(rt.build());
+  } catch (e) {
+    cell.setValue(text).setFontSize(11);    // 서식이 실패해도 설치는 계속된다
   }
-  rng.setRichTextValue(rt.build());
   sheet.setRowHeight(1, note ? 62 : 34);
 }
 
+/**
+ * 왼쪽 열을 고정하는 시트용 1행 머리말.
+ * [A~고정열] 에 제목, [그다음~끝] 에 안내문을 각각 병합한다. 고정 경계를 가르지 않는다.
+ */
+function splitBanner_(sheet, frozenCols, lastCol, title, note) {
+  ensureCols_(sheet, lastCol);
+  unmergeRow_(sheet, 1);
+  sheet.getRange(1, 1, 1, frozenCols).merge()
+    .setValue(title).setBackground('#dfe8e0').setFontColor('#1b3a2a')
+    .setFontWeight('bold').setFontSize(12).setWrap(true).setVerticalAlignment('middle');
+  if (lastCol > frozenCols) {
+    sheet.getRange(1, frozenCols + 1, 1, lastCol - frozenCols).merge()
+      .setValue(note).setBackground('#eceff1').setFontSize(10)
+      .setWrap(true).setVerticalAlignment('middle');
+  }
+  sheet.setRowHeight(1, 62);
+}
+
 function noteRow_(sheet, row, lastCol, text) {
-  var r = sheet.getRange(row, 1, 1, Math.max(lastCol, 1));
+  var n = Math.max(lastCol, 1);
+  ensureCols_(sheet, n);
+  unmergeRow_(sheet, row);
+  var r = sheet.getRange(row, 1, 1, n);
   r.merge().setValue(text).setBackground('#eceff1').setFontSize(10)
     .setWrap(true).setVerticalAlignment('middle');
   sheet.setRowHeight(row, 46);

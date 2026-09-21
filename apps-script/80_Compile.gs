@@ -83,8 +83,8 @@ function buildCompileFor_(recKey, acts, roster) {
     .concat(['합본', '합본 바이트', '압축', '모델', 'AI 압축결과', '최종본', '바이트', '검증']);
   var n = head.length;
 
-  noteRow_(s, 1, n,
-    '📦 ' + (rec ? rec.name : recKey) + ' 최종취합  —  ' + (rec ? rec.chars : 500) + '자(' + limit + '바이트) 기준\n' +
+  splitBanner_(s, 3, n,
+    '📦 ' + (rec ? rec.name : recKey) + '\n' + (rec ? rec.chars : 500) + '자(' + limit + '바이트)',
     '① 메뉴 ⑦ [최종취합 시트 생성/갱신]으로 활동 결과를 모읍니다  →  ② 합본이 한도를 넘는 학생만 [압축] 체크  →  ' +
     '③ 메뉴 ⑦ [최종 압축본 생성]  →  ④ [최종본] 칸에서 다듬어 나이스에 붙여넣기');
   s.setRowHeight(2, 8);

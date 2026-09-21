@@ -1,5 +1,5 @@
 /******************************************************************************
- * 세특 작성 도우미 v3.0.0 — 설치용 합본
+ * 세특 작성 도우미 v3.0.1 — 설치용 합본
  *
  * 이 파일 하나에 모든 스크립트가 들어 있습니다.
  * Apps Script 편집기에서 Code.gs 의 내용을 전부 지우고 이 파일을 통째로 붙여넣으세요.
@@ -27,7 +27,7 @@
  */
 
 var APP = {
-  VERSION: 'v3.0.0',
+  VERSION: 'v3.0.1',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -808,27 +808,69 @@ function styleHeader_(sheet, row, lastCol, bg) {
 }
 
 /**
- * 1행에 제목과 안내문을 함께 넣는다.
- * 데이터 영역 아래에 안내문을 두면 readTable_ 이 그 줄을 데이터로 읽어
- * 유령 항목이 생기므로, 설정용 시트의 안내문은 반드시 1행에 둔다.
+ * 시트 머리말 규칙 — 구글 시트의 두 가지 제약을 피한다.
+ *   1) 병합된 셀을 가르는 열 고정은 금지된다.
+ *      → 왼쪽 열을 고정하는 시트는 splitBanner_ 로 [고정 구역]과 [나머지]를 따로 병합한다.
+ *   2) 기존 병합과 일부만 겹치는 병합은 금지된다.
+ *      → 병합하기 전에 그 행의 병합을 먼저 푼다(unmergeRow_).
+ * v3.0.0 초판은 1번을 어겨서 [처음 설치]가 시트를 하나씩만 만들고 멈췄다.
  */
+function unmergeRow_(sheet, row) {
+  sheet.getRange(row, 1, 1, sheet.getMaxColumns()).breakApart();
+}
+
+function ensureCols_(sheet, n) {
+  var max = sheet.getMaxColumns();
+  if (max < n) sheet.insertColumnsAfter(max, n - max);
+}
+
+/** 1행 전체에 제목+안내문 (열 고정을 쓰지 않는 시트용) */
 function banner_(sheet, lastCol, title, note) {
-  var text = note ? (title + '\n' + note) : title;
-  var rng = sheet.getRange(1, 1, 1, Math.max(lastCol, 1));
+  var n = Math.max(lastCol, 1);
+  ensureCols_(sheet, n);
+  unmergeRow_(sheet, 1);
+  var rng = sheet.getRange(1, 1, 1, n);
   rng.merge().setBackground('#eceff1').setWrap(true).setVerticalAlignment('middle');
-  var rt = SpreadsheetApp.newRichTextValue().setText(text)
-    .setTextStyle(0, title.length, SpreadsheetApp.newTextStyle()
-      .setBold(true).setFontSize(13).setForegroundColor('#263238').build());
-  if (note) {
-    rt.setTextStyle(title.length, text.length, SpreadsheetApp.newTextStyle()
-      .setBold(false).setFontSize(10).setForegroundColor('#546e7a').build());
+  var text = note ? (title + '\n' + note) : title;
+  var cell = sheet.getRange(1, 1);
+  try {
+    var rt = SpreadsheetApp.newRichTextValue().setText(text)
+      .setTextStyle(0, title.length, SpreadsheetApp.newTextStyle()
+        .setBold(true).setFontSize(13).setForegroundColor('#263238').build());
+    if (note) {
+      rt.setTextStyle(title.length, text.length, SpreadsheetApp.newTextStyle()
+        .setBold(false).setFontSize(10).setForegroundColor('#546e7a').build());
+    }
+    cell.setRichTextValue(rt.build());
+  } catch (e) {
+    cell.setValue(text).setFontSize(11);    // 서식이 실패해도 설치는 계속된다
   }
-  rng.setRichTextValue(rt.build());
   sheet.setRowHeight(1, note ? 62 : 34);
 }
 
+/**
+ * 왼쪽 열을 고정하는 시트용 1행 머리말.
+ * [A~고정열] 에 제목, [그다음~끝] 에 안내문을 각각 병합한다. 고정 경계를 가르지 않는다.
+ */
+function splitBanner_(sheet, frozenCols, lastCol, title, note) {
+  ensureCols_(sheet, lastCol);
+  unmergeRow_(sheet, 1);
+  sheet.getRange(1, 1, 1, frozenCols).merge()
+    .setValue(title).setBackground('#dfe8e0').setFontColor('#1b3a2a')
+    .setFontWeight('bold').setFontSize(12).setWrap(true).setVerticalAlignment('middle');
+  if (lastCol > frozenCols) {
+    sheet.getRange(1, frozenCols + 1, 1, lastCol - frozenCols).merge()
+      .setValue(note).setBackground('#eceff1').setFontSize(10)
+      .setWrap(true).setVerticalAlignment('middle');
+  }
+  sheet.setRowHeight(1, 62);
+}
+
 function noteRow_(sheet, row, lastCol, text) {
-  var r = sheet.getRange(row, 1, 1, Math.max(lastCol, 1));
+  var n = Math.max(lastCol, 1);
+  ensureCols_(sheet, n);
+  unmergeRow_(sheet, row);
+  var r = sheet.getRange(row, 1, 1, n);
   r.merge().setValue(text).setBackground('#eceff1').setFontSize(10)
     .setWrap(true).setVerticalAlignment('middle');
   sheet.setRowHeight(row, 46);
@@ -905,29 +947,42 @@ function showVersion() {
 
 /** 전체 설치 (여러 번 실행해도 안전 — 기존 데이터는 보존) */
 function installAll() {
-  installCore_();
+  try {
+    installCore_();
+  } catch (e) {
+    ui_().alert(APP.MENU, e.message, ui_().ButtonSet.OK);
+    return;
+  }
   toast_('설치/복구 완료.', APP.MENU);
   ui_().alert(APP.MENU,
     '구조 설치가 끝났습니다.\n\n이어서 [🚀 시작하기]를 누르면 나머지를 단계별로 안내합니다.',
     ui_().ButtonSet.OK);
 }
 
-/** 알림 없이 시트 구조만 만든다 (온보딩 팝업에서도 호출) */
+/**
+ * 알림 없이 시트 구조만 만든다 (온보딩 팝업에서도 호출).
+ * 단계마다 따로 실행해서, 하나가 실패해도 나머지는 끝까지 만든다.
+ * 실패한 단계가 있으면 마지막에 모아서 알린다.
+ */
 function installCore_() {
   var lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error('다른 작업이 실행 중입니다. 잠시 후 다시 시도하세요.');
+  var steps = [
+    ['🚀 시작하기', buildStart], ['⚙️ 설정', buildConfig], ['🧩 기록종류', buildRecordTypes],
+    ['📚 교과영역', buildSubjects], ['📐 공통규칙', buildCommonRules], ['🗂 활동목록', buildActivityList],
+    ['👤 학생명단', buildRoster], ['✅ 검토', buildReview], ['📖 사용법', buildHelp],
+    ['시트 순서 정리', orderSheets_]
+  ];
+  var failed = [];
   try {
-    buildStart();
-    buildConfig();
-    buildRecordTypes();
-    buildSubjects();
-    buildCommonRules();
-    buildActivityList();
-    buildRoster();
-    buildReview();
-    buildHelp();
-    orderSheets_();
+    steps.forEach(function (st) {
+      try { st[1](); } catch (e) { failed.push('· ' + st[0] + ' — ' + e.message); }
+    });
   } finally { lock.releaseLock(); }
+  if (failed.length) {
+    throw new Error('설치 중 일부를 만들지 못했습니다.\n\n' + failed.join('\n') +
+      '\n\n나머지는 모두 만들었습니다. 이 창을 캡처해 제작자에게 보내 주세요.');
+  }
 }
 
 function orderSheets_() {
@@ -995,7 +1050,7 @@ function buildRecordTypes() {
   s.getRange(3, 4, rows.length, 1).insertCheckboxes();
   s.getRange(3, 1, rows.length, head.length).setWrap(true).setVerticalAlignment('top');
   [90, 220, 80, 110, 260, 320, 380, 220].forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
-  s.setFrozenRows(2); s.setFrozenColumns(2);
+  s.setFrozenRows(2);
 }
 
 /* ------------------------------------------------------------ 교과영역 */
@@ -1015,7 +1070,7 @@ function buildSubjects() {
   s.getRange(3, 3, 200, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(['교과', '공통'], true).build());
   [110, 220, 80, 200, 620].forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
-  s.setFrozenRows(2); s.setFrozenColumns(2);
+  s.setFrozenRows(2);
 }
 
 /* ------------------------------------------------------------ 공통규칙 */
@@ -1052,7 +1107,7 @@ function buildActivityList() {
   styleHeader_(s, 2, head.length);
   [110, 200, 100, 110, 80, 320, 340, 120, 300, 150, 150]
     .forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
-  s.setFrozenRows(2); s.setFrozenColumns(2);
+  s.setFrozenRows(2);
   s.getRange(3, 1, 300, head.length).setWrap(true).setVerticalAlignment('top');
   refreshActivityValidation_();
 }
@@ -1716,8 +1771,8 @@ function buildActivityInputSheet_(key, name, cols, rec) {
     .concat(['생성', '모델', 'AI 결과', '최종본', '바이트', '검증']);
   var n = head.length;
 
-  noteRow_(s, 1, n,
-    '▶ ' + name + '  (' + rec.name + ' · ' + rec.chars + '자 기준)\n' +
+  splitBanner_(s, 3, n,
+    '▶ ' + name + '\n' + rec.name + ' · ' + rec.chars + '자',
     '① 노란 칸에 학생 자료 입력  →  ② [모델] 선택  →  ③ [생성] 체크 또는 메뉴 ⑥ 체크된 행 생성  →  ' +
     '④ AI 결과를 확인하고 [최종본] 칸에 붙여넣어 다듬기  →  ⑤ 체크 해제(재호출·비용 방지)');
   s.getRange(2, 1).setValue('').setFontSize(8);
@@ -2809,8 +2864,8 @@ function buildCompileFor_(recKey, acts, roster) {
     .concat(['합본', '합본 바이트', '압축', '모델', 'AI 압축결과', '최종본', '바이트', '검증']);
   var n = head.length;
 
-  noteRow_(s, 1, n,
-    '📦 ' + (rec ? rec.name : recKey) + ' 최종취합  —  ' + (rec ? rec.chars : 500) + '자(' + limit + '바이트) 기준\n' +
+  splitBanner_(s, 3, n,
+    '📦 ' + (rec ? rec.name : recKey) + '\n' + (rec ? rec.chars : 500) + '자(' + limit + '바이트)',
     '① 메뉴 ⑦ [최종취합 시트 생성/갱신]으로 활동 결과를 모읍니다  →  ② 합본이 한도를 넘는 학생만 [압축] 체크  →  ' +
     '③ 메뉴 ⑦ [최종 압축본 생성]  →  ④ [최종본] 칸에서 다듬어 나이스에 붙여넣기');
   s.setRowHeight(2, 8);
