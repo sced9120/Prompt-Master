@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "test": "node test/engine.test.js && node test/schema.test.js",
-    "build": "node tools/build.js"
+    "build": "node tools/build.js",
+    "kit": "node tools/build.js && python3 tools/build-kit.py"
   },
   "license": "MIT"
 }
