@@ -95,6 +95,7 @@ function buildActivityInputSheet_(key, name, cols, rec) {
   s.getRange(APP.DATA_ROW, 5, 500, cols.length).setBackground(APP.COLORS.input)
     .setWrap(true).setVerticalAlignment('top');
   s.getRange(APP.DATA_ROW, 1, 500, 4).setBackground(APP.COLORS.lock);
+  try { applyModelDropdown_(s, 500); } catch (e) {}   // 비워 두면 [⚙️ 설정]의 활동용 모델
   return s;
 }
 

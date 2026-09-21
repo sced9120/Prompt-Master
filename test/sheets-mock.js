@@ -139,7 +139,7 @@ function makeRange(sheet, sheetProxy, r1, c1, nr, nc, vals, forms, merges, froze
     }
   };
   ['setBackground', 'setFontColor', 'setFontWeight', 'setFontSize', 'setWrap', 'setVerticalAlignment',
-   'setDataValidation', 'setNumberFormat', 'setHorizontalAlignment'].forEach(m => { range[m] = () => proxy; });
+   'setDataValidation', 'setNumberFormat', 'setHorizontalAlignment', 'clearDataValidations'].forEach(m => { range[m] = () => proxy; });
   const proxy = strict(range, 'Range(' + range.getA1Notation() + ')');
   return proxy;
 }
@@ -176,6 +176,7 @@ function builder(fields, build) {
 
 function makeGlobals() {
   const ss = makeSpreadsheet();
+  const fetchBox = { calls: [], handler: () => { throw new Error('mock: 네트워크 없음'); } };
   const props = () => { const m = new Map(); return {
     getProperty: k => (m.has(k) ? m.get(k) : null), setProperty: (k, v) => { m.set(k, String(v)); },
     deleteProperty: k => { m.delete(k); }, deleteAllProperties: () => m.clear() }; };
@@ -206,6 +207,15 @@ function makeGlobals() {
     Utilities: { formatDate: () => '9/21', sleep() {} },
     ScriptApp: { getProjectTriggers: () => [], deleteTrigger() {}, newTrigger: () => builder(['forSpreadsheet', 'onEdit', 'create'], () => ({})) },
     HtmlService: { createHtmlOutputFromFile: () => ({ setWidth() { return this; }, setHeight() { return this; }, setTitle() { return this; } }) },
+    // 가짜 인터넷 — 테스트가 __fetch.handler 를 바꿔 끼운다. 기본은 "연결 안 됨"
+    __fetch: fetchBox,
+    UrlFetchApp: {
+      fetch(url, opt) {
+        fetchBox.calls.push({ url, opt });
+        const r = fetchBox.handler(url, opt || {});
+        return { getResponseCode: () => r.code, getContentText: () => (typeof r.body === 'string' ? r.body : JSON.stringify(r.body)) };
+      }
+    },
     console
   };
 }

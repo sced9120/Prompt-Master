@@ -124,10 +124,10 @@ function generateMoreExamples() {
   if (ans === null) return;
   var want = Math.max(1, Math.min(5, Number(ans) || 2));
 
-  var model = String(cfg_('활동용 모델', 'gemini-2.5-flash'));
+  var model = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
   if (providerOf_(model) === 'subscription') {
     ui_().alert(APP.MENU,
-      '예시 생성에는 API 키가 필요합니다.\n[⚙️ 설정]의 활동용 모델을 gemini-2.5-flash 등으로 바꾸거나 메뉴 ②에서 키를 등록하세요.',
+      '예시 생성에는 API 키가 필요합니다.\n[⚙️ 설정]의 활동용 모델을 ' + DEFAULT_MODEL + ' 등으로 바꾸거나 메뉴 ②에서 키를 등록하세요.',
       ui_().ButtonSet.OK);
     return;
   }

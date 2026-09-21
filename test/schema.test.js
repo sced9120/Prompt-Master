@@ -192,5 +192,33 @@ t('HTML 이 호출하는 서버 함수가 모두 정의되어 있음', () => {
   ok(!bad.length, '없는 함수: ' + bad.join(', '));
 });
 
+console.log('\n[AI 모델 기본값]');
+t('기본 모델이 제미나이', () => ok(/var DEFAULT_MODEL = 'gemini-/.test(src['00_Presets.gs']), 'DEFAULT_MODEL 이 gemini- 로 시작하지 않음'));
+t('활동용·합본용 모델을 읽는 곳의 기본값이 모두 DEFAULT_MODEL', () => {
+  const hits = [...all.matchAll(/cfg_\('(활동용|합본용) 모델',\s*([^)]+)\)/g)];
+  ok(hits.length >= 6, '검출 ' + hits.length + '곳');
+  const bad = hits.filter(h => h[2].trim() !== 'DEFAULT_MODEL');
+  ok(!bad.length, bad.map(h => h[0]).join(' / '));
+});
+t('옛 모델 이름이 코드에 박혀 있지 않음 (프리셋의 이전값 표만 허용)', () => {
+  const bad = [];
+  Object.entries(src).forEach(([f, code]) => {
+    if (f === '00_Presets.gs') return;
+    const m = code.match(/'(gemini-2\.5-[a-z-]+|gpt-5-mini|gpt-5|claude-sonnet-4-5|claude-haiku-4-5)'/);
+    if (m) bad.push(f + ' → ' + m[1]);
+  });
+  ok(!bad.length, bad.join(', '));
+});
+t('모델 설정 창이 부르는 서버 함수가 모두 있음', () => {
+  const defined = new Set([...all.matchAll(/function\s+([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]));
+  ['getAiSettings', 'saveKeys', 'testModel', 'saveModelSettings', 'listAvailableModels', 'testAllModels', 'onboardSaveKey']
+    .forEach(n => ok(defined.has(n), '없는 함수: ' + n));
+});
+t('모델 표 헤더와 필드 수가 같음', () => {
+  const h = all.match(/var MODEL_HEAD = \[([^\]]+)\]/), f = all.match(/var MODEL_FIELDS = \[([^\]]+)\]/);
+  ok(h && f, 'MODEL_HEAD / MODEL_FIELDS 정의 없음');
+  ok(h[1].split(',').length === f[1].split(',').length, '헤더 ' + h[1] + ' / 필드 ' + f[1]);
+});
+
 console.log('\n' + (fail ? `실패 ${fail}개 / ` : '') + `통과 ${pass}개`);
 process.exit(fail ? 1 : 0);

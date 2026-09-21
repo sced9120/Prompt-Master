@@ -141,44 +141,83 @@ function renderInstall(b, done) {
 /* ───────────────────────── 2. AI 연결 */
 function renderAi(b, done) {
   b.innerHTML =
-    (done ? '<div class="note">연결된 키: <b>' + ST.keyNames.join(', ') + '</b>. 다른 키로 바꾸려면 아래에 새로 넣으세요.</div>' : '') +
+    (done ? '<div class="note">연결된 키: <b>' + ST.keyNames.join(', ') + '</b> · 지금 모델: <b>' + esc(ST.defaultModel) + '</b>. ' +
+            '바꾸려면 아래에서 다시 확인하세요.</div>' : '') +
     '<label>어디 키를 쓰시나요</label>' +
     '<select id="prov">' +
-      '<option value="gemini">Gemini — 무료 등급이 있어 가장 부담이 적습니다</option>' +
+      '<option value="gemini">Gemini — 무료 등급이 있어 가장 부담이 적습니다 (권장)</option>' +
       '<option value="openai">OpenAI</option>' +
       '<option value="anthropic">Anthropic (Claude)</option>' +
     '</select>' +
     '<label>API 키</label>' +
     '<input type="password" id="key" placeholder="키를 붙여넣으세요">' +
     '<div class="note" id="keyHint"></div>' +
+    '<label>모델 <span style="font-weight:400;color:var(--muted)">— 기본값 그대로 두셔도 충분합니다</span></label>' +
+    '<input id="model" list="aiModels" autocomplete="off" spellcheck="false">' +
+    '<datalist id="aiModels"></datalist>' +
+    '<div class="note" id="modelHint"></div>' +
     '<div class="actions"><button class="primary" id="bKey">저장하고 연결 확인</button></div>' +
     '<div class="msg" id="mKey"></div>' +
     '<div class="note" style="margin-top:12px">키는 <b>이 파일이 아니라 내 구글 계정</b>에 저장됩니다. ' +
     '이 파일을 남에게 공유해도 키는 넘어가지 않습니다.<br>' +
+    '모델은 나중에 메뉴 <b>② AI 연결 · 모델 설정</b>에서 여러 개를 적어 두고 하나씩 연결 테스트할 수 있습니다.<br>' +
     '워크스페이스 Gemini나 Google One AI Premium 구독이 있다면, 빈 셀에 <code>=AI("안녕")</code>을 넣어 ' +
     '답이 나오는지 확인해 보세요. 나온다면 키 없이 모델 목록에서 <b>Gemini(구독)</b>을 골라 쓸 수 있습니다. ' +
     '다만 활동 만들기 같은 자동 기능에는 키가 필요합니다.</div>';
 
   var hints = {
-    gemini: 'aistudio.google.com → Get API key. AIza 로 시작합니다.',
-    openai: 'platform.openai.com → API keys → Create new secret key. sk- 로 시작합니다.',
-    anthropic: 'console.anthropic.com → API keys. sk-ant- 로 시작합니다.'
+    gemini: '<a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> → Create API key. AIza 로 시작합니다.',
+    openai: '<a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a> → Create new secret key. sk- 로 시작합니다. 선불 충전이 필요합니다.',
+    anthropic: '<a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a> → API keys. sk-ant- 로 시작합니다. 선불 충전이 필요합니다.'
   };
-  var upd = function () { $('keyHint').textContent = hints[$('prov').value]; };
-  $('prov').onchange = upd; upd();
+  var guessOf = function (m) {
+    m = String(m || '').trim().toLowerCase();
+    if (/^(gemini|learnlm)/.test(m)) return 'gemini';
+    if (/^claude/.test(m)) return 'anthropic';
+    if (/^(gpt|chatgpt|o\d)/.test(m)) return 'openai';
+    return '';
+  };
+  var defs = ST.providerDefaults || { gemini: 'gemini-flash-latest', openai: 'gpt-5.6-luna', anthropic: 'claude-haiku-4-5' };
+  var links = ST.links || {};
+  var typed = false;
+  $('model').addEventListener('input', function () { typed = true; });
+
+  var upd = function () {
+    var p = $('prov').value;
+    $('keyHint').innerHTML = hints[p];
+    // 지금 설정된 모델이 이 회사 것이면 그대로, 아니면 회사 기본값
+    if (!typed) $('model').value = (guessOf(ST.defaultModel) === p) ? ST.defaultModel : defs[p];
+    var opts = (ST.presets || []).filter(function (x) { return guessOf(x.model) === p; });
+    $('aiModels').innerHTML = opts.map(function (x) {
+      return '<option value="' + esc(x.model) + '">' + esc(x.level) + '</option>';
+    }).join('');
+    var lv = opts.map(function (x) {
+      return '<a href="#" class="pick" data-m="' + esc(x.model) + '"><code>' + esc(x.model) + '</code></a> — ' + esc(x.level);
+    }).join('<br>');
+    $('modelHint').innerHTML = (lv ? lv + '<br>' : '') +
+      '세특 한 편은 <b>' + esc(defs[p]) + '</b> 급이면 충분합니다. 최신 모델명은 ' +
+      '<a href="' + esc(links[p] || '#') + '" target="_blank">공식 모델 목록</a>에서 영문 "모델 코드"를 그대로 복사하세요.';
+    [].forEach.call($('modelHint').querySelectorAll('a.pick'), function (a) {
+      a.onclick = function (e) { e.preventDefault(); $('model').value = a.dataset.m; typed = true; };
+    });
+  };
+  $('prov').onchange = function () { typed = false; upd(); };
+  if (ST.hasKey && ST.keyNames.length) $('prov').value = ST.keyNames[0];
+  upd();
 
   $('bKey').onclick = function () {
-    var btn = this, key = $('key').value.trim();
-    if (!key) { say('mKey', '키를 입력하세요.', 'err'); return; }
+    var btn = this, key = $('key').value.trim(), model = $('model').value.trim();
+    var p = $('prov').value;
+    if (!key && ST.keyNames.indexOf(p) < 0) { say('mKey', '키를 입력하세요.', 'err'); return; }
     busy(btn, true, '확인 중'); say('mKey', '');
     google.script.run
       .withSuccessHandler(function (r) {
         busy(btn, false); ST = r.status;
-        if (r.ok) { say('mKey', r.message, 'ok'); OPEN = 'roster'; setTimeout(draw, 500); }
-        else { say('mKey', '키는 저장했지만 호출이 실패했습니다 — ' + r.message, 'err'); draw(); }
+        if (r.ok) { say('mKey', '✓ ' + r.message, 'ok'); OPEN = 'roster'; setTimeout(draw, 900); }
+        else { say('mKey', '키는 저장했지만 연결이 실패했습니다 — ' + r.message, 'err'); }
       })
       .withFailureHandler(function (e) { busy(btn, false); say('mKey', e.message, 'err'); })
-      .onboardSaveKey({ provider: $('prov').value, key: key });
+      .onboardSaveKey({ provider: p, key: key, model: model });
   };
 }
 

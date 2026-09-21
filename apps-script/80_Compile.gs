@@ -134,8 +134,7 @@ function buildCompileFor_(recKey, acts, roster) {
     s.getRange(APP.DATA_ROW, 1, rows.length, 4).setBackground(APP.COLORS.lock);
     s.getRange(APP.DATA_ROW, 5, rows.length, acts.length + 2).setBackground(APP.COLORS.lock);
     s.getRange(APP.DATA_ROW, cChk, rows.length, 1).insertCheckboxes();
-    s.getRange(APP.DATA_ROW, cModel, rows.length, 1).setDataValidation(
-      SpreadsheetApp.newDataValidation().requireValueInList(modelChoices_(), true).build());
+    s.getRange(APP.DATA_ROW, cModel, rows.length, 1).setDataValidation(modelValidation_());
     s.getRange(APP.DATA_ROW, cAi, rows.length, 1).setBackground(APP.COLORS.output);
     s.getRange(APP.DATA_ROW, cFinal, rows.length, 1).setBackground(APP.COLORS.paste);
     var f = [];
@@ -204,12 +203,13 @@ function compileChecked() {
   for (var i = 0; i < cnt; i++) if (chk[i][0] === true) rows.push(APP.DATA_ROW + i);
   if (!rows.length) { toast_('[압축] 체크된 행이 없습니다.'); return; }
 
-  var defModel = String(cfg_('합본용 모델', 'gpt-5-mini'));
+  var defModel = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
   var system = compressPrompt_(rec);
-  var okN = 0, errN = 0;
+  var okN = 0, errN = 0, leftN = 0, t0 = Date.now();
 
   for (var k = 0; k < rows.length; k++) {
     var row = rows[k];
+    if (Date.now() - t0 > RUN_BUDGET_MS) { leftN = rows.length - k; break; }
     var merged = String(s.getRange(row, cMerge).getValue() || '').trim();
     if (!merged) { s.getRange(row, cChk).setValue(false); continue; }
     var model = cModel ? String(s.getRange(row, cModel).getValue()).trim() : '';
@@ -233,7 +233,11 @@ function compileChecked() {
     }
     SpreadsheetApp.flush();
   }
-  toast_('압축 완료 ' + okN + '건' + (errN ? ' / 실패 ' + errN + '건' : ''), APP.MENU);
+  var done = '압축 완료 ' + okN + '건' + (errN ? ' / 실패 ' + errN + '건' : '');
+  if (leftN) {
+    ui_().alert(APP.MENU, done + '\n\n실행 시간 제한(약 6분)에 가까워져 ' + leftN + '건을 남기고 멈췄습니다.\n' +
+      '남은 행은 [압축] 체크가 그대로 있으니 한 번 더 실행하세요.', ui_().ButtonSet.OK);
+  } else toast_(done, APP.MENU);
 }
 
 /** 압축용 프롬프트 (기록종류 규칙을 그대로 따름) */
