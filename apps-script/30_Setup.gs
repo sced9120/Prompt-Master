@@ -4,6 +4,8 @@
 
 function onOpen() {
   var m = ui_().createMenu(APP.MENU);
+  m.addItem('🚀 시작하기 (처음이면 여기)', 'openOnboard');
+  m.addSeparator();
   m.addItem('① 처음 설치 / 구조 복구', 'installAll');
   m.addSeparator();
   m.addItem('② AI 연결 설정', 'openApiDialog');
@@ -37,9 +39,20 @@ function onOpen() {
   sub.addItem('수업관찰 웹앱 배포 안내', 'observeDeployHelp');
   sub.addItem('예시 시트 구조 복구', 'repairExampleSheet');
   sub.addItem('사용법 시트 갱신', 'buildHelp');
+  sub.addItem('시작하기 안내 다시 켜기', 'onboardReset');
   sub.addItem('버전 정보', 'showVersion');
   m.addSubMenu(sub);
   m.addToUi();
+
+  // 아직 설정을 끝내지 않은 사본이면 [🚀 시작하기] 탭을 열어 준다.
+  // 단순 트리거라 권한 승인 전에도 여기까지는 동작한다.
+  try {
+    if (needsOnboarding_()) {
+      var st = sh_(APP.SH.START);
+      if (st) ss_().setActiveSheet(st);
+      ss_().toast('메뉴 [' + APP.MENU + '] > [🚀 시작하기] 를 눌러 시작하세요.', APP.MENU, 10);
+    }
+  } catch (e) {}
 }
 
 function showVersion() {
@@ -48,9 +61,19 @@ function showVersion() {
 
 /** 전체 설치 (여러 번 실행해도 안전 — 기존 데이터는 보존) */
 function installAll() {
+  installCore_();
+  toast_('설치/복구 완료.', APP.MENU);
+  ui_().alert(APP.MENU,
+    '구조 설치가 끝났습니다.\n\n이어서 [🚀 시작하기]를 누르면 나머지를 단계별로 안내합니다.',
+    ui_().ButtonSet.OK);
+}
+
+/** 알림 없이 시트 구조만 만든다 (온보딩 팝업에서도 호출) */
+function installCore_() {
   var lock = LockService.getDocumentLock();
-  if (!lock.tryLock(30000)) { toast_('다른 작업이 실행 중입니다.'); return; }
+  if (!lock.tryLock(30000)) throw new Error('다른 작업이 실행 중입니다. 잠시 후 다시 시도하세요.');
   try {
+    buildStart();
     buildConfig();
     buildRecordTypes();
     buildSubjects();
@@ -60,23 +83,18 @@ function installAll() {
     buildReview();
     buildHelp();
     orderSheets_();
-    toast_('설치/복구 완료. [📖 사용법] 시트를 먼저 읽어 보세요.', APP.MENU);
-    ui_().alert(APP.MENU,
-      '구조 설치가 끝났습니다.\n\n다음 순서로 진행하세요.\n' +
-      '1) ② AI 연결 설정\n2) ③ 학생 명단 입력 후 동기화\n3) ④ 활동 만들기 (AI 마법사)\n\n' +
-      '자세한 설명은 [📖 사용법] 시트에 있습니다.', ui_().ButtonSet.OK);
   } finally { lock.releaseLock(); }
 }
 
 function orderSheets_() {
-  var order = [APP.SH.HELP, APP.SH.CONFIG, APP.SH.ROSTER, APP.SH.ACTIVITY,
+  var order = [APP.SH.START, APP.SH.HELP, APP.SH.CONFIG, APP.SH.ROSTER, APP.SH.ACTIVITY,
                APP.SH.RECORD, APP.SH.SUBJECT, APP.SH.COMMON];
   var i = 1;
   order.forEach(function (n) {
     var s = sh_(n);
     if (s) { ss_().setActiveSheet(s); ss_().moveActiveSheet(i++); }
   });
-  var h = sh_(APP.SH.HELP);
+  var h = sh_(APP.SH.START) || sh_(APP.SH.HELP);
   if (h) ss_().setActiveSheet(h);
 }
 
