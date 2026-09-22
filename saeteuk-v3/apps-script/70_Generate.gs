@@ -2,6 +2,9 @@
  * 세특 작성 도우미 v3 — 생성 실행
  */
 
+/** 한 번 실행에서 AI 호출에 쓸 시간 (Apps Script 한도 6분보다 여유 있게) */
+var RUN_BUDGET_MS = 300000;
+
 /** 현재 시트가 어떤 활동의 입력 시트인지 */
 function activityOfSheet_(name) {
   var acts = getActivities_();
@@ -67,13 +70,16 @@ function runGeneration_(act, sheet, rows) {
     var cValid = colOf_(sheet, head, '검증');
     var limit = charsFor_(act) * 3;
     var system = promptFor_(act);
-    var defModel = String(cfg_('활동용 모델', 'gemini-2.5-flash'));
+    var defModel = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
     var autoValidate = cfgBool_('결과 자동검증', true);
     var banned = PRESET_BANNED, fmt = PRESET_FORMAT_RULES;
 
-    var okN = 0, skipN = 0, errN = 0, subN = 0;
+    var okN = 0, skipN = 0, errN = 0, subN = 0, leftN = 0;
+    var t0 = Date.now();
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i];
+      // Apps Script 한 번 실행은 약 6분까지. 넘기기 전에 멈추고, 남은 행은 체크를 그대로 둔다.
+      if (Date.now() - t0 > RUN_BUDGET_MS) { leftN = rows.length - i; break; }
       var vals = sheet.getRange(row, 5, 1, cols.length).getValues()[0];
       var filled = vals.some(function (v) { return String(v).trim() !== ''; });
       if (!filled) { skipN++; if (cGen) sheet.getRange(row, cGen).setValue(false); continue; }
@@ -113,7 +119,11 @@ function runGeneration_(act, sheet, rows) {
     if (subN) msg += ' / 구독수식 ' + subN + '건(셀에서 [생성] 버튼을 눌러 주세요)';
     if (skipN) msg += ' / 자료 없음 ' + skipN + '건';
     if (errN) msg += ' / 실패 ' + errN + '건';
-    toast_(msg, act.name);
+    if (leftN) {
+      ui_().alert(APP.MENU, msg + '\n\n실행 시간 제한(약 6분)에 가까워져 ' + leftN + '건을 남기고 멈췄습니다.\n' +
+        '남은 행은 [생성] 체크가 그대로 있으니 메뉴 ⑥ 을 한 번 더 누르세요.\n' +
+        '(자주 멈춘다면 [⚙️ 설정]의 1회 최대 생성 건수를 줄이거나 더 빠른 모델을 쓰세요)', ui_().ButtonSet.OK);
+    } else toast_(msg, act.name);
   } finally { lock.releaseLock(); }
 }
 

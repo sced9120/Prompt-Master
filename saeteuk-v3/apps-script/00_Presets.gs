@@ -8,7 +8,7 @@
  */
 
 var APP = {
-  VERSION: 'v3.0.0',
+  VERSION: 'v3.1.0',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -315,3 +315,52 @@ var PRESET_FORMAT_RULES = [
   { level: 'block', label: '금지 특수문자', re: "[·‘’“”\"'\\-–—*#]" },
   { level: 'check', label: '줄바꿈 포함', re: '\\n' }
 ];
+
+/* ================================================================ AI 모델 */
+/**
+ * 기본 모델 목록 — 설치할 때 [⚙️ 설정] 시트 아래 [🤖 모델 목록] 표에 한 번 채워지고,
+ * 그다음부터는 선생님이 고친 표가 우선합니다. (2026년 9월 기준으로 확인한 이름)
+ *
+ * 모델 이름은 회사들이 몇 달마다 바꿉니다. 그래서 기본값은 '-latest' 이름을 씁니다.
+ * gemini-flash-latest 는 구글이 새 Flash 모델을 낼 때마다 자동으로 그 모델을 가리키므로
+ * 배포한 사본이 몇 년이 지나도 "모델을 찾을 수 없음"으로 멈추지 않습니다.
+ *
+ * level: 표의 [수준] 칸. memo: [언제 쓰나] 칸.
+ */
+var DEFAULT_MODEL = 'gemini-flash-latest';
+
+/** 회사별 "이 정도면 충분" 모델 — 시작하기에서 키를 넣으면 이것으로 맞춘다 */
+var PROVIDER_DEFAULT_MODEL = {
+  gemini: 'gemini-flash-latest',
+  openai: 'gpt-5.6-luna',
+  anthropic: 'claude-haiku-4-5'
+};
+
+var PRESET_MODELS = [
+  { model: 'gemini-flash-latest', level: '★ 기본 · 충분',
+    memo: '세특·창체·행발 모두 이 정도면 충분합니다. 구글이 새 Flash를 내면 자동으로 바뀌어 이름이 낡지 않습니다. 무료 등급으로도 쓸 수 있습니다(호출 횟수 제한 있음).' },
+  { model: 'gemini-flash-lite-latest', level: '가볍게',
+    memo: '더 빠르고 저렴합니다. 행발처럼 짧은 글이나 한 번에 많은 학생을 돌릴 때. 문장이 조금 단조로울 수 있습니다.' },
+  { model: 'gemini-3.8-flash', level: '버전 고정',
+    memo: '학기 중에 문체가 바뀌지 않게 버전을 못 박고 싶을 때. 1년쯤 지나면 종료될 수 있으니 가끔 연결 테스트로 확인하세요.' },
+  { model: 'gemini-pro-latest', level: '고급 · 유료',
+    memo: '여러 활동을 합친 압축본이 글자수를 잘 못 맞출 때만. 느리고 비싸며, 무료 등급에서는 막힐 수 있습니다.' },
+  { model: 'gpt-5.6-luna', level: '충분',
+    memo: 'OpenAI 키를 쓸 때의 기본. 세특 작성에 충분합니다.' },
+  { model: 'gpt-5.6-terra', level: '고급',
+    memo: 'OpenAI 상위 모델. 압축본 품질을 더 올리고 싶을 때.' },
+  { model: 'claude-haiku-4-5', level: '충분',
+    memo: 'Claude 키를 쓸 때의 기본. 세특 작성에 충분합니다.' },
+  { model: 'claude-sonnet-5', level: '고급',
+    memo: 'Claude 상위 모델. 압축본 품질을 더 올리고 싶을 때.' }
+];
+
+/** v3.0.x 의 기본값 — 설치/복구 때 선생님이 손대지 않은 값이면 새 기본값으로 올린다 */
+var OLD_DEFAULT_MODELS = { '활동용 모델': 'gemini-2.5-flash', '합본용 모델': 'gpt-5-mini' };
+
+/** 최신 모델명을 확인하는 공식 페이지 */
+var MODEL_LINKS = {
+  gemini: 'https://ai.google.dev/gemini-api/docs/models',
+  openai: 'https://platform.openai.com/docs/models',
+  anthropic: 'https://platform.claude.com/docs/en/models/overview'
+};

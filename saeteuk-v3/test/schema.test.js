@@ -162,6 +162,17 @@ t('설정 시트들의 안내문은 1행 배너로만 존재', () => {
     });
 });
 
+console.log('\n[병합과 열 고정]');
+t('열 고정을 쓰는 함수는 1행 전체 병합을 쓰지 않음', () => {
+  // 구글 시트는 병합된 셀을 가르는 열 고정을 막는다. v3.0.0 초판의 설치 실패 원인.
+  const bad = [];
+  [...all.matchAll(/function\s+([A-Za-z_$][\w$]*)\s*\(/g)].forEach(m => {
+    const i = m.index, body = all.slice(i, all.indexOf('\n}', i));
+    if (/setFrozenColumns\(\s*[1-9]/.test(body) && /\bbanner_\(|noteRow_\([^,]+,\s*1\s*,/.test(body)) bad.push(m[1]);
+  });
+  ok(!bad.length, '1행을 통째로 병합한 뒤 열을 고정함: ' + bad.join(', ') + ' → splitBanner_ 를 쓰세요');
+});
+
 console.log('\n[메뉴 ↔ 함수]');
 t('모든 메뉴 항목의 핸들러가 정의되어 있음', () => {
   const defined = new Set([...all.matchAll(/function\s+([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]));
@@ -179,6 +190,34 @@ t('HTML 이 호출하는 서버 함수가 모두 정의되어 있음', () => {
   const bad = calls.filter(n => !defined.has(n));
   ok(calls.length >= 5, '검출된 호출이 너무 적음: ' + calls.join(','));
   ok(!bad.length, '없는 함수: ' + bad.join(', '));
+});
+
+console.log('\n[AI 모델 기본값]');
+t('기본 모델이 제미나이', () => ok(/var DEFAULT_MODEL = 'gemini-/.test(src['00_Presets.gs']), 'DEFAULT_MODEL 이 gemini- 로 시작하지 않음'));
+t('활동용·합본용 모델을 읽는 곳의 기본값이 모두 DEFAULT_MODEL', () => {
+  const hits = [...all.matchAll(/cfg_\('(활동용|합본용) 모델',\s*([^)]+)\)/g)];
+  ok(hits.length >= 6, '검출 ' + hits.length + '곳');
+  const bad = hits.filter(h => h[2].trim() !== 'DEFAULT_MODEL');
+  ok(!bad.length, bad.map(h => h[0]).join(' / '));
+});
+t('옛 모델 이름이 코드에 박혀 있지 않음 (프리셋의 이전값 표만 허용)', () => {
+  const bad = [];
+  Object.entries(src).forEach(([f, code]) => {
+    if (f === '00_Presets.gs') return;
+    const m = code.match(/'(gemini-2\.5-[a-z-]+|gpt-5-mini|gpt-5|claude-sonnet-4-5|claude-haiku-4-5)'/);
+    if (m) bad.push(f + ' → ' + m[1]);
+  });
+  ok(!bad.length, bad.join(', '));
+});
+t('모델 설정 창이 부르는 서버 함수가 모두 있음', () => {
+  const defined = new Set([...all.matchAll(/function\s+([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]));
+  ['getAiSettings', 'saveKeys', 'testModel', 'saveModelSettings', 'listAvailableModels', 'testAllModels', 'onboardSaveKey']
+    .forEach(n => ok(defined.has(n), '없는 함수: ' + n));
+});
+t('모델 표 헤더와 필드 수가 같음', () => {
+  const h = all.match(/var MODEL_HEAD = \[([^\]]+)\]/), f = all.match(/var MODEL_FIELDS = \[([^\]]+)\]/);
+  ok(h && f, 'MODEL_HEAD / MODEL_FIELDS 정의 없음');
+  ok(h[1].split(',').length === f[1].split(',').length, '헤더 ' + h[1] + ' / 필드 ' + f[1]);
 });
 
 console.log('\n' + (fail ? `실패 ${fail}개 / ` : '') + `통과 ${pass}개`);

@@ -8,8 +8,8 @@ function onOpen() {
   m.addSeparator();
   m.addItem('① 처음 설치 / 구조 복구', 'installAll');
   m.addSeparator();
-  m.addItem('② AI 연결 설정', 'openApiDialog');
-  m.addItem('   연결 테스트', 'testConnection');
+  m.addItem('② AI 연결 · 모델 설정', 'openApiDialog');
+  m.addItem('   모델 연결 테스트', 'testAllModels');
   m.addSeparator();
   m.addItem('③ 학생 명단 동기화', 'syncRoster');
   m.addSeparator();
@@ -61,29 +61,42 @@ function showVersion() {
 
 /** 전체 설치 (여러 번 실행해도 안전 — 기존 데이터는 보존) */
 function installAll() {
-  installCore_();
+  try {
+    installCore_();
+  } catch (e) {
+    ui_().alert(APP.MENU, e.message, ui_().ButtonSet.OK);
+    return;
+  }
   toast_('설치/복구 완료.', APP.MENU);
   ui_().alert(APP.MENU,
     '구조 설치가 끝났습니다.\n\n이어서 [🚀 시작하기]를 누르면 나머지를 단계별로 안내합니다.',
     ui_().ButtonSet.OK);
 }
 
-/** 알림 없이 시트 구조만 만든다 (온보딩 팝업에서도 호출) */
+/**
+ * 알림 없이 시트 구조만 만든다 (온보딩 팝업에서도 호출).
+ * 단계마다 따로 실행해서, 하나가 실패해도 나머지는 끝까지 만든다.
+ * 실패한 단계가 있으면 마지막에 모아서 알린다.
+ */
 function installCore_() {
   var lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error('다른 작업이 실행 중입니다. 잠시 후 다시 시도하세요.');
+  var steps = [
+    ['🚀 시작하기', buildStart], ['⚙️ 설정', buildConfig], ['🧩 기록종류', buildRecordTypes],
+    ['📚 교과영역', buildSubjects], ['📐 공통규칙', buildCommonRules], ['🗂 활동목록', buildActivityList],
+    ['👤 학생명단', buildRoster], ['✅ 검토', buildReview], ['📖 사용법', buildHelp],
+    ['시트 순서 정리', orderSheets_]
+  ];
+  var failed = [];
   try {
-    buildStart();
-    buildConfig();
-    buildRecordTypes();
-    buildSubjects();
-    buildCommonRules();
-    buildActivityList();
-    buildRoster();
-    buildReview();
-    buildHelp();
-    orderSheets_();
+    steps.forEach(function (st) {
+      try { st[1](); } catch (e) { failed.push('· ' + st[0] + ' — ' + e.message); }
+    });
   } finally { lock.releaseLock(); }
+  if (failed.length) {
+    throw new Error('설치 중 일부를 만들지 못했습니다.\n\n' + failed.join('\n') +
+      '\n\n나머지는 모두 만들었습니다. 이 창을 캡처해 제작자에게 보내 주세요.');
+  }
 }
 
 function orderSheets_() {
@@ -99,37 +112,76 @@ function orderSheets_() {
 }
 
 /* ---------------------------------------------------------------- 설정 */
+/**
+ * [⚙️ 설정] 시트
+ *   1~3행   머리말 · 안내 · 헤더
+ *   4행~    항목 | 값 | 설명
+ *   그 아래 🤖 모델 목록 표 (모델명 | 회사 | 수준 | 언제 쓰나 | 연결 확인)
+ * 다시 실행해도 선생님이 바꾼 값과 모델 목록은 그대로 둔다.
+ */
 function buildConfig() {
   var s = shOrCreate_(APP.SH.CONFIG);
-  var existing = {};
-  if (s.getLastRow() >= 4) {
-    s.getRange(4, 1, s.getLastRow() - 3, 2).getValues().forEach(function (r) {
-      if (String(r[0]).trim()) existing[String(r[0]).trim()] = r[1];
-    });
+  var existing = {}, oldModels = null;
+  var last = s.getLastRow();
+  var tHead = modelTableRow_(s);
+  if (last >= 4) {
+    var endSet = tHead ? tHead - 1 : last;
+    if (endSet >= 4) {
+      s.getRange(4, 1, endSet - 3, 2).getValues().forEach(function (r) {
+        var k = String(r[0]).trim();
+        if (k && !existing.hasOwnProperty(k)) existing[k] = r[1];
+      });
+    }
   }
+  if (tHead) oldModels = readModelRowsAt_(s, tHead);
+
+  // v3.0.x → v3.1: 손대지 않은 옛 기본 모델은 새 기본값으로, [추가 모델]은 모델 목록으로 옮긴다
+  Object.keys(OLD_DEFAULT_MODELS).forEach(function (k) {
+    if (normModel(existing[k]) === OLD_DEFAULT_MODELS[k]) delete existing[k];
+  });
+  var extra = String(existing['추가 모델'] || '').split(',').map(normModel).filter(String);
+
   s.clear();
+  s.getRange(1, 1, s.getMaxRows(), s.getMaxColumns()).breakApart().clearDataValidations();
   s.getRange('A1').setValue('⚙️ 설정  —  ' + APP.VERSION)
     .setFontSize(14).setFontWeight('bold');
-  noteRow_(s, 2, 3, 'API 키는 이 시트에 저장되지 않습니다. 메뉴 > ② AI 연결 설정 에서 입력하며, 사용자 계정별로 따로 보관되어 사본을 공유해도 남에게 넘어가지 않습니다.');
+  noteRow_(s, 2, MODEL_HEAD.length, 'API 키는 이 시트에 저장되지 않습니다. 메뉴 > ② AI 연결 · 모델 설정 에서 입력하며, 사용자 계정별로 따로 보관되어 사본을 공유해도 남에게 넘어가지 않습니다.');
   s.getRange(3, 1, 1, 3).setValues([['항목', '값', '설명']]);
   styleHeader_(s, 3, 3);
 
   var rows = [
     ['교사 경력(년)', 15, '프롬프트의 역할 문장에 쓰입니다. 숫자만.'],
     ['기본 교과영역', '수학', '새 활동을 만들 때 기본으로 선택되는 교과. [📚 교과영역] 시트의 키.'],
-    ['활동용 모델', 'gemini-2.5-flash', '활동별 세특 생성에 쓰는 모델. 저렴한 모델 권장.'],
-    ['합본용 모델', 'gpt-5-mini', '최종 압축에 쓰는 모델. 조금 더 좋은 모델 권장.'],
+    ['활동용 모델', DEFAULT_MODEL, '활동별 세특 생성에 쓰는 모델. 아래 모델 목록에서 고르거나 직접 적으세요. Flash급이면 충분합니다.'],
+    ['합본용 모델', DEFAULT_MODEL, '여러 활동을 한 편으로 압축할 때 쓰는 모델. 대개 활동용과 같아도 되고, 글자수를 잘 못 맞추면 한 단계 위 모델로.'],
     ['학생 이름 마스킹', true, 'TRUE면 학생 이름을 AI에 보내지 않습니다. 개인정보 보호 권장값.'],
     ['결과 자동검증', true, 'TRUE면 생성 직후 기재 금지사항·분량·어미를 자동 점검합니다.'],
-    ['1회 최대 생성 건수', 25, '한 번에 처리할 최대 학생 수. 시간 초과 방지.'],
-    ['추가 모델', '', '드롭다운에 없는 모델을 쉼표로 적으면 선택지에 추가됩니다.']
+    ['1회 최대 생성 건수', 25, '한 번에 처리할 최대 학생 수. 실행 시간(약 6분) 제한 때문에 넘치면 나눠서 처리합니다.']
   ];
   rows.forEach(function (r) { if (existing.hasOwnProperty(r[0])) r[1] = existing[r[0]]; });
   s.getRange(4, 1, rows.length, 3).setValues(rows);
   s.getRange(4, 1, rows.length, 1).setFontWeight('bold');
   s.getRange(4, 2, rows.length, 1).setBackground(APP.COLORS.input);
   s.getRange(4, 3, rows.length, 1).setFontColor('#666666').setWrap(true);
-  s.setColumnWidth(1, 160); s.setColumnWidth(2, 200); s.setColumnWidth(3, 460);
+
+  // 🤖 모델 목록
+  var note = 4 + rows.length + 1;
+  var head = note + 1;
+  noteRow_(s, note, MODEL_HEAD.length,
+    '🤖 모델 목록 — 여기 적힌 이름이 모든 [모델] 드롭다운의 선택지가 됩니다. 새 이름을 직접 적어도 되고, ' +
+    '메뉴 ② [AI 연결 · 모델 설정]에서 한 줄씩 연결 테스트를 하면 [연결 확인] 칸에 ✓/✗ 가 남습니다. ' +
+    '최신 이름: Gemini ' + MODEL_LINKS.gemini + ' · OpenAI ' + MODEL_LINKS.openai + ' · Claude ' + MODEL_LINKS.anthropic);
+  s.setRowHeight(note, 62);
+  var models = (oldModels && oldModels.length) ? oldModels : presetModelRows_();
+  extra.forEach(function (m) {
+    if (!models.some(function (r) { return r.model === m; })) models.push({ model: m, company: '자동', level: '', memo: '직접 추가', status: '' });
+  });
+  writeModelTable_(s, head, models);
+  applyConfigModelDropdown_();
+
+  // 폭: A 항목/모델명 · B 값/수준 · C 설명/언제 쓰나(넓게) · D 회사 · E 연결 확인
+  s.setColumnWidth(1, 190); s.setColumnWidth(2, 190); s.setColumnWidth(3, 460);
+  s.setColumnWidth(4, 90); s.setColumnWidth(5, 230);
   s.setFrozenRows(3);
 }
 
@@ -151,7 +203,7 @@ function buildRecordTypes() {
   s.getRange(3, 4, rows.length, 1).insertCheckboxes();
   s.getRange(3, 1, rows.length, head.length).setWrap(true).setVerticalAlignment('top');
   [90, 220, 80, 110, 260, 320, 380, 220].forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
-  s.setFrozenRows(2); s.setFrozenColumns(2);
+  s.setFrozenRows(2);
 }
 
 /* ------------------------------------------------------------ 교과영역 */
@@ -171,7 +223,7 @@ function buildSubjects() {
   s.getRange(3, 3, 200, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(['교과', '공통'], true).build());
   [110, 220, 80, 200, 620].forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
-  s.setFrozenRows(2); s.setFrozenColumns(2);
+  s.setFrozenRows(2);
 }
 
 /* ------------------------------------------------------------ 공통규칙 */
@@ -208,7 +260,7 @@ function buildActivityList() {
   styleHeader_(s, 2, head.length);
   [110, 200, 100, 110, 80, 320, 340, 120, 300, 150, 150]
     .forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
-  s.setFrozenRows(2); s.setFrozenColumns(2);
+  s.setFrozenRows(2);
   s.getRange(3, 1, 300, head.length).setWrap(true).setVerticalAlignment('top');
   refreshActivityValidation_();
 }

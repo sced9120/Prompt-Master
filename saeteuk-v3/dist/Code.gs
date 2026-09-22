@@ -1,5 +1,5 @@
 /******************************************************************************
- * 세특 작성 도우미 v3.0.0 — 설치용 합본
+ * 세특 작성 도우미 v3.1.0 — 설치용 합본
  *
  * 이 파일 하나에 모든 스크립트가 들어 있습니다.
  * Apps Script 편집기에서 Code.gs 의 내용을 전부 지우고 이 파일을 통째로 붙여넣으세요.
@@ -10,7 +10,7 @@
  * 고칠 때는 apps-script/ 의 해당 파일을 고치고 node tools/build.js 를 다시 돌리세요.
  * 이 파일을 직접 고치면 다음 빌드 때 덮어써집니다.
  *
- * 빌드: 2026-09-21  ·  원본 15개 파일
+ * 빌드: 2026-09-21  ·  원본 16개 파일
  *****************************************************************************/
 
 /* ==========================================================================
@@ -27,7 +27,7 @@
  */
 
 var APP = {
-  VERSION: 'v3.0.0',
+  VERSION: 'v3.1.0',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -335,6 +335,55 @@ var PRESET_FORMAT_RULES = [
   { level: 'check', label: '줄바꿈 포함', re: '\\n' }
 ];
 
+/* ================================================================ AI 모델 */
+/**
+ * 기본 모델 목록 — 설치할 때 [⚙️ 설정] 시트 아래 [🤖 모델 목록] 표에 한 번 채워지고,
+ * 그다음부터는 선생님이 고친 표가 우선합니다. (2026년 9월 기준으로 확인한 이름)
+ *
+ * 모델 이름은 회사들이 몇 달마다 바꿉니다. 그래서 기본값은 '-latest' 이름을 씁니다.
+ * gemini-flash-latest 는 구글이 새 Flash 모델을 낼 때마다 자동으로 그 모델을 가리키므로
+ * 배포한 사본이 몇 년이 지나도 "모델을 찾을 수 없음"으로 멈추지 않습니다.
+ *
+ * level: 표의 [수준] 칸. memo: [언제 쓰나] 칸.
+ */
+var DEFAULT_MODEL = 'gemini-flash-latest';
+
+/** 회사별 "이 정도면 충분" 모델 — 시작하기에서 키를 넣으면 이것으로 맞춘다 */
+var PROVIDER_DEFAULT_MODEL = {
+  gemini: 'gemini-flash-latest',
+  openai: 'gpt-5.6-luna',
+  anthropic: 'claude-haiku-4-5'
+};
+
+var PRESET_MODELS = [
+  { model: 'gemini-flash-latest', level: '★ 기본 · 충분',
+    memo: '세특·창체·행발 모두 이 정도면 충분합니다. 구글이 새 Flash를 내면 자동으로 바뀌어 이름이 낡지 않습니다. 무료 등급으로도 쓸 수 있습니다(호출 횟수 제한 있음).' },
+  { model: 'gemini-flash-lite-latest', level: '가볍게',
+    memo: '더 빠르고 저렴합니다. 행발처럼 짧은 글이나 한 번에 많은 학생을 돌릴 때. 문장이 조금 단조로울 수 있습니다.' },
+  { model: 'gemini-3.8-flash', level: '버전 고정',
+    memo: '학기 중에 문체가 바뀌지 않게 버전을 못 박고 싶을 때. 1년쯤 지나면 종료될 수 있으니 가끔 연결 테스트로 확인하세요.' },
+  { model: 'gemini-pro-latest', level: '고급 · 유료',
+    memo: '여러 활동을 합친 압축본이 글자수를 잘 못 맞출 때만. 느리고 비싸며, 무료 등급에서는 막힐 수 있습니다.' },
+  { model: 'gpt-5.6-luna', level: '충분',
+    memo: 'OpenAI 키를 쓸 때의 기본. 세특 작성에 충분합니다.' },
+  { model: 'gpt-5.6-terra', level: '고급',
+    memo: 'OpenAI 상위 모델. 압축본 품질을 더 올리고 싶을 때.' },
+  { model: 'claude-haiku-4-5', level: '충분',
+    memo: 'Claude 키를 쓸 때의 기본. 세특 작성에 충분합니다.' },
+  { model: 'claude-sonnet-5', level: '고급',
+    memo: 'Claude 상위 모델. 압축본 품질을 더 올리고 싶을 때.' }
+];
+
+/** v3.0.x 의 기본값 — 설치/복구 때 선생님이 손대지 않은 값이면 새 기본값으로 올린다 */
+var OLD_DEFAULT_MODELS = { '활동용 모델': 'gemini-2.5-flash', '합본용 모델': 'gpt-5-mini' };
+
+/** 최신 모델명을 확인하는 공식 페이지 */
+var MODEL_LINKS = {
+  gemini: 'https://ai.google.dev/gemini-api/docs/models',
+  openai: 'https://platform.openai.com/docs/models',
+  anthropic: 'https://platform.claude.com/docs/en/models/overview'
+};
+
 
 /* ==========================================================================
    10_Engine.gs
@@ -591,6 +640,138 @@ if (typeof module !== 'undefined' && module.exports) {
 
 
 /* ==========================================================================
+   12_Models.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 모델 이름 다루기 (순수 로직)
+ * ---------------------------------------------------------------
+ * 선생님이 모델 이름을 직접 적으므로, 오타·복사 흔적·회사 판별·오류 해석을 여기서 처리한다.
+ * Apps Script와 Node 양쪽에서 동작한다(테스트: test/models.test.js).
+ * ---------------------------------------------------------------
+ */
+
+/** 복사해 온 이름 정리: 앞뒤 공백·따옴표, API 목록의 'models/' 접두어 */
+function normModel(m) {
+  return String(m === null || m === undefined ? '' : m)
+    .replace(/[​-‍﻿]/g, '')
+    .trim()
+    .replace(/^["'`“”‘’]+|["'`“”‘’]+$/g, '')
+    .replace(/^models\//i, '')
+    .trim();
+}
+
+/** 이름만 보고 회사를 짐작한다. 모르면 '' */
+function guessProvider(m) {
+  m = normModel(m).toLowerCase();
+  if (!m) return '';
+  if (/^(gemini|learnlm)/.test(m)) return 'gemini';
+  if (/^claude/.test(m)) return 'anthropic';
+  if (/^(gpt|chatgpt|o\d|ft:gpt|ft:o\d)/.test(m)) return 'openai';
+  return '';
+}
+
+/** 표의 [회사] 칸 값 → 내부 이름. '자동'이나 빈칸이면 '' */
+function companyToProvider(label) {
+  var s = String(label || '').trim().toLowerCase();
+  if (!s || s === '자동') return '';
+  if (/gemini|google|구글|제미나이/.test(s)) return 'gemini';
+  if (/openai|gpt|오픈/.test(s)) return 'openai';
+  if (/claude|anthropic|클로드|앤트로픽/.test(s)) return 'anthropic';
+  return '';
+}
+
+function providerLabel(p) {
+  return { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude', subscription: 'Gemini(구독)' }[p] || '?';
+}
+
+/**
+ * API 오류를 선생님이 알아들을 말로 바꾼다.
+ * @return {{kind:string, hint:string, retry:boolean}}
+ *   kind: model | key | free | billing | rate | access | region | request | server | other
+ */
+function explainApiError(code, body) {
+  code = Number(code) || 0;
+  var b = String(body || '').toLowerCase();
+
+  if (/api[ _-]?key not valid|invalid[ _-]api[ _-]key|incorrect api key|invalid x-api-key|api_key_invalid|authentication_error|unauthenticated/.test(b) || code === 401) {
+    return { kind: 'key', retry: false, hint: 'API 키가 올바르지 않습니다. 키를 처음부터 다시 복사해 넣으세요.' };
+  }
+  if (code === 404 || /model_not_found|not_found_error|is not found|was not found|does not exist|unknown model|not supported for generatecontent|no such model/.test(b)) {
+    return { kind: 'model', retry: false, hint: '모델명을 찾을 수 없습니다. 철자를 확인하거나, 종료된 모델이면 최신 이름으로 바꾸세요.' };
+  }
+  if (/insufficient_quota|credit balance|billing_hard_limit|payment required/.test(b) || code === 402) {
+    return { kind: 'billing', retry: false, hint: '결제 잔액(크레딧)이 없습니다. 해당 회사 콘솔에서 결제 수단이나 충전을 확인하세요.' };
+  }
+  if (code === 429 && /limit:\s*0\b|free_tier[^,]*limit:\s*0/.test(b)) {
+    return { kind: 'free', retry: false, hint: '무료 등급에서는 이 모델을 쓸 수 없습니다. 다른 모델을 고르거나 결제(유료 등급)를 등록하세요.' };
+  }
+  if (code === 429) {
+    return { kind: 'rate', retry: true, hint: '호출 한도를 넘었습니다(무료 등급은 분당·하루 횟수 제한). 잠시 뒤 다시 하거나 나눠서 실행하세요.' };
+  }
+  if (/location is not supported|user location|unsupported_country|region/.test(b) && code === 400) {
+    return { kind: 'region', retry: false, hint: '이 지역에서는 쓸 수 없는 모델입니다.' };
+  }
+  if (code === 403) {
+    return { kind: 'access', retry: false, hint: '이 키로는 이 모델을 쓸 권한이 없습니다. 콘솔에서 사용 권한이나 프로젝트 설정을 확인하세요.' };
+  }
+  if (code >= 500 || code === 529) {
+    return { kind: 'server', retry: true, hint: '회사 서버가 잠시 불안정합니다. 잠시 뒤 다시 시도하세요.' };
+  }
+  if (code === 400) {
+    return { kind: 'request', retry: false, hint: '이 모델이 요청을 받지 않습니다. 글을 쓰는(대화용) 모델이 맞는지 확인하세요 — 이미지·음성·임베딩 모델은 쓸 수 없습니다.' };
+  }
+  return { kind: 'other', retry: false, hint: '' };
+}
+
+/** "내 키로 쓸 수 있는 모델" 목록에서 글쓰기에 못 쓰는 모델을 뺀다 */
+function isTextModel(provider, id) {
+  var m = normModel(id).toLowerCase();
+  if (!m) return false;
+  var common = /embed|image|imagen|tts|audio|speech|live|realtime|transcri|whisper|veo|lyria|robotics|computer-use|deep-research|antigravity|omni|aqa|moderation|dall-e|sora|search/;
+  if (common.test(m)) return false;
+  if (provider === 'gemini') return /^gemini/.test(m);
+  if (provider === 'openai') return /^(gpt|chatgpt|o\d)/.test(m) && !/instruct|codex|oss|babbage|davinci/.test(m);
+  if (provider === 'anthropic') return /^claude/.test(m);
+  return false;
+}
+
+/** 목록 정렬: -latest 별칭 → 버전 숫자가 큰 것 → 이름순 */
+function sortModelIds(ids) {
+  var ver = function (s) {
+    var m = String(s).match(/(\d+(?:\.\d+)?)/);
+    return m ? parseFloat(m[1]) : 0;
+  };
+  return ids.slice().sort(function (a, b) {
+    var la = /-latest$/.test(a) ? 1 : 0, lb = /-latest$/.test(b) ? 1 : 0;
+    if (la !== lb) return lb - la;
+    var d = ver(b) - ver(a);
+    if (d) return d;
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+}
+
+/** 연결 확인 결과를 표에 적을 한 줄로 */
+function modelStatusText(res, stamp) {
+  if (!res) return '';
+  var tail = stamp ? ' · ' + stamp : '';
+  if (res.ok === true) return '✓ 연결됨 · ' + res.sec + '초' + tail;
+  if (res.skipped) return '– ' + res.message + tail;
+  if (res.ok === null) return 'ⓘ ' + res.message;
+  return '✗ ' + (res.short || res.message) + tail;
+}
+
+/* Node 테스트용 export (Apps Script에서는 무시됨) */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    normModel: normModel, guessProvider: guessProvider, companyToProvider: companyToProvider,
+    providerLabel: providerLabel, explainApiError: explainApiError, isTextModel: isTextModel,
+    sortModelIds: sortModelIds, modelStatusText: modelStatusText
+  };
+}
+
+
+/* ==========================================================================
    20_Lib.gs
    ========================================================================== */
 
@@ -808,27 +989,69 @@ function styleHeader_(sheet, row, lastCol, bg) {
 }
 
 /**
- * 1행에 제목과 안내문을 함께 넣는다.
- * 데이터 영역 아래에 안내문을 두면 readTable_ 이 그 줄을 데이터로 읽어
- * 유령 항목이 생기므로, 설정용 시트의 안내문은 반드시 1행에 둔다.
+ * 시트 머리말 규칙 — 구글 시트의 두 가지 제약을 피한다.
+ *   1) 병합된 셀을 가르는 열 고정은 금지된다.
+ *      → 왼쪽 열을 고정하는 시트는 splitBanner_ 로 [고정 구역]과 [나머지]를 따로 병합한다.
+ *   2) 기존 병합과 일부만 겹치는 병합은 금지된다.
+ *      → 병합하기 전에 그 행의 병합을 먼저 푼다(unmergeRow_).
+ * v3.0.0 초판은 1번을 어겨서 [처음 설치]가 시트를 하나씩만 만들고 멈췄다.
  */
+function unmergeRow_(sheet, row) {
+  sheet.getRange(row, 1, 1, sheet.getMaxColumns()).breakApart();
+}
+
+function ensureCols_(sheet, n) {
+  var max = sheet.getMaxColumns();
+  if (max < n) sheet.insertColumnsAfter(max, n - max);
+}
+
+/** 1행 전체에 제목+안내문 (열 고정을 쓰지 않는 시트용) */
 function banner_(sheet, lastCol, title, note) {
-  var text = note ? (title + '\n' + note) : title;
-  var rng = sheet.getRange(1, 1, 1, Math.max(lastCol, 1));
+  var n = Math.max(lastCol, 1);
+  ensureCols_(sheet, n);
+  unmergeRow_(sheet, 1);
+  var rng = sheet.getRange(1, 1, 1, n);
   rng.merge().setBackground('#eceff1').setWrap(true).setVerticalAlignment('middle');
-  var rt = SpreadsheetApp.newRichTextValue().setText(text)
-    .setTextStyle(0, title.length, SpreadsheetApp.newTextStyle()
-      .setBold(true).setFontSize(13).setForegroundColor('#263238').build());
-  if (note) {
-    rt.setTextStyle(title.length, text.length, SpreadsheetApp.newTextStyle()
-      .setBold(false).setFontSize(10).setForegroundColor('#546e7a').build());
+  var text = note ? (title + '\n' + note) : title;
+  var cell = sheet.getRange(1, 1);
+  try {
+    var rt = SpreadsheetApp.newRichTextValue().setText(text)
+      .setTextStyle(0, title.length, SpreadsheetApp.newTextStyle()
+        .setBold(true).setFontSize(13).setForegroundColor('#263238').build());
+    if (note) {
+      rt.setTextStyle(title.length, text.length, SpreadsheetApp.newTextStyle()
+        .setBold(false).setFontSize(10).setForegroundColor('#546e7a').build());
+    }
+    cell.setRichTextValue(rt.build());
+  } catch (e) {
+    cell.setValue(text).setFontSize(11);    // 서식이 실패해도 설치는 계속된다
   }
-  rng.setRichTextValue(rt.build());
   sheet.setRowHeight(1, note ? 62 : 34);
 }
 
+/**
+ * 왼쪽 열을 고정하는 시트용 1행 머리말.
+ * [A~고정열] 에 제목, [그다음~끝] 에 안내문을 각각 병합한다. 고정 경계를 가르지 않는다.
+ */
+function splitBanner_(sheet, frozenCols, lastCol, title, note) {
+  ensureCols_(sheet, lastCol);
+  unmergeRow_(sheet, 1);
+  sheet.getRange(1, 1, 1, frozenCols).merge()
+    .setValue(title).setBackground('#dfe8e0').setFontColor('#1b3a2a')
+    .setFontWeight('bold').setFontSize(12).setWrap(true).setVerticalAlignment('middle');
+  if (lastCol > frozenCols) {
+    sheet.getRange(1, frozenCols + 1, 1, lastCol - frozenCols).merge()
+      .setValue(note).setBackground('#eceff1').setFontSize(10)
+      .setWrap(true).setVerticalAlignment('middle');
+  }
+  sheet.setRowHeight(1, 62);
+}
+
 function noteRow_(sheet, row, lastCol, text) {
-  var r = sheet.getRange(row, 1, 1, Math.max(lastCol, 1));
+  var n = Math.max(lastCol, 1);
+  ensureCols_(sheet, n);
+  unmergeRow_(sheet, row);
+  var r = sheet.getRange(row, 1, 1, n);
   r.merge().setValue(text).setBackground('#eceff1').setFontSize(10)
     .setWrap(true).setVerticalAlignment('middle');
   sheet.setRowHeight(row, 46);
@@ -852,8 +1075,8 @@ function onOpen() {
   m.addSeparator();
   m.addItem('① 처음 설치 / 구조 복구', 'installAll');
   m.addSeparator();
-  m.addItem('② AI 연결 설정', 'openApiDialog');
-  m.addItem('   연결 테스트', 'testConnection');
+  m.addItem('② AI 연결 · 모델 설정', 'openApiDialog');
+  m.addItem('   모델 연결 테스트', 'testAllModels');
   m.addSeparator();
   m.addItem('③ 학생 명단 동기화', 'syncRoster');
   m.addSeparator();
@@ -905,29 +1128,42 @@ function showVersion() {
 
 /** 전체 설치 (여러 번 실행해도 안전 — 기존 데이터는 보존) */
 function installAll() {
-  installCore_();
+  try {
+    installCore_();
+  } catch (e) {
+    ui_().alert(APP.MENU, e.message, ui_().ButtonSet.OK);
+    return;
+  }
   toast_('설치/복구 완료.', APP.MENU);
   ui_().alert(APP.MENU,
     '구조 설치가 끝났습니다.\n\n이어서 [🚀 시작하기]를 누르면 나머지를 단계별로 안내합니다.',
     ui_().ButtonSet.OK);
 }
 
-/** 알림 없이 시트 구조만 만든다 (온보딩 팝업에서도 호출) */
+/**
+ * 알림 없이 시트 구조만 만든다 (온보딩 팝업에서도 호출).
+ * 단계마다 따로 실행해서, 하나가 실패해도 나머지는 끝까지 만든다.
+ * 실패한 단계가 있으면 마지막에 모아서 알린다.
+ */
 function installCore_() {
   var lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error('다른 작업이 실행 중입니다. 잠시 후 다시 시도하세요.');
+  var steps = [
+    ['🚀 시작하기', buildStart], ['⚙️ 설정', buildConfig], ['🧩 기록종류', buildRecordTypes],
+    ['📚 교과영역', buildSubjects], ['📐 공통규칙', buildCommonRules], ['🗂 활동목록', buildActivityList],
+    ['👤 학생명단', buildRoster], ['✅ 검토', buildReview], ['📖 사용법', buildHelp],
+    ['시트 순서 정리', orderSheets_]
+  ];
+  var failed = [];
   try {
-    buildStart();
-    buildConfig();
-    buildRecordTypes();
-    buildSubjects();
-    buildCommonRules();
-    buildActivityList();
-    buildRoster();
-    buildReview();
-    buildHelp();
-    orderSheets_();
+    steps.forEach(function (st) {
+      try { st[1](); } catch (e) { failed.push('· ' + st[0] + ' — ' + e.message); }
+    });
   } finally { lock.releaseLock(); }
+  if (failed.length) {
+    throw new Error('설치 중 일부를 만들지 못했습니다.\n\n' + failed.join('\n') +
+      '\n\n나머지는 모두 만들었습니다. 이 창을 캡처해 제작자에게 보내 주세요.');
+  }
 }
 
 function orderSheets_() {
@@ -943,37 +1179,76 @@ function orderSheets_() {
 }
 
 /* ---------------------------------------------------------------- 설정 */
+/**
+ * [⚙️ 설정] 시트
+ *   1~3행   머리말 · 안내 · 헤더
+ *   4행~    항목 | 값 | 설명
+ *   그 아래 🤖 모델 목록 표 (모델명 | 회사 | 수준 | 언제 쓰나 | 연결 확인)
+ * 다시 실행해도 선생님이 바꾼 값과 모델 목록은 그대로 둔다.
+ */
 function buildConfig() {
   var s = shOrCreate_(APP.SH.CONFIG);
-  var existing = {};
-  if (s.getLastRow() >= 4) {
-    s.getRange(4, 1, s.getLastRow() - 3, 2).getValues().forEach(function (r) {
-      if (String(r[0]).trim()) existing[String(r[0]).trim()] = r[1];
-    });
+  var existing = {}, oldModels = null;
+  var last = s.getLastRow();
+  var tHead = modelTableRow_(s);
+  if (last >= 4) {
+    var endSet = tHead ? tHead - 1 : last;
+    if (endSet >= 4) {
+      s.getRange(4, 1, endSet - 3, 2).getValues().forEach(function (r) {
+        var k = String(r[0]).trim();
+        if (k && !existing.hasOwnProperty(k)) existing[k] = r[1];
+      });
+    }
   }
+  if (tHead) oldModels = readModelRowsAt_(s, tHead);
+
+  // v3.0.x → v3.1: 손대지 않은 옛 기본 모델은 새 기본값으로, [추가 모델]은 모델 목록으로 옮긴다
+  Object.keys(OLD_DEFAULT_MODELS).forEach(function (k) {
+    if (normModel(existing[k]) === OLD_DEFAULT_MODELS[k]) delete existing[k];
+  });
+  var extra = String(existing['추가 모델'] || '').split(',').map(normModel).filter(String);
+
   s.clear();
+  s.getRange(1, 1, s.getMaxRows(), s.getMaxColumns()).breakApart().clearDataValidations();
   s.getRange('A1').setValue('⚙️ 설정  —  ' + APP.VERSION)
     .setFontSize(14).setFontWeight('bold');
-  noteRow_(s, 2, 3, 'API 키는 이 시트에 저장되지 않습니다. 메뉴 > ② AI 연결 설정 에서 입력하며, 사용자 계정별로 따로 보관되어 사본을 공유해도 남에게 넘어가지 않습니다.');
+  noteRow_(s, 2, MODEL_HEAD.length, 'API 키는 이 시트에 저장되지 않습니다. 메뉴 > ② AI 연결 · 모델 설정 에서 입력하며, 사용자 계정별로 따로 보관되어 사본을 공유해도 남에게 넘어가지 않습니다.');
   s.getRange(3, 1, 1, 3).setValues([['항목', '값', '설명']]);
   styleHeader_(s, 3, 3);
 
   var rows = [
     ['교사 경력(년)', 15, '프롬프트의 역할 문장에 쓰입니다. 숫자만.'],
     ['기본 교과영역', '수학', '새 활동을 만들 때 기본으로 선택되는 교과. [📚 교과영역] 시트의 키.'],
-    ['활동용 모델', 'gemini-2.5-flash', '활동별 세특 생성에 쓰는 모델. 저렴한 모델 권장.'],
-    ['합본용 모델', 'gpt-5-mini', '최종 압축에 쓰는 모델. 조금 더 좋은 모델 권장.'],
+    ['활동용 모델', DEFAULT_MODEL, '활동별 세특 생성에 쓰는 모델. 아래 모델 목록에서 고르거나 직접 적으세요. Flash급이면 충분합니다.'],
+    ['합본용 모델', DEFAULT_MODEL, '여러 활동을 한 편으로 압축할 때 쓰는 모델. 대개 활동용과 같아도 되고, 글자수를 잘 못 맞추면 한 단계 위 모델로.'],
     ['학생 이름 마스킹', true, 'TRUE면 학생 이름을 AI에 보내지 않습니다. 개인정보 보호 권장값.'],
     ['결과 자동검증', true, 'TRUE면 생성 직후 기재 금지사항·분량·어미를 자동 점검합니다.'],
-    ['1회 최대 생성 건수', 25, '한 번에 처리할 최대 학생 수. 시간 초과 방지.'],
-    ['추가 모델', '', '드롭다운에 없는 모델을 쉼표로 적으면 선택지에 추가됩니다.']
+    ['1회 최대 생성 건수', 25, '한 번에 처리할 최대 학생 수. 실행 시간(약 6분) 제한 때문에 넘치면 나눠서 처리합니다.']
   ];
   rows.forEach(function (r) { if (existing.hasOwnProperty(r[0])) r[1] = existing[r[0]]; });
   s.getRange(4, 1, rows.length, 3).setValues(rows);
   s.getRange(4, 1, rows.length, 1).setFontWeight('bold');
   s.getRange(4, 2, rows.length, 1).setBackground(APP.COLORS.input);
   s.getRange(4, 3, rows.length, 1).setFontColor('#666666').setWrap(true);
-  s.setColumnWidth(1, 160); s.setColumnWidth(2, 200); s.setColumnWidth(3, 460);
+
+  // 🤖 모델 목록
+  var note = 4 + rows.length + 1;
+  var head = note + 1;
+  noteRow_(s, note, MODEL_HEAD.length,
+    '🤖 모델 목록 — 여기 적힌 이름이 모든 [모델] 드롭다운의 선택지가 됩니다. 새 이름을 직접 적어도 되고, ' +
+    '메뉴 ② [AI 연결 · 모델 설정]에서 한 줄씩 연결 테스트를 하면 [연결 확인] 칸에 ✓/✗ 가 남습니다. ' +
+    '최신 이름: Gemini ' + MODEL_LINKS.gemini + ' · OpenAI ' + MODEL_LINKS.openai + ' · Claude ' + MODEL_LINKS.anthropic);
+  s.setRowHeight(note, 62);
+  var models = (oldModels && oldModels.length) ? oldModels : presetModelRows_();
+  extra.forEach(function (m) {
+    if (!models.some(function (r) { return r.model === m; })) models.push({ model: m, company: '자동', level: '', memo: '직접 추가', status: '' });
+  });
+  writeModelTable_(s, head, models);
+  applyConfigModelDropdown_();
+
+  // 폭: A 항목/모델명 · B 값/수준 · C 설명/언제 쓰나(넓게) · D 회사 · E 연결 확인
+  s.setColumnWidth(1, 190); s.setColumnWidth(2, 190); s.setColumnWidth(3, 460);
+  s.setColumnWidth(4, 90); s.setColumnWidth(5, 230);
   s.setFrozenRows(3);
 }
 
@@ -995,7 +1270,7 @@ function buildRecordTypes() {
   s.getRange(3, 4, rows.length, 1).insertCheckboxes();
   s.getRange(3, 1, rows.length, head.length).setWrap(true).setVerticalAlignment('top');
   [90, 220, 80, 110, 260, 320, 380, 220].forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
-  s.setFrozenRows(2); s.setFrozenColumns(2);
+  s.setFrozenRows(2);
 }
 
 /* ------------------------------------------------------------ 교과영역 */
@@ -1015,7 +1290,7 @@ function buildSubjects() {
   s.getRange(3, 3, 200, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(['교과', '공통'], true).build());
   [110, 220, 80, 200, 620].forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
-  s.setFrozenRows(2); s.setFrozenColumns(2);
+  s.setFrozenRows(2);
 }
 
 /* ------------------------------------------------------------ 공통규칙 */
@@ -1052,7 +1327,7 @@ function buildActivityList() {
   styleHeader_(s, 2, head.length);
   [110, 200, 100, 110, 80, 320, 340, 120, 300, 150, 150]
     .forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
-  s.setFrozenRows(2); s.setFrozenColumns(2);
+  s.setFrozenRows(2);
   s.getRange(3, 1, 300, head.length).setWrap(true).setVerticalAlignment('top');
   refreshActivityValidation_();
 }
@@ -1182,7 +1457,8 @@ function onboardStatus() {
   var st = {
     installed: false, hasKey: false, keyNames: [],
     rosterCount: 0, activities: [], exampleCount: 0, done: isOnboardDone_(),
-    models: [], defaultModel: ''
+    models: [], defaultModel: '', compileModel: '',
+    providerDefaults: PROVIDER_DEFAULT_MODEL, presets: presetModelRows_(), links: MODEL_LINKS
   };
   try {
     st.installed = !!(sh_(APP.SH.CONFIG) && sh_(APP.SH.RECORD) && sh_(APP.SH.ACTIVITY) && sh_(APP.SH.ROSTER));
@@ -1199,7 +1475,8 @@ function onboardStatus() {
     } catch (e) {}
     try {
       st.models = modelChoices_().filter(function (m) { return m.indexOf('구독') < 0; });
-      st.defaultModel = String(cfg_('활동용 모델', 'gemini-2.5-flash'));
+      st.defaultModel = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
+      st.compileModel = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
     } catch (e) {}
     if (st.activities.length) {
       try { st.exampleCount = readExampleRows_(getActivity_(st.activities[0].key)).length; } catch (e) {}
@@ -1215,22 +1492,38 @@ function onboardInstall() {
 }
 
 /* -------------------------------------------------------------- 2단계 */
+/**
+ * 키를 저장하고, 고른(또는 기본) 모델로 한 번 불러 본다.
+ * 성공하면 그 모델을 활동용·합본용 모델로 맞추고, 모델 목록 표에 ✓ 를 남긴다.
+ * @param {{provider:string, key?:string, model?:string}} p  key 가 비면 저장된 키로 모델만 다시 시험
+ */
 function onboardSaveKey(p) {
   var provider = String(p.provider || 'gemini');
+  if (PROVIDERS.indexOf(provider) < 0) throw new Error('알 수 없는 회사: ' + provider);
   var key = String(p.key || '').trim();
-  if (!key) throw new Error('키를 입력하세요.');
-  setKey_(provider, key);
+  if (key) setKey_(provider, key);
+  else if (!getKey_(provider)) throw new Error('키를 입력하세요.');
 
-  // 방금 넣은 키에 맞는 모델을 기본값으로 올려 둔다
-  var model = provider === 'gemini' ? 'gemini-2.5-flash'
-            : provider === 'openai' ? 'gpt-5-mini' : 'claude-haiku-4-5';
-  try {
-    var r = callAI_('한 단어로만 답한다.', '준비됐으면 "확인"이라고만 답해라.', model);
-    setCfg_('활동용 모델', model);
-    return { ok: true, message: '연결됐습니다. (' + String(r).slice(0, 20) + ')', status: onboardStatus() };
-  } catch (e) {
-    return { ok: false, message: e.message, status: onboardStatus() };
+  var model = normModel(p.model) || PROVIDER_DEFAULT_MODEL[provider];
+  var guess = guessProvider(model);
+  if (guess && guess !== provider) {
+    return { ok: false, status: onboardStatus(),
+      message: model + ' 은(는) ' + providerLabel(guess) + ' 모델입니다. 위에서 회사를 ' + providerLabel(guess) +
+               '(으)로 바꾸거나, ' + providerLabel(provider) + ' 모델 이름을 적어 주세요.' };
   }
+  var res = testModel({ model: model, company: providerLabel(provider) });
+  try {
+    var preset = PRESET_MODELS.filter(function (x) { return x.model === model; })[0] || {};
+    recordModelStatus_(res, { company: guess ? '자동' : providerLabel(provider), level: preset.level, memo: preset.memo });
+  } catch (e) {}
+  if (res.ok) {
+    setCfg_('활동용 모델', model);
+    setCfg_('합본용 모델', model);
+    try { refreshModelDropdowns_(); } catch (e) {}
+    return { ok: true, model: model, status: onboardStatus(),
+             message: '연결됐습니다 · ' + model + ' · ' + res.sec + '초. 활동용·합본용 모델을 이것으로 맞췄습니다.' };
+  }
+  return { ok: false, model: model, kind: res.kind || '', status: onboardStatus(), message: res.message };
 }
 
 /** 설정 시트의 값 하나를 바꾼다 */
@@ -1308,14 +1601,17 @@ function onboardTestGenerate(activityKey) {
 
   var rec = findByKey(getRecordTypes_(), act.recordKey);
   var user = buildStudentBlock(cols, rows[0].values, { grade: (rec && rec.useGrade) ? 3 : '' });
-  var model = String(cfg_('활동용 모델', 'gemini-2.5-flash'));
-  if (providerOf_(model) === 'subscription') model = 'gemini-2.5-flash';
+  var model = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
+  if (providerOf_(model) === 'subscription') {
+    var withKey = PROVIDERS.filter(function (x) { return getKey_(x); })[0] || 'gemini';
+    model = PROVIDER_DEFAULT_MODEL[withKey];
+  }
 
   var txt = cleanResult_(callAI_(promptFor_(act), user, model));
   var limit = charsFor_(act) * 3;
   var v = validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES);
   return {
-    text: txt, bytes: v.bytes, limit: limit,
+    text: txt, bytes: v.bytes, limit: limit, model: model,
     issues: v.issues.map(function (i) { return (i.level === 'block' ? '[수정] ' : '[확인] ') + i.label; })
   };
 }
@@ -1504,8 +1800,30 @@ function buildHelp() {
   P('· 주민등록번호, 가정환경, 건강 정보 등 민감정보는 입력하지 마세요.');
   P('· 유료 API는 호출한 만큼 과금됩니다. 결과 확인 후 체크박스를 꼭 해제하세요.');
 
-  H('9. 자주 막히는 곳');
-  P('Q. 호출이 실패해요 → 메뉴 ② 연결 테스트. 고른 모델이 내 키로 쓸 수 있는 모델인지 확인하세요.');
+  H('9. AI 모델 — 직접 적고, 시험하고, 고르기');
+  P('모델 목록은 [⚙️ 설정] 시트 아래 [🤖 모델 목록] 표에 있습니다. 여기 적힌 이름이 모든 [모델] 드롭다운의 선택지입니다.');
+  P('메뉴 ② AI 연결 · 모델 설정 > [② 모델] 탭에서 이름을 적고 [시험]을 누르면 ✓/✗ 와 걸린 시간이 표에 남습니다.');
+  P('메뉴 ② 아래 [모델 연결 테스트]는 목록 전체를 한 번에 확인합니다. 학기 초에 한 번 눌러 두세요.');
+  P('');
+  P('어느 수준이면 충분할까?');
+  P('  ★ 충분(기본) : ' + PROVIDER_DEFAULT_MODEL.gemini + ' · ' + PROVIDER_DEFAULT_MODEL.openai + ' · ' + PROVIDER_DEFAULT_MODEL.anthropic + '  → 과세특·창체·행발 거의 모든 경우');
+  P('  가볍게       : gemini-flash-lite-latest  → 행발처럼 짧은 글, 한 번에 많은 학생');
+  P('  고급         : gemini-pro-latest · gpt-5.6-terra · claude-sonnet-5  → 합본 압축이 글자수를 자꾸 넘길 때만 (느리고 몇 배 비쌈)');
+  P('  결과 품질은 모델 등급보다 예시와 학생 자료가 훨씬 크게 좌우합니다. 상위 모델부터 쓰지 마세요.');
+  P('');
+  P('최신 모델명은 어디서?');
+  P('  Gemini : ' + MODEL_LINKS.gemini + '  (각 모델의 Model code)');
+  P('  OpenAI : ' + MODEL_LINKS.openai);
+  P('  Claude : ' + MODEL_LINKS.anthropic + '  (Claude API ID)');
+  P('  또는 메뉴 ② > [③ 도움말] > [목록 불러오기] 를 누르면 내 키로 쓸 수 있는 모델을 회사에 직접 물어봐 줍니다.');
+  P('  "Gemini 3.8 Flash" 같은 표시 이름이 아니라 gemini-3.8-flash 같은 영문 소문자 코드를 적습니다.');
+  P('  -latest 로 끝나는 Gemini 이름은 새 모델이 나오면 자동으로 바뀌어 낡지 않습니다. 그래서 기본값입니다.');
+  P('  버전 번호가 든 이름은 결과가 일정한 대신, 1년쯤 지나면 종료될 수 있습니다.');
+
+  H('10. 자주 막히는 곳');
+  P('Q. 호출이 실패해요 → 메뉴 ② 아래 [모델 연결 테스트]. ✗ 옆에 이유가 나옵니다(모델명 오류 · 무료 등급 불가 · 한도 초과 · 키 오류).');
+  P('Q. "모델명을 찾을 수 없습니다" → 모델이 종료됐거나 철자가 틀렸습니다. 위 9번의 공식 목록에서 새 이름으로 바꾸세요.');
+  P('Q. 한 번에 많이 돌리면 중간에 멈춰요 → 실행 시간 제한(약 6분) 때문입니다. 남은 행은 체크가 그대로 있으니 한 번 더 누르세요.');
   P('Q. Gemini 무료 등급 → 분당 호출 제한이 있어 여러 명을 한꺼번에 돌리면 일부가 실패합니다. 나눠서 실행하세요.');
   P('Q. Gemini(구독)인데 결과가 없어요 → 결과 셀에 뜬 [생성] 버튼을 눌러야 합니다.');
   P('Q. 결과가 갱신 안 돼요 → 셀을 클릭하고 수식 끝에 공백 한 칸을 넣고 엔터(캐시 갱신).');
@@ -1716,8 +2034,8 @@ function buildActivityInputSheet_(key, name, cols, rec) {
     .concat(['생성', '모델', 'AI 결과', '최종본', '바이트', '검증']);
   var n = head.length;
 
-  noteRow_(s, 1, n,
-    '▶ ' + name + '  (' + rec.name + ' · ' + rec.chars + '자 기준)\n' +
+  splitBanner_(s, 3, n,
+    '▶ ' + name + '\n' + rec.name + ' · ' + rec.chars + '자',
     '① 노란 칸에 학생 자료 입력  →  ② [모델] 선택  →  ③ [생성] 체크 또는 메뉴 ⑥ 체크된 행 생성  →  ' +
     '④ AI 결과를 확인하고 [최종본] 칸에 붙여넣어 다듬기  →  ⑤ 체크 해제(재호출·비용 방지)');
   s.getRange(2, 1).setValue('').setFontSize(8);
@@ -1742,6 +2060,7 @@ function buildActivityInputSheet_(key, name, cols, rec) {
   s.getRange(APP.DATA_ROW, 5, 500, cols.length).setBackground(APP.COLORS.input)
     .setWrap(true).setVerticalAlignment('top');
   s.getRange(APP.DATA_ROW, 1, 500, 4).setBackground(APP.COLORS.lock);
+  try { applyModelDropdown_(s, 500); } catch (e) {}   // 비워 두면 [⚙️ 설정]의 활동용 모델
   return s;
 }
 
@@ -2050,10 +2369,10 @@ function generateMoreExamples() {
   if (ans === null) return;
   var want = Math.max(1, Math.min(5, Number(ans) || 2));
 
-  var model = String(cfg_('활동용 모델', 'gemini-2.5-flash'));
+  var model = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
   if (providerOf_(model) === 'subscription') {
     ui_().alert(APP.MENU,
-      '예시 생성에는 API 키가 필요합니다.\n[⚙️ 설정]의 활동용 모델을 gemini-2.5-flash 등으로 바꾸거나 메뉴 ②에서 키를 등록하세요.',
+      '예시 생성에는 API 키가 필요합니다.\n[⚙️ 설정]의 활동용 모델을 ' + DEFAULT_MODEL + ' 등으로 바꾸거나 메뉴 ②에서 키를 등록하세요.',
       ui_().ButtonSet.OK);
     return;
   }
@@ -2204,7 +2523,7 @@ function wizardContext() {
     }),
     defaultSubject: String(cfg_('기본 교과영역', '공통')),
     models: modelChoices_(),
-    defaultModel: String(cfg_('활동용 모델', 'gemini-2.5-flash')),
+    defaultModel: normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL,
     hasKey: !!(getKey_('openai') || getKey_('gemini') || getKey_('anthropic'))
   };
 }
@@ -2216,10 +2535,10 @@ function wizardContext() {
 function wizardSuggest(p) {
   var rec = findByKey(getRecordTypes_(), p.recordKey) || getRecordTypes_()[0];
   var sub = findByKey(getSubjects_(), p.subjectKey) || findByKey(getSubjects_(), '공통');
-  var model = p.model || String(cfg_('활동용 모델', 'gemini-2.5-flash'));
+  var model = normModel(p.model) || normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
   var want = Math.max(1, Math.min(3, Number(p.count) || 1));
   if (providerOf_(model) === 'subscription') {
-    throw new Error('마법사는 API 키가 필요합니다. 모델을 gemini-2.5-flash 등으로 바꾸거나 메뉴 ②에서 키를 등록하세요.');
+    throw new Error('마법사는 API 키가 필요합니다. 모델을 ' + DEFAULT_MODEL + ' 등으로 바꾸거나 메뉴 ②에서 키를 등록하세요.');
   }
 
   var system = [
@@ -2344,31 +2663,180 @@ function wizardCreate(def) {
    ========================================================================== */
 
 /**
- * 세특 작성 도우미 v3 — AI 연결
+ * 세특 작성 도우미 v3 — AI 연결 · 모델
  * API 키는 UserProperties에 저장되어 사용자 계정별로 분리됩니다.
  * 사본을 다른 선생님과 공유해도 키는 넘어가지 않습니다.
+ *
+ * 모델은 [⚙️ 설정] 시트 아래 [🤖 모델 목록] 표에서 선생님이 직접 적습니다.
+ * 표가 곧 드롭다운의 선택지이고, 연결 테스트 결과도 그 표에 남습니다.
  */
 
 var SUBSCRIPTION_MODEL = 'Gemini(구독)';
+var PROVIDERS = ['gemini', 'openai', 'anthropic'];
+// [⚙️ 설정]의 항목|값|설명 열 폭에 맞춰 순서를 정했다 (C열이 넓은 설명 칸)
+var MODEL_HEAD = ['모델명', '수준', '언제 쓰나', '회사', '연결 확인'];
+var MODEL_FIELDS = ['model', 'level', 'memo', 'company', 'status'];
+function modelCol_(field) { return MODEL_FIELDS.indexOf(field) + 1; }
+var COMPANY_CHOICES = ['자동', 'Gemini', 'OpenAI', 'Claude'];
+var TEST_SYSTEM = '짧게 답한다.';
+var TEST_USER = '연결 확인입니다. "확인"이라고만 답하세요.';
 
+var __modelCache = null;   // 한 번 실행하는 동안만 쓰는 표 캐시
+
+/* ------------------------------------------------------------ 모델 표 */
+/** [⚙️ 설정] 시트에서 모델 표 헤더가 있는 행. 없으면 0 */
+function modelTableRow_(s) {
+  if (!s) return 0;
+  var last = s.getLastRow();
+  if (!last) return 0;
+  var v = s.getRange(1, 1, last, 2).getValues();
+  for (var i = 0; i < v.length; i++) {
+    if (String(v[i][0]).trim() === MODEL_HEAD[0] && String(v[i][1]).trim() === MODEL_HEAD[1]) return i + 1;
+  }
+  return 0;
+}
+
+/** 표 읽기 → [{model, company, level, memo, status, row}] */
+function readModelRowsAt_(s, head) {
+  var out = [];
+  var last = s.getLastRow();
+  if (!head || last <= head) return out;
+  var v = s.getRange(head + 1, 1, last - head, MODEL_HEAD.length).getValues();
+  var seen = {};
+  for (var i = 0; i < v.length; i++) {
+    var get = function (f) { return v[i][modelCol_(f) - 1]; };
+    var m = normModel(get('model'));
+    if (!m || seen[m]) continue;
+    seen[m] = true;
+    out.push({
+      model: m, company: String(get('company') || '자동').trim() || '자동',
+      level: String(get('level') || ''), memo: String(get('memo') || ''), status: String(get('status') || ''),
+      row: head + 1 + i
+    });
+  }
+  return out;
+}
+
+function presetModelRows_() {
+  return PRESET_MODELS.map(function (p) {
+    return { model: p.model, company: '자동', level: p.level, memo: p.memo, status: '' };
+  });
+}
+
+/** 지금 쓸 수 있는 모델 표 (표가 없으면 기본 목록) */
+function readModelTable_() {
+  if (__modelCache) return __modelCache;
+  var s = sh_(APP.SH.CONFIG);
+  var head = modelTableRow_(s);
+  __modelCache = head ? readModelRowsAt_(s, head) : presetModelRows_();
+  return __modelCache;
+}
+
+/** 표 쓰기 — head 행에 헤더, 그 아래에 rows. 아래쪽 남은 줄은 비운다 */
+function writeModelTable_(s, head, rows) {
+  var n = MODEL_HEAD.length;
+  ensureCols_(s, n);
+  var last = s.getLastRow();
+  if (last > head) s.getRange(head + 1, 1, last - head, n).clearContent();
+  s.getRange(head, 1, 1, n).setValues([MODEL_HEAD]);
+  styleHeader_(s, head, n, '#35583f');
+  if (rows.length) {
+    s.getRange(head + 1, 1, rows.length, n).setValues(rows.map(modelRowValues_));
+  }
+  var body = Math.max(rows.length + 10, 20);   // 빈 줄도 몇 개 서식을 입혀 둔다
+  if (head + body > s.getMaxRows()) s.insertRowsAfter(s.getMaxRows(), head + body - s.getMaxRows());
+  s.getRange(head + 1, 1, body, n).setWrap(true).setVerticalAlignment('top');
+  s.getRange(head + 1, modelCol_('model'), body, 1).setBackground(APP.COLORS.input).setFontWeight('bold');
+  s.getRange(head + 1, modelCol_('level'), body, 1).setFontWeight('bold').setFontColor('#35583f');
+  s.getRange(head + 1, modelCol_('memo'), body, 1).setFontColor('#555555');
+  s.getRange(head + 1, modelCol_('company'), body, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(COMPANY_CHOICES, true).setAllowInvalid(true).build());
+  s.getRange(head + 1, modelCol_('status'), body, 1).setFontColor('#37474f');
+  __modelCache = null;
+}
+
+function modelRowValues_(r) {
+  var d = { model: r.model, level: r.level || '', memo: r.memo || '', company: r.company || '자동', status: r.status || '' };
+  return MODEL_FIELDS.map(function (f) { return d[f]; });
+}
+
+/** 표에서 [회사]를 직접 고른 모델 → 회사 */
+function companyMap_() {
+  var map = {};
+  readModelTable_().forEach(function (r) {
+    var p = companyToProvider(r.company);
+    if (p) map[r.model] = p;
+  });
+  return map;
+}
+
+/** 드롭다운 선택지: 구독 + 표의 모델 + 설정에 적힌 모델 */
 function modelChoices_() {
-  var extra = String(cfg_('추가 모델', '') || '').split(',').map(function (x) { return x.trim(); }).filter(String);
-  return [
-    SUBSCRIPTION_MODEL,
-    'gemini-2.5-flash', 'gemini-2.5-pro',
-    'gpt-5-mini', 'gpt-5',
-    'claude-haiku-4-5', 'claude-sonnet-4-5'
-  ].concat(extra);
+  var out = [SUBSCRIPTION_MODEL], seen = {};
+  seen[SUBSCRIPTION_MODEL] = true;
+  var add = function (m) { m = normModel(m); if (m && !seen[m]) { seen[m] = true; out.push(m); } };
+  readModelTable_().forEach(function (r) { add(r.model); });
+  add(cfg_('활동용 모델', DEFAULT_MODEL));
+  add(cfg_('합본용 모델', DEFAULT_MODEL));
+  return out;
 }
 
+function modelValidation_() {
+  return SpreadsheetApp.newDataValidation()
+    .requireValueInList(modelChoices_(), true)
+    .setAllowInvalid(true)          // 목록에 없는 이름도 직접 적을 수 있게
+    .build();
+}
+
+/** 시트의 [모델] 열에 드롭다운을 입힌다 (헤더가 HEAD_ROW 에 있는 입력·취합 시트) */
+function applyModelDropdown_(sheet, rows) {
+  var c = colOf_(sheet, APP.HEAD_ROW, '모델');
+  if (!c) return false;
+  var n = rows || (sheet.getMaxRows() - APP.DATA_ROW + 1);
+  if (n < 1) return false;
+  sheet.getRange(APP.DATA_ROW, c, n, 1).setDataValidation(modelValidation_());
+  return true;
+}
+
+/** 모델 목록이 바뀐 뒤 모든 입력·취합 시트와 설정 칸의 드롭다운을 새로 입힌다 */
+function refreshModelDropdowns_() {
+  __modelCache = null;
+  var n = 0;
+  try {
+    getActivities_().forEach(function (a) {
+      var s = a.inSheet && sh_(a.inSheet);
+      if (s && applyModelDropdown_(s)) n++;
+    });
+  } catch (e) {}
+  try {
+    compileSheets_().forEach(function (s) {
+      var rows = s.getLastRow() - APP.DATA_ROW + 1;
+      if (rows > 0 && applyModelDropdown_(s, rows)) n++;
+    });
+  } catch (e) {}
+  applyConfigModelDropdown_();
+  return n;
+}
+
+/** [⚙️ 설정]의 활동용/합본용 모델 칸 */
+function applyConfigModelDropdown_() {
+  var s = sh_(APP.SH.CONFIG);
+  if (!s || !s.getLastRow()) return;
+  var v = s.getRange(1, 1, s.getLastRow(), 1).getValues();
+  for (var i = 0; i < v.length; i++) {
+    var k = String(v[i][0]).trim();
+    if (k === '활동용 모델' || k === '합본용 모델') s.getRange(i + 1, 2).setDataValidation(modelValidation_());
+  }
+}
+
+/* ------------------------------------------------------------ 회사 판별 */
 function providerOf_(model) {
-  var m = String(model || '').trim();
+  var m = normModel(model);
   if (!m || m === SUBSCRIPTION_MODEL) return 'subscription';
-  if (/^gemini/i.test(m)) return 'gemini';
-  if (/^claude/i.test(m)) return 'anthropic';
-  return 'openai';
+  return companyMap_()[m] || guessProvider(m);
 }
 
+/* ------------------------------------------------------------ 키 보관 */
 function props_() { return PropertiesService.getUserProperties(); }
 function getKey_(p) { return props_().getProperty('KEY_' + p) || ''; }
 function setKey_(p, v) {
@@ -2376,40 +2844,201 @@ function setKey_(p, v) {
   else props_().deleteProperty('KEY_' + p);
 }
 
-/* -------------------------------------------------------------- 설정 UI */
+/* -------------------------------------------------------------- 설정 창 */
 function openApiDialog() {
-  var t = HtmlService.createTemplateFromFile('UI_ApiKey');
-  t.has = {
-    openai: !!getKey_('openai'), gemini: !!getKey_('gemini'), anthropic: !!getKey_('anthropic')
+  var html = HtmlService.createHtmlOutputFromFile('UI_ApiKey').setWidth(760).setHeight(640);
+  ui_().showModalDialog(html, 'AI 연결 · 모델 설정');
+}
+
+/** 설정 창이 처음 열릴 때 필요한 것 전부 */
+function getAiSettings() {
+  var has = {};
+  PROVIDERS.forEach(function (p) { has[p] = !!getKey_(p); });
+  return {
+    has: has,
+    rows: readModelTable_().map(function (r) {
+      return { model: r.model, company: r.company, level: r.level, memo: r.memo, status: r.status };
+    }),
+    activity: normModel(cfg_('활동용 모델', DEFAULT_MODEL)),
+    compile: normModel(cfg_('합본용 모델', DEFAULT_MODEL)),
+    presets: presetModelRows_(),
+    links: MODEL_LINKS,
+    defaults: PROVIDER_DEFAULT_MODEL,
+    fallback: DEFAULT_MODEL
   };
-  ui_().showModalDialog(t.evaluate().setWidth(560).setHeight(560), 'AI 연결 설정');
 }
 
 function saveKeys(obj) {
-  ['openai', 'gemini', 'anthropic'].forEach(function (p) {
+  PROVIDERS.forEach(function (p) {
     if (obj[p] === undefined) return;
     var v = String(obj[p] || '').trim();
     if (v === '__KEEP__') return;
+    if (v === '__DELETE__') v = '';
     setKey_(p, v);
   });
-  return '저장했습니다. 이 키는 ' + Session.getActiveUser().getEmail() + ' 계정에만 저장됩니다.';
+  var has = {};
+  PROVIDERS.forEach(function (p) { has[p] = !!getKey_(p); });
+  var who = '';
+  try { who = Session.getActiveUser().getEmail(); } catch (e) {}
+  return { has: has, message: '저장했습니다. 키는 ' + (who || '내') + ' 계정에만 보관됩니다.' };
 }
 
-function testConnection() {
-  var out = [];
-  ['openai', 'gemini', 'anthropic'].forEach(function (p) {
-    if (!getKey_(p)) { out.push('· ' + p + ' : 키 없음'); return; }
-    var model = p === 'openai' ? 'gpt-5-mini' : (p === 'gemini' ? 'gemini-2.5-flash' : 'claude-haiku-4-5');
+/**
+ * 모델 표 저장 (설정 창의 [저장])
+ * @param {{rows:Array, activity:string, compile:string}} p
+ */
+function saveModelSettings(p) {
+  var s = sh_(APP.SH.CONFIG);
+  if (!s) throw new Error('[⚙️ 설정] 시트가 없습니다. 메뉴 ① 처음 설치 / 구조 복구 를 먼저 실행하세요.');
+  var seen = {}, rows = [];
+  (p.rows || []).forEach(function (r) {
+    var m = normModel(r.model);
+    if (!m || m === SUBSCRIPTION_MODEL || seen[m]) return;
+    seen[m] = true;
+    rows.push({ model: m, company: r.company || '자동', level: r.level || '', memo: r.memo || '', status: r.status || '' });
+  });
+  if (!rows.length) throw new Error('모델을 한 개 이상 적어 주세요.');
+
+  var head = modelTableRow_(s);
+  if (!head) { buildConfig(); head = modelTableRow_(s); }
+  writeModelTable_(s, head, rows);
+
+  var act = normModel(p.activity) || rows[0].model;
+  var cmp = normModel(p.compile) || act;
+  setCfg_('활동용 모델', act);
+  setCfg_('합본용 모델', cmp);
+  var n = refreshModelDropdowns_();
+  return '저장했습니다. 활동용 ' + act + ' · 합본용 ' + cmp +
+         (n ? ' · 시트 ' + n + '곳의 모델 드롭다운을 새로 고쳤습니다.' : '');
+}
+
+/* ------------------------------------------------------------ 연결 확인 */
+/**
+ * 모델 하나 시험 호출 (설정 창에서 한 줄씩 부른다)
+ * @param {{model:string, company?:string}} p
+ * @return {{ok:boolean|null, model, provider, sec?, message, short?, kind?, skipped?}}
+ */
+function testModel(p) {
+  var m = normModel(p && p.model);
+  if (!m) return { ok: false, model: '', message: '모델명이 비었습니다.' };
+  if (m === SUBSCRIPTION_MODEL) {
+    return { ok: null, model: m, provider: 'subscription',
+      message: '스크립트로는 시험할 수 없습니다. 빈 셀에 =AI("안녕")을 넣어 답이 나오면 사용 가능합니다.' };
+  }
+  var prov = companyToProvider(p.company) || providerOf_(m);
+  if (!prov || prov === 'subscription') {
+    return { ok: false, model: m, provider: '', short: '회사를 모름',
+      message: '어느 회사 모델인지 알 수 없습니다. [회사] 칸에서 Gemini·OpenAI·Claude 중 하나를 고르세요.' };
+  }
+  if (!getKey_(prov)) {
+    return { ok: false, skipped: true, model: m, provider: prov, message: providerLabel(prov) + ' 키 없음' };
+  }
+  var t0 = Date.now();
+  try {
+    var r = callAI_(TEST_SYSTEM, TEST_USER, m, prov);
+    return { ok: true, model: m, provider: prov, sec: ((Date.now() - t0) / 1000).toFixed(1),
+             reply: String(r).slice(0, 20), message: '연결됨' };
+  } catch (e) {
+    return { ok: false, model: m, provider: prov, kind: e.kind || '', hint: e.hint || '',
+             short: e.hint ? e.hint.split('.')[0] : '', message: e.message };
+  }
+}
+
+function stamp_() {
+  try { return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'M/d HH:mm'); }
+  catch (e) { return ''; }
+}
+
+/** 표의 한 모델에 연결 확인 결과를 적는다 (표에 없으면 맨 아래에 추가) */
+function recordModelStatus_(res, extra) {
+  var s = sh_(APP.SH.CONFIG);
+  var head = modelTableRow_(s);
+  if (!head || !res || !res.model) return;
+  var rows = readModelRowsAt_(s, head);
+  var text = modelStatusText(res, stamp_());
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].model === res.model) { s.getRange(rows[i].row, modelCol_('status')).setValue(text); __modelCache = null; return; }
+  }
+  var r = (rows.length ? rows[rows.length - 1].row : head) + 1;
+  extra = extra || {};
+  s.getRange(r, 1, 1, MODEL_HEAD.length).setValues([modelRowValues_({ model: res.model, company: extra.company,
+    level: extra.level, memo: extra.memo || '직접 추가', status: text })]);
+  __modelCache = null;
+}
+
+/** 메뉴: 모델 목록 전체 연결 테스트 → 표에 ✓/✗ 를 적고 요약을 띄운다 */
+function testAllModels() {
+  var t0 = Date.now();
+  var list = readModelTable_().slice();
+  var cur = [normModel(cfg_('활동용 모델', DEFAULT_MODEL)), normModel(cfg_('합본용 모델', DEFAULT_MODEL))];
+  cur.forEach(function (m) {
+    if (m && m !== SUBSCRIPTION_MODEL && !list.some(function (r) { return r.model === m; })) list.push({ model: m, company: '자동' });
+  });
+  var lines = [], okN = 0, badN = 0, noKey = {};
+  for (var i = 0; i < list.length; i++) {
+    if (Date.now() - t0 > 240000) { lines.push('… 시간이 오래 걸려 여기서 멈췄습니다. 다시 누르면 이어서 확인합니다.'); break; }
+    toast_((i + 1) + '/' + list.length + ' ' + list[i].model + ' 확인 중…', '모델 연결 테스트');
+    var res = testModel({ model: list[i].model, company: list[i].company });
+    recordModelStatus_(res);
+    if (res.skipped) { noKey[providerLabel(res.provider)] = true; continue; }
+    if (res.ok) { okN++; lines.push('✓ ' + res.model + ' — ' + res.sec + '초'); }
+    else { badN++; lines.push('✗ ' + res.model + ' — ' + (res.short || res.message)); }
+  }
+  var head = ['사용 중: 활동용 ' + cur[0] + ' · 합본용 ' + cur[1], ''];
+  var tail = [];
+  var nk = Object.keys(noKey);
+  if (nk.length) tail.push('', '– 키가 없어 건너뜀: ' + nk.join(', ') + ' 모델');
+  tail.push('', '결과는 [⚙️ 설정] 아래 모델 목록의 [연결 확인] 칸에도 적어 두었습니다.');
+  if (badN) tail.push('✗ 가 뜬 모델은 이름을 고치거나 지우세요. 최신 이름은 메뉴 ② [AI 연결 · 모델 설정] > 도움말에서 확인할 수 있습니다.');
+  ui_().alert('모델 연결 테스트 — 통과 ' + okN + ' / 실패 ' + badN,
+    head.concat(lines.length ? lines : ['(시험할 모델이 없습니다 — 먼저 API 키를 넣으세요)']).concat(tail).join('\n'),
+    ui_().ButtonSet.OK);
+}
+
+/** 예전 메뉴 이름 호환 */
+function testConnection() { testAllModels(); }
+
+/* ------------------------------------------------- 내 키로 쓸 수 있는 모델 */
+/**
+ * 각 회사에 "이 키로 쓸 수 있는 모델 목록"을 물어본다. 키가 있는 회사만.
+ * @return {{gemini?:{ok, models?:string[], message?}, openai?:…, anthropic?:…}}
+ */
+function listAvailableModels() {
+  var out = {};
+  PROVIDERS.forEach(function (p) {
+    var key = getKey_(p);
+    if (!key) return;
     try {
-      var r = callAI_('한 단어로만 답한다.', '준비됐으면 "확인"이라고만 답해라.', model);
-      out.push('· ' + p + ' : 정상 (' + String(r).slice(0, 20) + ')');
+      var ids = [];
+      if (p === 'gemini') {
+        var token = '', guard = 0;
+        do {
+          var j = fetchJson_('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000' +
+            (token ? '&pageToken=' + encodeURIComponent(token) : '') + '&key=' + encodeURIComponent(key),
+            { method: 'get', muteHttpExceptions: true }, 'Gemini');
+          (j.models || []).forEach(function (x) {
+            var methods = x.supportedGenerationMethods || [];
+            if (methods.indexOf('generateContent') >= 0) ids.push(normModel(x.name));
+          });
+          token = j.nextPageToken || '';
+        } while (token && ++guard < 5);
+      } else if (p === 'openai') {
+        var o = fetchJson_('https://api.openai.com/v1/models',
+          { method: 'get', headers: { Authorization: 'Bearer ' + key }, muteHttpExceptions: true }, 'OpenAI');
+        (o.data || []).forEach(function (x) { ids.push(normModel(x.id)); });
+      } else {
+        var a = fetchJson_('https://api.anthropic.com/v1/models?limit=100',
+          { method: 'get', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, muteHttpExceptions: true }, 'Anthropic');
+        (a.data || []).forEach(function (x) { ids.push(normModel(x.id)); });
+      }
+      var seen = {};
+      ids = ids.filter(function (m) { if (seen[m] || !isTextModel(p, m)) return false; seen[m] = true; return true; });
+      out[p] = { ok: true, models: sortModelIds(ids) };
     } catch (e) {
-      out.push('· ' + p + ' : 실패 — ' + e.message);
+      out[p] = { ok: false, message: e.hint || e.message };
     }
   });
-  out.push('');
-  out.push('· ' + SUBSCRIPTION_MODEL + ' : 빈 셀에 =AI("안녕") 을 입력해 답이 나오면 사용 가능합니다.');
-  ui_().alert('연결 테스트', out.join('\n'), ui_().ButtonSet.OK);
+  return out;
 }
 
 /* ------------------------------------------------------------- 호출 본체 */
@@ -2417,36 +3046,51 @@ function testConnection() {
  * @param {string} system  조립된 프롬프트(규칙 전체)
  * @param {string} user    학생 자료
  * @param {string} model
+ * @param {string=} provider  회사를 직접 지정할 때(연결 테스트)
  * @return {string}
  */
-function callAI_(system, user, model) {
-  var p = providerOf_(model);
-  if (p === 'subscription') throw new Error(SUBSCRIPTION_MODEL + ' 은(는) 셀 수식으로 동작합니다. 메뉴 ⑤ 대신 체크박스를 사용하세요.');
+function callAI_(system, user, model, provider) {
+  var m = normModel(model);
+  var p = provider || providerOf_(m);
+  if (p === 'subscription') throw new Error(SUBSCRIPTION_MODEL + ' 은(는) 셀 수식으로 동작합니다. 메뉴 ⑥ 대신 체크박스를 사용하세요.');
+  if (!p) {
+    throw new Error('"' + m + '" 이(가) 어느 회사 모델인지 알 수 없습니다. [⚙️ 설정] 아래 모델 목록의 [회사] 칸을 골라 주세요.');
+  }
   var key = getKey_(p);
-  if (!key) throw new Error(p + ' API 키가 없습니다. 메뉴 > ② AI 연결 설정 에서 입력하세요.');
+  if (!key) throw new Error(providerLabel(p) + ' API 키가 없습니다. 메뉴 > ② AI 연결 · 모델 설정 에서 입력하세요.');
 
-  if (p === 'openai') return callOpenAI_(key, model, system, user);
-  if (p === 'gemini') return callGemini_(key, model, system, user);
-  return callAnthropic_(key, model, system, user);
+  if (p === 'openai') return callOpenAI_(key, m, system, user);
+  if (p === 'gemini') return callGemini_(key, m, system, user);
+  return callAnthropic_(key, m, system, user);
 }
 
 function fetchJson_(url, options, label) {
   var delays = [0, 2000, 5000];
-  var last = '';
+  var last = '', info = null, code = 0;
   for (var i = 0; i < delays.length; i++) {
     if (delays[i]) Utilities.sleep(delays[i]);
-    var res = UrlFetchApp.fetch(url, options);
-    var code = res.getResponseCode();
+    var res;
+    try { res = UrlFetchApp.fetch(url, options); }
+    catch (e) {                              // 네트워크 오류·시간 초과
+      last = String(e.message || e).slice(0, 160);
+      info = { kind: 'server', retry: true, hint: '인터넷 연결이 잠시 끊겼거나 응답이 늦습니다. 잠시 뒤 다시 시도하세요.' };
+      continue;
+    }
+    code = res.getResponseCode();
     var body = res.getContentText();
     if (code >= 200 && code < 300) {
       try { return JSON.parse(body); }
       catch (e) { throw new Error(label + ' 응답 해석 실패'); }
     }
-    last = code + ' ' + body.slice(0, 300);
-    if (code === 429 || code >= 500) continue;   // 재시도
-    break;
+    last = body.replace(/\s+/g, ' ').slice(0, 220);
+    info = explainApiError(code, body);
+    if (!info.retry) break;
   }
-  throw new Error(label + ' 호출 실패 (' + last + ')');
+  var err = new Error(label + ' — ' + (info && info.hint ? info.hint + ' ' : '') + '[' + (code || '연결') + '] ' + last);
+  err.kind = info ? info.kind : 'other';
+  err.hint = info ? info.hint : '';
+  err.code = code;
+  throw err;
 }
 
 function callOpenAI_(key, model, system, user) {
@@ -2479,7 +3123,7 @@ function callGemini_(key, model, system, user) {
   var cand = json.candidates && json.candidates[0];
   var parts = cand && cand.content && cand.content.parts;
   var txt = '';
-  if (parts) parts.forEach(function (p) { if (p.text) txt += p.text; });
+  if (parts) parts.forEach(function (p) { if (p.text && !p.thought) txt += p.text; });
   if (!txt) throw new Error('Gemini 응답이 비었습니다. (안전 필터 또는 모델명 확인)');
   return txt.trim();
 }
@@ -2524,6 +3168,9 @@ function cleanResult_(t) {
 /**
  * 세특 작성 도우미 v3 — 생성 실행
  */
+
+/** 한 번 실행에서 AI 호출에 쓸 시간 (Apps Script 한도 6분보다 여유 있게) */
+var RUN_BUDGET_MS = 300000;
 
 /** 현재 시트가 어떤 활동의 입력 시트인지 */
 function activityOfSheet_(name) {
@@ -2590,13 +3237,16 @@ function runGeneration_(act, sheet, rows) {
     var cValid = colOf_(sheet, head, '검증');
     var limit = charsFor_(act) * 3;
     var system = promptFor_(act);
-    var defModel = String(cfg_('활동용 모델', 'gemini-2.5-flash'));
+    var defModel = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
     var autoValidate = cfgBool_('결과 자동검증', true);
     var banned = PRESET_BANNED, fmt = PRESET_FORMAT_RULES;
 
-    var okN = 0, skipN = 0, errN = 0, subN = 0;
+    var okN = 0, skipN = 0, errN = 0, subN = 0, leftN = 0;
+    var t0 = Date.now();
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i];
+      // Apps Script 한 번 실행은 약 6분까지. 넘기기 전에 멈추고, 남은 행은 체크를 그대로 둔다.
+      if (Date.now() - t0 > RUN_BUDGET_MS) { leftN = rows.length - i; break; }
       var vals = sheet.getRange(row, 5, 1, cols.length).getValues()[0];
       var filled = vals.some(function (v) { return String(v).trim() !== ''; });
       if (!filled) { skipN++; if (cGen) sheet.getRange(row, cGen).setValue(false); continue; }
@@ -2636,7 +3286,11 @@ function runGeneration_(act, sheet, rows) {
     if (subN) msg += ' / 구독수식 ' + subN + '건(셀에서 [생성] 버튼을 눌러 주세요)';
     if (skipN) msg += ' / 자료 없음 ' + skipN + '건';
     if (errN) msg += ' / 실패 ' + errN + '건';
-    toast_(msg, act.name);
+    if (leftN) {
+      ui_().alert(APP.MENU, msg + '\n\n실행 시간 제한(약 6분)에 가까워져 ' + leftN + '건을 남기고 멈췄습니다.\n' +
+        '남은 행은 [생성] 체크가 그대로 있으니 메뉴 ⑥ 을 한 번 더 누르세요.\n' +
+        '(자주 멈춘다면 [⚙️ 설정]의 1회 최대 생성 건수를 줄이거나 더 빠른 모델을 쓰세요)', ui_().ButtonSet.OK);
+    } else toast_(msg, act.name);
   } finally { lock.releaseLock(); }
 }
 
@@ -2809,8 +3463,8 @@ function buildCompileFor_(recKey, acts, roster) {
     .concat(['합본', '합본 바이트', '압축', '모델', 'AI 압축결과', '최종본', '바이트', '검증']);
   var n = head.length;
 
-  noteRow_(s, 1, n,
-    '📦 ' + (rec ? rec.name : recKey) + ' 최종취합  —  ' + (rec ? rec.chars : 500) + '자(' + limit + '바이트) 기준\n' +
+  splitBanner_(s, 3, n,
+    '📦 ' + (rec ? rec.name : recKey) + '\n' + (rec ? rec.chars : 500) + '자(' + limit + '바이트)',
     '① 메뉴 ⑦ [최종취합 시트 생성/갱신]으로 활동 결과를 모읍니다  →  ② 합본이 한도를 넘는 학생만 [압축] 체크  →  ' +
     '③ 메뉴 ⑦ [최종 압축본 생성]  →  ④ [최종본] 칸에서 다듬어 나이스에 붙여넣기');
   s.setRowHeight(2, 8);
@@ -2860,8 +3514,7 @@ function buildCompileFor_(recKey, acts, roster) {
     s.getRange(APP.DATA_ROW, 1, rows.length, 4).setBackground(APP.COLORS.lock);
     s.getRange(APP.DATA_ROW, 5, rows.length, acts.length + 2).setBackground(APP.COLORS.lock);
     s.getRange(APP.DATA_ROW, cChk, rows.length, 1).insertCheckboxes();
-    s.getRange(APP.DATA_ROW, cModel, rows.length, 1).setDataValidation(
-      SpreadsheetApp.newDataValidation().requireValueInList(modelChoices_(), true).build());
+    s.getRange(APP.DATA_ROW, cModel, rows.length, 1).setDataValidation(modelValidation_());
     s.getRange(APP.DATA_ROW, cAi, rows.length, 1).setBackground(APP.COLORS.output);
     s.getRange(APP.DATA_ROW, cFinal, rows.length, 1).setBackground(APP.COLORS.paste);
     var f = [];
@@ -2930,12 +3583,13 @@ function compileChecked() {
   for (var i = 0; i < cnt; i++) if (chk[i][0] === true) rows.push(APP.DATA_ROW + i);
   if (!rows.length) { toast_('[압축] 체크된 행이 없습니다.'); return; }
 
-  var defModel = String(cfg_('합본용 모델', 'gpt-5-mini'));
+  var defModel = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
   var system = compressPrompt_(rec);
-  var okN = 0, errN = 0;
+  var okN = 0, errN = 0, leftN = 0, t0 = Date.now();
 
   for (var k = 0; k < rows.length; k++) {
     var row = rows[k];
+    if (Date.now() - t0 > RUN_BUDGET_MS) { leftN = rows.length - k; break; }
     var merged = String(s.getRange(row, cMerge).getValue() || '').trim();
     if (!merged) { s.getRange(row, cChk).setValue(false); continue; }
     var model = cModel ? String(s.getRange(row, cModel).getValue()).trim() : '';
@@ -2959,7 +3613,11 @@ function compileChecked() {
     }
     SpreadsheetApp.flush();
   }
-  toast_('압축 완료 ' + okN + '건' + (errN ? ' / 실패 ' + errN + '건' : ''), APP.MENU);
+  var done = '압축 완료 ' + okN + '건' + (errN ? ' / 실패 ' + errN + '건' : '');
+  if (leftN) {
+    ui_().alert(APP.MENU, done + '\n\n실행 시간 제한(약 6분)에 가까워져 ' + leftN + '건을 남기고 멈췄습니다.\n' +
+      '남은 행은 [압축] 체크가 그대로 있으니 한 번 더 실행하세요.', ui_().ButtonSet.OK);
+  } else toast_(done, APP.MENU);
 }
 
 /** 압축용 프롬프트 (기록종류 규칙을 그대로 따름) */

@@ -24,7 +24,7 @@ function wizardContext() {
     }),
     defaultSubject: String(cfg_('기본 교과영역', '공통')),
     models: modelChoices_(),
-    defaultModel: String(cfg_('활동용 모델', 'gemini-2.5-flash')),
+    defaultModel: normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL,
     hasKey: !!(getKey_('openai') || getKey_('gemini') || getKey_('anthropic'))
   };
 }
@@ -36,10 +36,10 @@ function wizardContext() {
 function wizardSuggest(p) {
   var rec = findByKey(getRecordTypes_(), p.recordKey) || getRecordTypes_()[0];
   var sub = findByKey(getSubjects_(), p.subjectKey) || findByKey(getSubjects_(), '공통');
-  var model = p.model || String(cfg_('활동용 모델', 'gemini-2.5-flash'));
+  var model = normModel(p.model) || normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
   var want = Math.max(1, Math.min(3, Number(p.count) || 1));
   if (providerOf_(model) === 'subscription') {
-    throw new Error('마법사는 API 키가 필요합니다. 모델을 gemini-2.5-flash 등으로 바꾸거나 메뉴 ②에서 키를 등록하세요.');
+    throw new Error('마법사는 API 키가 필요합니다. 모델을 ' + DEFAULT_MODEL + ' 등으로 바꾸거나 메뉴 ②에서 키를 등록하세요.');
   }
 
   var system = [

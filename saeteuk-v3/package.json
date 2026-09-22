@@ -1,11 +1,12 @@
 {
   "name": "saeteuk-helper",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "학교생활기록부 특기사항 작성 도우미 — 프롬프트 조립형 구글 시트 도구",
   "private": true,
   "scripts": {
-    "test": "node test/engine.test.js && node test/schema.test.js",
-    "build": "node tools/build.js"
+    "test": "node test/engine.test.js && node test/schema.test.js && node test/install.test.js && node test/models.test.js",
+    "build": "node tools/build.js",
+    "kit": "node tools/build.js && python3 tools/build-kit.py"
   },
   "license": "MIT"
 }

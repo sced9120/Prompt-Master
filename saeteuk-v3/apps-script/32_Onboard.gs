@@ -43,7 +43,8 @@ function onboardStatus() {
   var st = {
     installed: false, hasKey: false, keyNames: [],
     rosterCount: 0, activities: [], exampleCount: 0, done: isOnboardDone_(),
-    models: [], defaultModel: ''
+    models: [], defaultModel: '', compileModel: '',
+    providerDefaults: PROVIDER_DEFAULT_MODEL, presets: presetModelRows_(), links: MODEL_LINKS
   };
   try {
     st.installed = !!(sh_(APP.SH.CONFIG) && sh_(APP.SH.RECORD) && sh_(APP.SH.ACTIVITY) && sh_(APP.SH.ROSTER));
@@ -60,7 +61,8 @@ function onboardStatus() {
     } catch (e) {}
     try {
       st.models = modelChoices_().filter(function (m) { return m.indexOf('구독') < 0; });
-      st.defaultModel = String(cfg_('활동용 모델', 'gemini-2.5-flash'));
+      st.defaultModel = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
+      st.compileModel = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
     } catch (e) {}
     if (st.activities.length) {
       try { st.exampleCount = readExampleRows_(getActivity_(st.activities[0].key)).length; } catch (e) {}
@@ -76,22 +78,38 @@ function onboardInstall() {
 }
 
 /* -------------------------------------------------------------- 2단계 */
+/**
+ * 키를 저장하고, 고른(또는 기본) 모델로 한 번 불러 본다.
+ * 성공하면 그 모델을 활동용·합본용 모델로 맞추고, 모델 목록 표에 ✓ 를 남긴다.
+ * @param {{provider:string, key?:string, model?:string}} p  key 가 비면 저장된 키로 모델만 다시 시험
+ */
 function onboardSaveKey(p) {
   var provider = String(p.provider || 'gemini');
+  if (PROVIDERS.indexOf(provider) < 0) throw new Error('알 수 없는 회사: ' + provider);
   var key = String(p.key || '').trim();
-  if (!key) throw new Error('키를 입력하세요.');
-  setKey_(provider, key);
+  if (key) setKey_(provider, key);
+  else if (!getKey_(provider)) throw new Error('키를 입력하세요.');
 
-  // 방금 넣은 키에 맞는 모델을 기본값으로 올려 둔다
-  var model = provider === 'gemini' ? 'gemini-2.5-flash'
-            : provider === 'openai' ? 'gpt-5-mini' : 'claude-haiku-4-5';
-  try {
-    var r = callAI_('한 단어로만 답한다.', '준비됐으면 "확인"이라고만 답해라.', model);
-    setCfg_('활동용 모델', model);
-    return { ok: true, message: '연결됐습니다. (' + String(r).slice(0, 20) + ')', status: onboardStatus() };
-  } catch (e) {
-    return { ok: false, message: e.message, status: onboardStatus() };
+  var model = normModel(p.model) || PROVIDER_DEFAULT_MODEL[provider];
+  var guess = guessProvider(model);
+  if (guess && guess !== provider) {
+    return { ok: false, status: onboardStatus(),
+      message: model + ' 은(는) ' + providerLabel(guess) + ' 모델입니다. 위에서 회사를 ' + providerLabel(guess) +
+               '(으)로 바꾸거나, ' + providerLabel(provider) + ' 모델 이름을 적어 주세요.' };
   }
+  var res = testModel({ model: model, company: providerLabel(provider) });
+  try {
+    var preset = PRESET_MODELS.filter(function (x) { return x.model === model; })[0] || {};
+    recordModelStatus_(res, { company: guess ? '자동' : providerLabel(provider), level: preset.level, memo: preset.memo });
+  } catch (e) {}
+  if (res.ok) {
+    setCfg_('활동용 모델', model);
+    setCfg_('합본용 모델', model);
+    try { refreshModelDropdowns_(); } catch (e) {}
+    return { ok: true, model: model, status: onboardStatus(),
+             message: '연결됐습니다 · ' + model + ' · ' + res.sec + '초. 활동용·합본용 모델을 이것으로 맞췄습니다.' };
+  }
+  return { ok: false, model: model, kind: res.kind || '', status: onboardStatus(), message: res.message };
 }
 
 /** 설정 시트의 값 하나를 바꾼다 */
@@ -169,14 +187,17 @@ function onboardTestGenerate(activityKey) {
 
   var rec = findByKey(getRecordTypes_(), act.recordKey);
   var user = buildStudentBlock(cols, rows[0].values, { grade: (rec && rec.useGrade) ? 3 : '' });
-  var model = String(cfg_('활동용 모델', 'gemini-2.5-flash'));
-  if (providerOf_(model) === 'subscription') model = 'gemini-2.5-flash';
+  var model = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
+  if (providerOf_(model) === 'subscription') {
+    var withKey = PROVIDERS.filter(function (x) { return getKey_(x); })[0] || 'gemini';
+    model = PROVIDER_DEFAULT_MODEL[withKey];
+  }
 
   var txt = cleanResult_(callAI_(promptFor_(act), user, model));
   var limit = charsFor_(act) * 3;
   var v = validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES);
   return {
-    text: txt, bytes: v.bytes, limit: limit,
+    text: txt, bytes: v.bytes, limit: limit, model: model,
     issues: v.issues.map(function (i) { return (i.level === 'block' ? '[수정] ' : '[확인] ') + i.label; })
   };
 }
