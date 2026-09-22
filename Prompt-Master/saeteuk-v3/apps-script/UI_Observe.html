@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; padding:14px; font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; color:#1f2328; }
+  h2 { margin:0 0 12px; font-size:15px; }
+  label { display:block; font-size:12px; font-weight:600; color:#374151; margin:12px 0 4px; }
+  select, textarea, input { width:100%; padding:10px; border:1px solid #dfe3e8; border-radius:8px; font:inherit; }
+  textarea { resize:vertical; }
+  button { width:100%; margin-top:14px; padding:13px; border:0; border-radius:8px;
+           background:#2e5aac; color:#fff; font:600 15px/1 inherit; cursor:pointer; }
+  button:disabled { background:#9aa7bd; }
+  .status { margin-top:10px; font-size:12px; min-height:18px; }
+  .ok { color:#1b5e20; } .err { color:#b3261e; }
+  .hint { font-size:11px; color:#6b7280; margin-top:4px; }
+  .quick { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .quick span { border:1px solid #dfe3e8; border-radius:14px; padding:4px 10px; font-size:12px; cursor:pointer; background:#f7f8fa; }
+</style>
+</head>
+<body>
+
+<h2>관찰 기록</h2>
+
+<label>활동</label>
+<select id="act"></select>
+
+<label>학생</label>
+<select id="stu"></select>
+
+<label>관찰 내용</label>
+<textarea id="txt" rows="5" placeholder="본 대로 짧게. 예) 모둠에서 먼저 가설을 제안하고 변인 통제를 지적함"></textarea>
+<div class="quick" id="quick"></div>
+<div class="hint">날짜가 앞에 붙어 기존 기록 아래에 한 줄씩 쌓입니다.</div>
+
+<button id="save">저장</button>
+<div class="status" id="status"></div>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var QUICK = ['질문이 정확함', '모둠을 이끎', '스스로 오류를 찾음', '자료를 근거로 설명함', '끝까지 시도함', '다른 관점을 받아들임'];
+
+QUICK.forEach(function (q) {
+  var el = document.createElement('span');
+  el.textContent = q;
+  el.onclick = function () {
+    var t = $('txt');
+    t.value = t.value ? t.value.replace(/\s*$/, '') + ', ' + q : q;
+    t.focus();
+  };
+  $('quick').appendChild(el);
+});
+
+google.script.run.withSuccessHandler(function (c) {
+  c.activities.forEach(function (a) {
+    var o = document.createElement('option');
+    o.value = a.key; o.textContent = a.name + ' → ' + a.firstCol;
+    $('act').appendChild(o);
+  });
+  c.students.forEach(function (s) {
+    var o = document.createElement('option');
+    o.value = s.id; o.textContent = s.label;
+    $('stu').appendChild(o);
+  });
+  if (!c.activities.length) setStatus('활동이 없습니다. 메뉴 ④에서 먼저 만드세요.', 'err');
+  if (!c.students.length) setStatus('학생 명단이 비어 있습니다.', 'err');
+}).withFailureHandler(function (e) { setStatus(e.message, 'err'); }).observeContext();
+
+function setStatus(m, c) { var el = $('status'); el.className = 'status ' + (c || ''); el.textContent = m; }
+
+$('save').onclick = function () {
+  var text = $('txt').value.trim();
+  if (!text) { setStatus('내용을 적어 주세요.', 'err'); return; }
+  $('save').disabled = true; setStatus('저장 중…');
+  google.script.run
+    .withSuccessHandler(function (m) {
+      $('save').disabled = false; setStatus(m, 'ok'); $('txt').value = '';
+      var sel = $('stu'); if (sel.selectedIndex < sel.options.length - 1) sel.selectedIndex++;
+    })
+    .withFailureHandler(function (e) { $('save').disabled = false; setStatus(e.message, 'err'); })
+    .observeSave({ activityKey: $('act').value, studentId: $('stu').value, text: text });
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root { --line:#dfe3e8; --muted:#6b7280; --accent:#2e5aac; --bg:#f7f8fa; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:16px; font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; color:#1f2328; }
+  h2 { margin:0 0 4px; font-size:16px; }
+  .sub { color:var(--muted); font-size:12px; margin-bottom:14px; }
+  label { display:block; font-size:12px; font-weight:600; color:#374151; margin:12px 0 4px; }
+  select, input[type=text], textarea {
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px;
+    font:inherit; background:#fff; }
+  textarea { resize:vertical; }
+  .row { display:flex; gap:8px; }
+  .row > div { flex:1; }
+  button { font:inherit; border-radius:6px; padding:9px 14px; cursor:pointer; border:1px solid var(--line); background:#fff; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button.primary:disabled { background:#9aa7bd; border-color:#9aa7bd; cursor:default; }
+  button:disabled { opacity:.6; cursor:default; }
+  .card { border:1px solid var(--line); border-radius:8px; padding:14px; margin-top:16px; background:var(--bg); }
+  .card h3 { margin:0 0 10px; font-size:13px; color:var(--accent); }
+  .hint { font-size:11px; color:var(--muted); margin-top:4px; }
+  .actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+  .status { margin-top:12px; font-size:12px; min-height:18px; }
+  .status.err { color:#b3261e; }
+  .status.ok { color:#1b5e20; }
+  pre { white-space:pre-wrap; word-break:break-word; background:#fff; border:1px solid var(--line);
+        border-radius:6px; padding:10px; max-height:300px; overflow:auto; font:11px/1.5 ui-monospace,Menlo,Consolas,monospace; }
+  .spin { display:inline-block; width:12px; height:12px; border:2px solid #ccd; border-top-color:var(--accent);
+          border-radius:50%; animation:s .8s linear infinite; vertical-align:-2px; margin-right:6px; }
+  @keyframes s { to { transform:rotate(360deg); } }
+  .ex { font-size:12px; }
+  .ex b { display:block; color:#374151; margin-top:6px; font-size:11px; }
+  .exItem { border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-top:8px; background:#fff; }
+  .exHead { display:flex; justify-content:space-between; align-items:center;
+            font-size:11px; font-weight:600; color:var(--accent); margin-bottom:4px; }
+  .exHead button { font-size:11px; padding:2px 8px; border:1px solid var(--line);
+                   background:#fff; border-radius:4px; color:#6b7280; }
+  .exItem textarea { font-size:12px; margin-top:2px; }
+</style>
+</head>
+<body>
+
+<h2>활동 만들기 마법사</h2>
+<div class="sub">활동을 말로 설명하면 입력 항목·예시를 제안합니다. 프롬프트는 직접 쓰지 않아도 됩니다.</div>
+
+<div class="row">
+  <div>
+    <label>어떤 기록인가요</label>
+    <select id="rec"></select>
+  </div>
+  <div>
+    <label>교과 · 영역</label>
+    <select id="sub"></select>
+  </div>
+</div>
+
+<label>활동 설명 <span style="font-weight:400;color:#6b7280">— 편한 말로 적으세요</span></label>
+<textarea id="desc" rows="5" placeholder="예) 2학기에 통합과학 실험 보고서를 씁니다. 학생들이 가설을 세우고 직접 실험을 설계해서 결과를 해석하고, 오차 원인과 개선점까지 적게 했어요."></textarea>
+<div class="hint">무엇을 시켰는지, 학생이 무엇을 제출했는지 정도만 적으면 충분합니다.</div>
+
+<div class="row">
+  <div>
+    <label>초안 생성에 쓸 모델</label>
+    <select id="model"></select>
+  </div>
+  <div>
+    <label>함께 만들 예시 개수</label>
+    <select id="exCount">
+      <option value="1">1개 — 빠름</option>
+      <option value="2" selected>2개 — 권장</option>
+      <option value="3">3개 — 수준이 고루 섞임</option>
+    </select>
+  </div>
+</div>
+
+<div class="actions">
+  <button class="primary" id="btnSuggest">초안 만들기</button>
+</div>
+
+<div class="status" id="status"></div>
+
+<div class="card" id="result" style="display:none">
+  <h3>제안된 활동</h3>
+
+  <label>활동 이름</label>
+  <input type="text" id="fName">
+
+  <label>시트 이름에 쓸 짧은 키</label>
+  <input type="text" id="fKey">
+
+  <label>입력 항목 (쉼표로 구분)</label>
+  <input type="text" id="fCols">
+  <div class="hint">학생 한 명당 선생님이 채울 칸입니다. 지우거나 더해도 됩니다.</div>
+
+  <label>활동 개요</label>
+  <textarea id="fDesc" rows="3"></textarea>
+
+  <div id="exBox" class="ex"></div>
+
+  <label>초안 고치기 <span style="font-weight:400;color:#6b7280">— 말로 요청</span></label>
+  <input type="text" id="fRefine" placeholder="예) '협업한 부분'도 항목에 넣어 주세요">
+  <div class="actions">
+    <button id="btnRefine">이렇게 고쳐줘</button>
+    <button id="btnPreview">프롬프트 미리보기</button>
+    <button class="primary" id="btnCreate">이 활동 만들기</button>
+  </div>
+</div>
+
+<div class="card" id="previewCard" style="display:none">
+  <h3>실제로 AI에게 전달될 프롬프트</h3>
+  <pre id="previewText"></pre>
+  <div class="hint">이 내용은 [🧩 기록종류] · [📚 교과영역] · [📐 공통규칙] 시트에서 자동 조립됩니다. 문구를 바꾸고 싶으면 그 시트를 고치세요. 모든 활동에 함께 반영됩니다.</div>
+</div>
+
+<script>
+var CTX = null, DEF = null;
+var $ = function (id) { return document.getElementById(id); };
+
+function setStatus(msg, cls, busy) {
+  var el = $('status');
+  el.className = 'status ' + (cls || '');
+  el.innerHTML = (busy ? '<span class="spin"></span>' : '') + (msg || '');
+}
+function busy(on) {
+  ['btnSuggest', 'btnRefine', 'btnPreview', 'btnCreate'].forEach(function (id) {
+    var b = $(id); if (b) b.disabled = on;
+  });
+}
+
+google.script.run.withSuccessHandler(function (c) {
+  CTX = c;
+  c.records.forEach(function (r) {
+    var o = document.createElement('option');
+    o.value = r.key; o.textContent = r.name + ' · ' + r.chars + '자';
+    $('rec').appendChild(o);
+  });
+  c.subjects.forEach(function (s) {
+    var o = document.createElement('option');
+    o.value = s.key; o.textContent = s.key + ' — ' + s.name;
+    if (s.key === c.defaultSubject) o.selected = true;
+    $('sub').appendChild(o);
+  });
+  c.models.forEach(function (m) {
+    if (m.indexOf('구독') >= 0) return;   // 마법사는 API 키 필요
+    var o = document.createElement('option');
+    o.value = m; o.textContent = m;
+    if (m === c.defaultModel) o.selected = true;
+    $('model').appendChild(o);
+  });
+  if (!c.hasKey) setStatus('API 키가 없습니다. 메뉴 ② AI 연결 설정에서 먼저 등록하세요.', 'err');
+}).withFailureHandler(function (e) {
+  setStatus('초기화 실패: ' + e.message + ' — 메뉴 ① 처음 설치를 먼저 실행하세요.', 'err');
+}).wizardContext();
+
+function renderDef(d) {
+  DEF = d;
+  $('result').style.display = 'block';
+  $('fName').value = d.name || '';
+  $('fKey').value = d.key || '';
+  $('fCols').value = (d.columns || []).join(', ');
+  $('fDesc').value = d.desc || '';
+  var box = $('exBox');
+  box.textContent = '';
+  var list = (d.examples || []).filter(function (e) { return e && e.result; });
+  DEF.examples = list;           // 삭제 버튼의 인덱스가 어긋나지 않도록 동기화
+  if (!list.length) return;
+
+  var lab = document.createElement('label');
+  lab.textContent = '예시 ' + list.length + '개 (예시 시트에 함께 저장됩니다)';
+  box.appendChild(lab);
+
+  list.forEach(function (ex, n) {
+    var wrap = document.createElement('div');
+    wrap.className = 'exItem';
+    var head = document.createElement('div');
+    head.className = 'exHead';
+    head.textContent = '예시 ' + (n + 1) + ' · ' + byteLen(ex.result).toLocaleString('ko-KR') + '바이트';
+    var del = document.createElement('button');
+    del.type = 'button'; del.textContent = '삭제';
+    del.onclick = function () { DEF.examples.splice(n, 1); renderDef(DEF); };
+    head.appendChild(del);
+    wrap.appendChild(head);
+
+    (d.columns || []).forEach(function (c, i) {
+      var v = (ex.values && ex.values[i]) ? ex.values[i] : '';
+      if (!v) return;
+      var b = document.createElement('b'); b.textContent = c;
+      var t = document.createElement('div'); t.textContent = v;
+      wrap.appendChild(b); wrap.appendChild(t);
+    });
+    var rb = document.createElement('b'); rb.textContent = '결과 예문';
+    var ta = document.createElement('textarea');
+    ta.rows = 4; ta.value = ex.result;
+    ta.addEventListener('input', function () {
+      DEF.examples[n].result = ta.value;
+      head.firstChild.nodeValue = '예시 ' + (n + 1) + ' · ' + byteLen(ta.value).toLocaleString('ko-KR') + '바이트';
+    });
+    wrap.appendChild(rb); wrap.appendChild(ta);
+    box.appendChild(wrap);
+  });
+}
+
+/* 나이스 기준 바이트 (한글 3, 그 외 1, 줄바꿈 2) */
+function byteLen(s) {
+  var n = 0;
+  for (var i = 0; i < String(s).length; i++) {
+    var c = String(s).charCodeAt(i);
+    if (c === 10 || c === 13) n += 2; else if (c > 127) n += 3; else n += 1;
+  }
+  return n;
+}
+
+function collect() {
+  var cols = $('fCols').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  return {
+    name: $('fName').value.trim(),
+    key: $('fKey').value.trim(),
+    columns: cols,
+    desc: $('fDesc').value.trim(),
+    chars: DEF ? DEF.chars : null,
+    recordKey: $('rec').value,
+    subjectKey: $('sub').value,
+    examples: DEF ? DEF.examples : []
+  };
+}
+
+$('btnSuggest').onclick = function () {
+  var text = $('desc').value.trim();
+  if (!text) { setStatus('활동 설명을 먼저 적어 주세요.', 'err'); return; }
+  busy(true); setStatus('AI가 초안을 만드는 중…', '', true);
+  google.script.run
+    .withSuccessHandler(function (d) { busy(false); setStatus('초안이 나왔습니다. 항목을 고친 뒤 만들기를 누르세요.', 'ok'); renderDef(d); })
+    .withFailureHandler(function (e) { busy(false); setStatus(e.message, 'err'); })
+    .wizardSuggest({ text: text, recordKey: $('rec').value, subjectKey: $('sub').value,
+                     model: $('model').value, count: Number($('exCount').value) });
+};
+
+$('btnRefine').onclick = function () {
+  var req = $('fRefine').value.trim();
+  if (!req) { setStatus('어떻게 고칠지 적어 주세요.', 'err'); return; }
+  busy(true); setStatus('고치는 중…', '', true);
+  google.script.run
+    .withSuccessHandler(function (d) { busy(false); setStatus('수정했습니다.', 'ok'); $('fRefine').value = ''; renderDef(d); })
+    .withFailureHandler(function (e) { busy(false); setStatus(e.message, 'err'); })
+    .wizardSuggest({ text: req, recordKey: $('rec').value, subjectKey: $('sub').value,
+                     model: $('model').value, count: Number($('exCount').value), previous: collect() });
+};
+
+$('btnPreview').onclick = function () {
+  busy(true); setStatus('프롬프트 조립 중…', '', true);
+  google.script.run
+    .withSuccessHandler(function (p) {
+      busy(false); setStatus('', '');
+      $('previewCard').style.display = 'block';
+      $('previewText').textContent = p;
+    })
+    .withFailureHandler(function (e) { busy(false); setStatus(e.message, 'err'); })
+    .wizardPreview(collect());
+};
+
+$('btnCreate').onclick = function () {
+  var d = collect();
+  if (!d.name) { setStatus('활동 이름을 적어 주세요.', 'err'); return; }
+  if (!d.columns.length) { setStatus('입력 항목을 하나 이상 남겨 주세요.', 'err'); return; }
+  busy(true); setStatus('시트를 만드는 중…', '', true);
+  google.script.run
+    .withSuccessHandler(function (r) {
+      busy(false);
+      setStatus('만들었습니다 → ' + r.inSheet + ' / ' + r.exSheet + '. 예시는 AI 초안이니 시트에서 한 번 손봐 주세요.', 'ok');
+      $('btnCreate').disabled = true;
+    })
+    .withFailureHandler(function (e) { busy(false); setStatus(e.message, 'err'); })
+    .wizardCreate(d);
+};
+</script>
+</body>
+</html>

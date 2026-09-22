@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root { --line:#dde3dd; --muted:#6b7280; --accent:#35583f; --accent-soft:#e3ece4;
+          --warn:#8f2f20; --warn-soft:#f8eae6; --ok:#2c6340; --bg:#f6f8f6; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; padding:18px; color:#16202a;
+         font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
+  h2 { margin:0 0 2px; font-size:17px; }
+  .sub { color:var(--muted); font-size:12.5px; margin-bottom:16px; }
+
+  .step { border:1px solid var(--line); border-radius:9px; margin-bottom:8px; background:#fff; overflow:hidden; }
+  .step.active { border-color:var(--accent); box-shadow:0 1px 6px rgba(53,88,63,.10); }
+  .step.done .head { background:var(--accent-soft); }
+  .head { display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; }
+  .num { flex:none; width:22px; height:22px; border-radius:50%; background:var(--line); color:#4b5563;
+         font-size:11px; font-weight:600; line-height:22px; text-align:center; }
+  .step.active .num { background:var(--accent); color:#fff; }
+  .step.done .num { background:var(--ok); color:#fff; }
+  .title { flex:1; font-weight:600; font-size:13.5px; }
+  .chip { font-size:11px; color:var(--muted); }
+  .step.done .chip { color:var(--ok); font-weight:600; }
+  .body { padding:2px 14px 16px 46px; display:none; }
+  .step.active .body { display:block; }
+
+  label { display:block; font-size:12px; font-weight:600; color:#374151; margin:10px 0 4px; }
+  input, select, textarea {
+    width:100%; padding:8px 10px; border:1px solid #c9d1c9; border-radius:6px; font:inherit; background:#fff; }
+  textarea { resize:vertical; font-size:13px; }
+  .row { display:flex; gap:8px; } .row > div { flex:1; }
+  .note { font-size:11.5px; color:var(--muted); margin-top:5px; line-height:1.55; }
+  .warn { background:var(--warn-soft); border-radius:7px; padding:10px 12px; font-size:12.5px;
+          color:#6b2417; margin:10px 0; line-height:1.6; }
+  .warn b { color:var(--warn); }
+
+  button { font:inherit; font-size:13px; font-weight:600; cursor:pointer; padding:8px 15px;
+           border:1px solid #c9d1c9; border-radius:6px; background:#fff; color:#16202a; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.55; cursor:default; }
+  .actions { display:flex; gap:7px; margin-top:13px; flex-wrap:wrap; align-items:center; }
+
+  .msg { font-size:12.5px; margin-top:9px; min-height:16px; }
+  .msg.err { color:var(--warn); } .msg.ok { color:var(--ok); }
+  .spin { display:inline-block; width:11px; height:11px; border:2px solid #ccd; border-top-color:var(--accent);
+          border-radius:50%; animation:sp .8s linear infinite; vertical-align:-1px; margin-right:5px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .result { background:var(--bg); border:1px solid var(--line); border-radius:7px;
+            padding:11px 13px; margin-top:11px; font-size:13px; line-height:1.7; }
+  .meta { font-size:11.5px; color:var(--muted); margin-top:7px; }
+  .done-box { text-align:center; padding:6px 0 2px; }
+  .done-box .big { font-size:15px; font-weight:600; color:var(--ok); margin-bottom:6px; }
+  @media (prefers-reduced-motion:reduce) { * { animation:none !important; } }
+</style>
+</head>
+<body>
+
+<h2>시작하기</h2>
+<div class="sub">순서대로 따라가면 첫 세특이 나오는 것까지 확인할 수 있습니다. 중간에 닫아도 다시 열면 이어집니다.</div>
+
+<div id="steps"></div>
+<div class="msg" id="globalMsg"></div>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var LABEL = { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude' };
+var ST = null, CTX = null, ACT = null, OPEN;   // undefined = 아직 안 정함, null = 사용자가 접음
+
+var STEPS = [
+  { key:'install', title:'구조 설치', render:renderInstall, isDone:function(s){ return s.installed; } },
+  { key:'ai',      title:'AI 연결',   render:renderAi,      isDone:function(s){ return s.hasKey; } },
+  { key:'roster',  title:'학생 명단', render:renderRoster,  isDone:function(s){ return s.rosterCount > 0; } },
+  { key:'act',     title:'첫 활동 만들기', render:renderAct, isDone:function(s){ return s.activities.length > 0; } },
+  { key:'test',    title:'시험 생성', render:renderTest,    isDone:function(s){ return s.done; } }
+];
+
+function busy(el, on, text) {
+  el.disabled = on;
+  if (on) { el.dataset.label = el.textContent; el.innerHTML = '<span class="spin"></span>' + (text || '진행 중'); }
+  else if (el.dataset.label) { el.textContent = el.dataset.label; }
+}
+function say(id, msg, cls) { var e = $(id); e.className = 'msg ' + (cls || ''); e.textContent = msg || ''; }
+
+function load(cb) {
+  google.script.run
+    .withSuccessHandler(function (s) { ST = s; draw(); if (cb) cb(s); })
+    .withFailureHandler(function (e) { say('globalMsg', e.message, 'err'); })
+    .onboardStatus();
+}
+
+function draw() {
+  var box = $('steps');
+  box.textContent = '';
+  var firstOpen = null;
+  STEPS.forEach(function (st, i) {
+    var done = st.isDone(ST);
+    if (!done && firstOpen === null) firstOpen = st.key;
+  });
+  if (OPEN === undefined) OPEN = firstOpen || 'test';
+
+  STEPS.forEach(function (st, i) {
+    var done = st.isDone(ST);
+    var el = document.createElement('div');
+    el.className = 'step' + (done ? ' done' : '') + (OPEN === st.key ? ' active' : '');
+
+    var head = document.createElement('div');
+    head.className = 'head';
+    head.onclick = function () { OPEN = (OPEN === st.key ? null : st.key); draw(); };
+    head.innerHTML = '<span class="num">' + (done ? '✓' : (i + 1)) + '</span>' +
+                     '<span class="title">' + st.title + '</span>' +
+                     '<span class="chip">' + (done ? '완료' : '') + '</span>';
+    el.appendChild(head);
+
+    var body = document.createElement('div');
+    body.className = 'body';
+    el.appendChild(body);
+    box.appendChild(el);
+    if (OPEN === st.key) st.render(body, done);
+  });
+}
+
+/* ───────────────────────── 1. 설치 */
+function renderInstall(b, done) {
+  b.innerHTML =
+    '<div class="note">기록종류·교과영역·공통규칙·학생명단 등 기본 시트를 만듭니다. ' +
+    '여러 번 눌러도 안전하며, 이미 입력한 내용은 지워지지 않습니다.</div>' +
+    '<div class="warn">처음이라면 이 버튼을 누를 때 구글 승인 화면이 뜹니다.<br>' +
+    '<b>[계속]</b> → 계정 선택 → <b>"확인하지 않은 앱"</b> 화면에서 <b>[고급]</b> → ' +
+    '<b>[…(안전하지 않음)(으)로 이동]</b> → <b>[허용]</b> 순서로 눌러 주세요.</div>' +
+    '<div class="actions"><button class="primary" id="bInstall">' + (done ? '다시 설치' : '설치하기') + '</button></div>' +
+    '<div class="msg" id="mInstall"></div>';
+  $('bInstall').onclick = function () {
+    var btn = this; busy(btn, true, '설치 중'); say('mInstall', '');
+    google.script.run
+      .withSuccessHandler(function (s) { ST = s; busy(btn, false); OPEN = 'ai'; draw(); })
+      .withFailureHandler(function (e) { busy(btn, false); say('mInstall', e.message, 'err'); })
+      .onboardInstall();
+  };
+}
+
+/* ───────────────────────── 2. AI 연결 */
+function renderAi(b, done) {
+  b.innerHTML =
+    (done ? '<div class="note">연결된 키: <b>' + ST.keyNames.map(function (k) { return LABEL[k] + ' ✓'; }).join(' · ') + '</b>' +
+            ' · 주 모델 <b>' + esc(ST.defaultModel) + '</b>' + (ST.backupModel ? ' · 예비 <b>' + esc(ST.backupModel) + '</b>' : '') + '<br>' +
+            '<b>키는 여러 개 함께 쓸 수 있습니다.</b> 다른 회사 키도 넣으려면 회사를 바꿔 한 번 더 저장하세요. ' +
+            '주 모델은 그대로 두고, 새로 넣은 쪽을 예비 모델(주 모델이 실패하면 대신)로 둡니다.</div>' : '') +
+    '<label>어디 키를 쓰시나요</label>' +
+    '<select id="prov">' +
+      '<option value="gemini">Gemini — 무료 등급이 있어 가장 부담이 적습니다 (권장)</option>' +
+      '<option value="openai">OpenAI (ChatGPT) — ChatGPT 구독과 별개로 API 선불 충전 필요</option>' +
+      '<option value="anthropic">Anthropic (Claude)</option>' +
+    '</select>' +
+    '<label>API 키</label>' +
+    '<input type="password" id="key" placeholder="키를 붙여넣으세요">' +
+    '<div class="note" id="keyHint"></div>' +
+    '<label>모델 <span style="font-weight:400;color:var(--muted)">— 기본값 그대로 두셔도 충분합니다</span></label>' +
+    '<input id="model" list="aiModels" autocomplete="off" spellcheck="false">' +
+    '<datalist id="aiModels"></datalist>' +
+    '<div class="note" id="modelHint"></div>' +
+    '<div class="actions"><button class="primary" id="bKey">저장하고 연결 확인</button></div>' +
+    '<div class="msg" id="mKey"></div>' +
+    '<div class="note" style="margin-top:12px">키는 <b>이 파일이 아니라 내 구글 계정</b>에 저장됩니다. ' +
+    '이 파일을 남에게 공유해도 키는 넘어가지 않습니다.<br>' +
+    '모델은 나중에 메뉴 <b>② AI 연결 · 모델 설정</b>에서 여러 개를 적어 두고 하나씩 연결 테스트할 수 있습니다.<br>' +
+    '워크스페이스 Gemini나 Google One AI Premium 구독이 있다면, 빈 셀에 <code>=AI("안녕")</code>을 넣어 ' +
+    '답이 나오는지 확인해 보세요. 나온다면 키 없이 모델 목록에서 <b>Gemini(구독)</b>을 골라 쓸 수 있습니다. ' +
+    '다만 활동 만들기 같은 자동 기능에는 키가 필요합니다.</div>';
+
+  var hints = {
+    gemini: '<a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> → Create API key. AIza 로 시작합니다.',
+    openai: '<a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a> → Create new secret key. sk- 로 시작합니다. 선불 충전이 필요합니다.',
+    anthropic: '<a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a> → API keys. sk-ant- 로 시작합니다. 선불 충전이 필요합니다.'
+  };
+  var guessOf = function (m) {
+    m = String(m || '').trim().toLowerCase();
+    if (/^(gemini|learnlm)/.test(m)) return 'gemini';
+    if (/^claude/.test(m)) return 'anthropic';
+    if (/^(gpt|chatgpt|o\d)/.test(m)) return 'openai';
+    return '';
+  };
+  var defs = ST.providerDefaults || { gemini: 'gemini-flash-latest', openai: 'gpt-5.6-luna', anthropic: 'claude-haiku-4-5' };
+  var links = ST.links || {};
+  var typed = false;
+  $('model').addEventListener('input', function () { typed = true; });
+
+  var upd = function () {
+    var p = $('prov').value;
+    $('keyHint').innerHTML = hints[p];
+    // 지금 설정된 모델이 이 회사 것이면 그대로, 아니면 회사 기본값
+    if (!typed) $('model').value = (guessOf(ST.defaultModel) === p) ? ST.defaultModel : defs[p];
+    var opts = (ST.presets || []).filter(function (x) { return guessOf(x.model) === p; });
+    $('aiModels').innerHTML = opts.map(function (x) {
+      return '<option value="' + esc(x.model) + '">' + esc(x.level) + '</option>';
+    }).join('');
+    var lv = opts.map(function (x) {
+      return '<a href="#" class="pick" data-m="' + esc(x.model) + '"><code>' + esc(x.model) + '</code></a> — ' + esc(x.level);
+    }).join('<br>');
+    $('modelHint').innerHTML = (lv ? lv + '<br>' : '') +
+      '세특 한 편은 <b>' + esc(defs[p]) + '</b> 급이면 충분합니다. 최신 모델명은 ' +
+      '<a href="' + esc(links[p] || '#') + '" target="_blank">공식 모델 목록</a>에서 영문 "모델 코드"를 그대로 복사하세요.';
+    [].forEach.call($('modelHint').querySelectorAll('a.pick'), function (a) {
+      a.onclick = function (e) { e.preventDefault(); $('model').value = a.dataset.m; typed = true; };
+    });
+  };
+  $('prov').onchange = function () { typed = false; upd(); };
+  // 이미 키가 있으면 아직 안 넣은 회사를 먼저 보여 준다 (두 번째 키 넣기)
+  if (ST.hasKey) { var rest = ['gemini', 'openai', 'anthropic'].filter(function (k) { return ST.keyNames.indexOf(k) < 0; }); if (rest.length) $('prov').value = rest[0]; }
+  upd();
+
+  $('bKey').onclick = function () {
+    var btn = this, key = $('key').value.trim(), model = $('model').value.trim();
+    var p = $('prov').value;
+    if (!key && ST.keyNames.indexOf(p) < 0) { say('mKey', '키를 입력하세요.', 'err'); return; }
+    busy(btn, true, '확인 중'); say('mKey', '');
+    google.script.run
+      .withSuccessHandler(function (r) {
+        busy(btn, false); ST = r.status;
+        if (r.ok) { say('mKey', '✓ ' + r.message, 'ok'); if (!r.kept) { OPEN = 'roster'; setTimeout(draw, 900); } }
+        else { say('mKey', '키는 저장했지만 연결이 실패했습니다 — ' + r.message, 'err'); }
+      })
+      .withFailureHandler(function (e) { busy(btn, false); say('mKey', e.message, 'err'); })
+      .onboardSaveKey({ provider: p, key: key, model: model });
+  };
+}
+
+/* ───────────────────────── 3. 학생 명단 */
+function renderRoster(b, done) {
+  var mode = ST.rosterMode || 'class';
+  b.innerHTML =
+    '<label>명단 방식</label>' +
+    '<div class="row" style="gap:14px">' +
+      '<label style="font-weight:400;margin:0"><input type="radio" name="rmode" value="class" style="width:auto"' + (mode === 'class' ? ' checked' : '') + '> 반 · 번호 <span style="color:var(--muted)">(담임·교과)</span></label>' +
+      '<label style="font-weight:400;margin:0"><input type="radio" name="rmode" value="grade" style="width:auto"' + (mode === 'grade' ? ' checked' : '') + '> 학년 · 반 · 번호 <span style="color:var(--muted)">(동아리·방과후)</span></label>' +
+    '</div>' +
+    '<div class="actions" style="margin-top:10px"><button id="bFile">📄 엑셀 양식 받기 · 파일로 불러오기</button>' +
+    '<span class="note" style="margin:0">양식에 채워 올리면 제일 편합니다.</span></div>' +
+    (done ? '<div class="note">지금 <b>' + ST.rosterCount + '명</b>이 등록되어 있습니다. 다시 넣으면 교체됩니다.</div>' : '') +
+    '<label>또는 바로 붙여넣기</label>' +
+    '<textarea id="roster" rows="6"></textarea>' +
+    '<div class="note" id="rPrev"></div>' +
+    '<div class="actions"><button class="primary" id="bRoster">명단 저장</button></div>' +
+    '<div class="msg" id="mRoster"></div>';
+
+  var ta = $('roster'), timer = null;
+  var cur = function () { var r = document.querySelector('input[name=rmode]:checked'); return r ? r.value : 'class'; };
+  var hint = function () {
+    var g = cur() === 'grade';
+    ta.placeholder = g ? '2\t3\t15\t김하늘\n1\t2\t7\t박서준\t2\n(학번 20315 김하늘 도 됩니다)' : '1\t1\t김하늘\n1\t2\t박서준\n1\t3\t이유나\t2';
+    if (!ta.value.trim()) $('rPrev').textContent = (g ? '학년 · 반 · 번호 · 이름' : '반 · 번호 · 이름') +
+      ' 순서로 한 줄에 한 명씩. 성취수준(1~5)은 맨 뒤에 넣거나 비워 두세요. 탭·쉼표·빈칸 어느 것으로 나뉘어도 됩니다.';
+  };
+  var preview = function () {
+    if (!ta.value.trim()) { hint(); return; }
+    google.script.run.withSuccessHandler(function (p) {
+      $('rPrev').textContent = p.count
+        ? p.count + '명으로 읽었습니다. 예) ' + p.sample.join(' / ') +
+          (p.mode !== cur() ? '  ※ ' + (p.mode === 'grade' ? '학년이 있는 명단 같습니다' : '학년이 없는 명단 같습니다') : '') +
+          (p.warnings.length ? '  ⚠ ' + p.warnings[0] : '')
+        : '아직 알아보지 못했습니다. 순서를 확인해 주세요.';
+    }).onboardPreviewRoster(ta.value, cur());
+  };
+  [].forEach.call(document.querySelectorAll('input[name=rmode]'), function (r) { r.onchange = function () { hint(); preview(); }; });
+  hint();
+  ta.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(preview, 350); });
+
+  $('bFile').onclick = function () {
+    // 한 번에 창 하나만 열 수 있어서, 명단 창으로 넘어갔다가 저장하면 이 창으로 돌아온다
+    google.script.run.openRosterDialog(true);
+  };
+  $('bRoster').onclick = function () {
+    var btn = this; busy(btn, true, '저장 중'); say('mRoster', '');
+    google.script.run
+      .withSuccessHandler(function (s) { ST = s; busy(btn, false); OPEN = 'act'; draw(); })
+      .withFailureHandler(function (e) { busy(btn, false); say('mRoster', e.message, 'err'); })
+      .onboardSaveRoster(ta.value, cur());
+  };
+}
+
+/* ───────────────────────── 4. 첫 활동 */
+function renderAct(b, done) {
+  b.innerHTML =
+    '<div class="note">세특을 만들 <b>활동</b>을 하나 정의합니다. 편한 말로 설명하면 AI가 ' +
+    '입력 항목과 예시 초안을 제안하고, 입력 시트까지 한 번에 만듭니다.</div>' +
+    (done ? '<div class="note">이미 만든 활동: <b>' + ST.activities.map(function (a) { return a.name; }).join(', ') + '</b></div>' : '') +
+    '<div class="row"><div><label>어떤 기록인가요</label><select id="rec"></select></div>' +
+    '<div><label>교과 · 영역</label><select id="sub"></select></div></div>' +
+    '<label>활동 설명</label>' +
+    '<textarea id="desc" rows="4" placeholder="예) 2학기에 통합과학 실험 보고서를 씁니다. 가설을 세우고 실험을 직접 설계해서 결과를 해석하고, 오차 원인과 개선점까지 적게 했어요."></textarea>' +
+    '<div class="note">무엇을 시켰는지, 학생이 무엇을 제출했는지 정도면 충분합니다. 창의적 체험활동이나 행동특성이면 교과는 <b>공통</b>을 고르세요.</div>' +
+    '<div class="actions"><button class="primary" id="bAct">활동 만들기</button>' +
+    '<span class="note" style="margin:0">20초쯤 걸립니다</span></div>' +
+    '<div class="msg" id="mAct"></div>';
+
+  google.script.run.withSuccessHandler(function (c) {
+    CTX = c;
+    c.records.forEach(function (r) {
+      var o = document.createElement('option');
+      o.value = r.key; o.textContent = r.name + ' · ' + r.chars + '자';
+      if ($('rec')) $('rec').appendChild(o);
+    });
+    c.subjects.forEach(function (s) {
+      var o = document.createElement('option');
+      o.value = s.key; o.textContent = s.key + ' — ' + s.name;
+      if (s.key === c.defaultSubject) o.selected = true;
+      if ($('sub')) $('sub').appendChild(o);
+    });
+  }).withFailureHandler(function (e) { say('mAct', e.message, 'err'); }).wizardContext();
+
+  $('bAct').onclick = function () {
+    var btn = this, text = $('desc').value.trim();
+    if (!text) { say('mAct', '활동 설명을 적어 주세요.', 'err'); return; }
+    busy(btn, true, '만드는 중'); say('mAct', 'AI가 입력 항목과 예시를 짜고 있습니다…');
+    google.script.run
+      .withSuccessHandler(function (r) {
+        busy(btn, false); ST = r.status; ACT = r.made;
+        say('mAct', '만들었습니다 → ' + r.made.inSheet, 'ok');
+        OPEN = 'test'; setTimeout(draw, 600);
+      })
+      .withFailureHandler(function (e) { busy(btn, false); say('mAct', e.message, 'err'); })
+      .onboardCreateActivity({ text: text, recordKey: $('rec').value, subjectKey: $('sub').value, model: ST.defaultModel });
+  };
+}
+
+/* ───────────────────────── 5. 시험 생성 */
+function renderTest(b, done) {
+  if (!ST.activities.length) {
+    b.innerHTML = '<div class="note">활동을 먼저 만들어 주세요.</div>';
+    return;
+  }
+  var a = ST.activities[0];
+  b.innerHTML =
+    '<div class="note">학생 자료는 건드리지 않고, 방금 만든 <b>' + a.name + '</b> 의 예시 자료로 ' +
+    '실제 호출을 한 번 돌려 봅니다. 여기서 문장이 나오면 설정이 끝난 것입니다.</div>' +
+    '<div class="actions"><button class="primary" id="bTest">시험 삼아 한 건 만들어 보기</button></div>' +
+    '<div class="msg" id="mTest"></div><div id="testOut"></div>';
+
+  $('bTest').onclick = function () {
+    var btn = this; busy(btn, true, '생성 중'); say('mTest', ''); $('testOut').textContent = '';
+    google.script.run
+      .withSuccessHandler(function (r) {
+        busy(btn, false);
+        var box = $('testOut');
+        box.innerHTML = '<div class="result">' + esc(r.text) + '</div>' +
+          '<div class="meta">' + r.bytes + ' / ' + r.limit + ' 바이트' +
+          (r.issues.length ? ' · ' + esc(r.issues.join(', ')) : ' · 걸리는 표현 없음') + '</div>';
+        google.script.run.withSuccessHandler(function () {
+          ST.done = true;
+          box.innerHTML += doneHtml();
+          bindDone(a);
+        }).onboardFinish();
+      })
+      .withFailureHandler(function (e) { busy(btn, false); say('mTest', e.message, 'err'); })
+      .onboardTestGenerate(a.key);
+  };
+
+  if (done) { $('testOut').innerHTML = doneHtml(); bindDone(a); }
+}
+
+function doneHtml() {
+  return '<div class="done-box" style="margin-top:14px">' +
+    '<div class="big">설정이 끝났습니다</div>' +
+    '<div class="note" style="text-align:left">이제 이렇게 쓰시면 됩니다.<br>' +
+    '① 활동의 <b>▸예시</b> 시트에 모범 예시를 채웁니다. 결과 품질을 가장 크게 좌우합니다.<br>' +
+    '② <b>▸입력</b> 시트 노란 칸에 학생별 자료를 넣습니다.<br>' +
+    '③ [생성] 체크 후 메뉴 <b>⑥ 체크된 행 생성</b>.<br>' +
+    '④ AI 결과를 읽고 고쳐 파란 <b>최종본</b> 칸에 넣습니다.<br>' +
+    '⑤ 메뉴 <b>⑦ 최종취합</b> 으로 모아 나이스에 붙여넣습니다.</div>' +
+    '<div class="actions" style="justify-content:center">' +
+    '<button class="primary" id="bGoIn">입력 시트 열기</button>' +
+    '<button id="bGoEx">예시 시트 열기</button>' +
+    '<button id="bGoHelp">사용법 보기</button></div></div>';
+}
+
+function bindDone(a) {
+  var go = function (id, name) {
+    var el = $(id);
+    if (el) el.onclick = function () { google.script.run.onboardGoto(name); };
+  };
+  go('bGoIn', a.inSheet); go('bGoEx', a.exSheet); go('bGoHelp', '📖 사용법');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+load();
+</script>
+</body>
+</html>
