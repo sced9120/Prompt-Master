@@ -67,6 +67,7 @@ function buildActivityInputSheet_(key, name, cols, rec) {
   var head = ['반', '번호', '이름', '성취수준']
     .concat(cols)
     .concat(['생성', '모델', 'AI 결과', '최종본', '바이트', '검증']);
+  head[0] = classHead_();                 // 학년·반·번호 방식이면 '학년-반'
   var n = head.length;
 
   splitBanner_(s, 3, n,
@@ -257,10 +258,15 @@ function previewPrompt() {
     if (!target) { ui_().alert('번호가 올바르지 않습니다.'); return; }
   }
   var p = promptFor_(target);
+  var tok = estimateTokens(p);
+  var batchN = Math.max(1, Math.min(10, Number(cfg_('한 번에 묶을 학생 수', 5)) || 1));
+  var costLine = '규칙 부분 약 ' + fmtNum_(tok) + '토큰(추정)' +
+    (batchN > 1 ? ' · 학생 ' + batchN + '명씩 묶어 보내므로 학생 1명당 약 ' + fmtNum_(Math.round(tok / batchN)) + '토큰' : ' · 학생마다 이만큼 보냄') +
+    ' · 생각 줄이기 ' + (cfgBool_('생각 줄이기', true) ? '켜짐' : '꺼짐');
   var html = HtmlService.createHtmlOutput(
     '<div style="font:13px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;padding:8px">' +
     '<div style="color:#555;margin-bottom:8px">활동 <b>' + escHtml_(target.key) + '</b> · ' +
-    byteLen(p) + '바이트</div>' +
+    byteLen(p) + '바이트 · ' + escHtml_(costLine) + '</div>' +
     '<textarea style="width:100%;height:520px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;' +
     'border:1px solid #ccd;border-radius:6px;padding:10px" readonly>' + escHtml_(p) + '</textarea>' +
     '<p style="color:#777;font-size:12px">이 프롬프트는 [기록종류]·[교과영역]·[공통규칙]·[활동목록]에서 자동 조립됩니다. ' +

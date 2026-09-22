@@ -81,6 +81,7 @@ function buildCompileFor_(recKey, acts, roster) {
   var head = ['반', '번호', '이름', '성취수준']
     .concat(acts.map(function (a) { return a.name; }))
     .concat(['합본', '합본 바이트', '압축', '모델', 'AI 압축결과', '최종본', '바이트', '검증']);
+  head[0] = classHead_();
   var n = head.length;
 
   splitBanner_(s, 3, n,
@@ -117,6 +118,7 @@ function buildCompileFor_(recKey, acts, roster) {
     rows.push(r);
   });
 
+  if (rows.length) s.getRange(APP.DATA_ROW, 1, rows.length, 1).setNumberFormat('@');
   if (rows.length) s.getRange(APP.DATA_ROW, 1, rows.length, n).setValues(rows);
 
   var base = 4 + acts.length;
@@ -205,7 +207,8 @@ function compileChecked() {
 
   var defModel = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
   var system = compressPrompt_(rec);
-  var okN = 0, errN = 0, leftN = 0, t0 = Date.now();
+  var okN = 0, errN = 0, leftN = 0, backupN = 0, t0 = Date.now();
+  usageReset_();
 
   for (var k = 0; k < rows.length; k++) {
     var row = rows[k];
@@ -220,10 +223,13 @@ function compileChecked() {
         s.getRange(row, cAi).setFormula(subscriptionFormula_(system, merged));
         continue;
       }
-      var txt = cleanResult_(callAI_(system, merged, model));
+      var res = callWithBackup_(system, merged, model);
+      var txt = cleanResult_(res.text);
       if (byteLen(txt) > limit) txt = trimToBytes(txt, limit);
       s.getRange(row, cAi).setValue(txt);
-      if (cValid) s.getRange(row, cValid).setValue(formatIssues(validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES)));
+      if (cValid) s.getRange(row, cValid).setValue(formatIssues(validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES)) +
+        (res.backup ? '\n(예비 모델 ' + res.model + ' 로 생성)' : ''));
+      if (res.backup) backupN++;
       s.getRange(row, cChk).setValue(false);
       okN++;
     } catch (e) {
@@ -233,7 +239,9 @@ function compileChecked() {
     }
     SpreadsheetApp.flush();
   }
-  var done = '압축 완료 ' + okN + '건' + (errN ? ' / 실패 ' + errN + '건' : '');
+  var done = '압축 완료 ' + okN + '건' + (errN ? ' / 실패 ' + errN + '건' : '') + (backupN ? ' / 예비 모델 ' + backupN + '건' : '');
+  var used = usageText_();
+  if (used) done += '\n' + used;
   if (leftN) {
     ui_().alert(APP.MENU, done + '\n\n실행 시간 제한(약 6분)에 가까워져 ' + leftN + '건을 남기고 멈췄습니다.\n' +
       '남은 행은 [압축] 체크가 그대로 있으니 한 번 더 실행하세요.', ui_().ButtonSet.OK);

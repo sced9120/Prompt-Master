@@ -22,7 +22,7 @@ function observeContext() {
       return { key: a.key, name: a.name, firstCol: parseColumns(a.columns)[0] || '관찰 내용' };
     }),
     students: getRoster_().map(function (s) {
-      return { id: s.id, label: s.cls + '반 ' + s.no + '번 ' + (s.name || '') };
+      return { id: s.id, label: s.label };
     })
   };
 }

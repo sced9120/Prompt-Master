@@ -72,46 +72,67 @@ function runGeneration_(act, sheet, rows) {
     var system = promptFor_(act);
     var defModel = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
     var autoValidate = cfgBool_('결과 자동검증', true);
-    var banned = PRESET_BANNED, fmt = PRESET_FORMAT_RULES;
+    var batchN = Math.max(1, Math.min(10, Number(cfg_('한 번에 묶을 학생 수', 5)) || 1));
+    var rec = findByKey(getRecordTypes_(), act.recordKey);
+    var masked = maskName_();
+    usageReset_();
 
-    var okN = 0, skipN = 0, errN = 0, subN = 0, leftN = 0;
+    var okN = 0, skipN = 0, errN = 0, subN = 0, leftN = 0, backupN = 0;
     var t0 = Date.now();
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i];
-      // Apps Script 한 번 실행은 약 6분까지. 넘기기 전에 멈추고, 남은 행은 체크를 그대로 둔다.
-      if (Date.now() - t0 > RUN_BUDGET_MS) { leftN = rows.length - i; break; }
+
+    // 1) 행마다 학생 자료와 모델을 먼저 모은다
+    var jobs = [];
+    rows.forEach(function (row) {
       var vals = sheet.getRange(row, 5, 1, cols.length).getValues()[0];
       var filled = vals.some(function (v) { return String(v).trim() !== ''; });
-      if (!filled) { skipN++; if (cGen) sheet.getRange(row, cGen).setValue(false); continue; }
-
+      if (!filled) { skipN++; if (cGen) sheet.getRange(row, cGen).setValue(false); return; }
       var grade = sheet.getRange(row, 4).getValue();
-      var rec = findByKey(getRecordTypes_(), act.recordKey);
       var user = buildStudentBlock(cols, vals, { grade: (rec && rec.useGrade) ? grade : '' });
-      if (!maskName_()) user = '학생 이름: ' + sheet.getRange(row, 3).getValue() + '\n' + user;
+      if (!masked) user = '학생 이름: ' + sheet.getRange(row, 3).getValue() + '\n' + user;
+      var model = cModel ? normModel(sheet.getRange(row, cModel).getValue()) : '';
+      jobs.push({ row: row, user: user, model: model || defModel });
+    });
 
-      var model = cModel ? String(sheet.getRange(row, cModel).getValue()).trim() : '';
-      if (!model) model = defModel;
-
-      toast_((i + 1) + '/' + rows.length + ' 생성 중… (' + model + ')', act.name);
-
-      try {
-        if (providerOf_(model) === 'subscription') {
-          sheet.getRange(row, cAi).setFormula(subscriptionFormula_(system, user));
-          subN++;
-          continue;   // 수식 결과는 시트가 계산하므로 체크 유지
-        }
-        var txt = cleanResult_(callAI_(system, user, model));
-        sheet.getRange(row, cAi).setValue(txt);
-        if (autoValidate && cValid) {
-          sheet.getRange(row, cValid).setValue(formatIssues(validateResult(txt, limit, banned, fmt)));
-        }
-        if (cGen) sheet.getRange(row, cGen).setValue(false);
-        okN++;
-      } catch (e) {
-        sheet.getRange(row, cAi).setValue('⚠ 실패: ' + e.message);
-        if (cGen) sheet.getRange(row, cGen).setValue(false);
-        errN++;
+    var write = function (job, res) {
+      var txt = cleanResult_(res.text);
+      sheet.getRange(job.row, cAi).setValue(txt);
+      if (autoValidate && cValid) {
+        var v = formatIssues(validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES));
+        if (res.backup) v += '\n(예비 모델 ' + res.model + ' 로 생성)';
+        sheet.getRange(job.row, cValid).setValue(v);
       }
+      if (cGen) sheet.getRange(job.row, cGen).setValue(false);
+      okN++; if (res.backup) backupN++;
+    };
+    var fail = function (job, e) {
+      sheet.getRange(job.row, cAi).setValue('⚠ 실패: ' + e.message);
+      if (cGen) sheet.getRange(job.row, cGen).setValue(false);
+      errN++;
+    };
+
+    // 2) 같은 모델끼리 batchN 명씩 묶어서 부른다
+    var i = 0;
+    while (i < jobs.length) {
+      // Apps Script 한 번 실행은 약 6분까지. 넘기기 전에 멈추고, 남은 행은 체크를 그대로 둔다.
+      if (Date.now() - t0 > RUN_BUDGET_MS) { leftN = jobs.length - i; break; }
+      var first = jobs[i];
+      if (providerOf_(first.model) === 'subscription') {
+        sheet.getRange(first.row, cAi).setFormula(subscriptionFormula_(system, first.user));
+        subN++; i++;
+        continue;   // 수식 결과는 시트가 계산하므로 체크 유지
+      }
+      var chunk = [first], k = i + 1;
+      while (chunk.length < batchN && k < jobs.length && jobs[k].model === first.model) { chunk.push(jobs[k]); k++; }
+      i = k;
+      toast_((i) + '/' + jobs.length + ' 생성 중… (' + first.model + (chunk.length > 1 ? ' · ' + chunk.length + '명 묶음' : '') + ')', act.name);
+
+      var got = chunk.length > 1 ? generateBatch_(system, chunk, first.model) : {};
+      if (got.error) { chunk.forEach(function (job) { fail(job, got.error); }); SpreadsheetApp.flush(); continue; }
+      chunk.forEach(function (job) {
+        try {
+          write(job, got[job.row] || callWithBackup_(system, job.user, job.model));
+        } catch (e) { fail(job, e); }
+      });
       SpreadsheetApp.flush();
     }
 
@@ -119,12 +140,38 @@ function runGeneration_(act, sheet, rows) {
     if (subN) msg += ' / 구독수식 ' + subN + '건(셀에서 [생성] 버튼을 눌러 주세요)';
     if (skipN) msg += ' / 자료 없음 ' + skipN + '건';
     if (errN) msg += ' / 실패 ' + errN + '건';
+    if (backupN) msg += ' / 예비 모델 ' + backupN + '건';
+    var used = usageText_();
     if (leftN) {
       ui_().alert(APP.MENU, msg + '\n\n실행 시간 제한(약 6분)에 가까워져 ' + leftN + '건을 남기고 멈췄습니다.\n' +
         '남은 행은 [생성] 체크가 그대로 있으니 메뉴 ⑥ 을 한 번 더 누르세요.\n' +
-        '(자주 멈춘다면 [⚙️ 설정]의 1회 최대 생성 건수를 줄이거나 더 빠른 모델을 쓰세요)', ui_().ButtonSet.OK);
-    } else toast_(msg, act.name);
+        '(자주 멈춘다면 [⚙️ 설정]의 1회 최대 생성 건수를 줄이거나 더 빠른 모델을 쓰세요)' +
+        (used ? '\n\n' + used : ''), ui_().ButtonSet.OK);
+    } else toast_(msg + (used ? '\n' + used : ''), act.name);
   } finally { lock.releaseLock(); }
+}
+
+/**
+ * 여러 학생을 한 번의 호출로 생성한다.
+ * @return {Object} row → {text, model, backup}. 호출 자체가 실패하면 {error: Error}.
+ *         응답에서 빠진 학생은 결과에 없으므로, 부르는 쪽이 한 명씩 다시 부른다.
+ */
+function generateBatch_(system, chunk, model) {
+  var ids = chunk.map(function (job, n) { return 'S' + (n + 1); });
+  var user = buildBatchUser(chunk.map(function (job, n) { return { id: ids[n], block: job.user }; }));
+  var res;
+  try {
+    res = callWithBackup_(system, user, model, { json: true, schema: BATCH_SCHEMA });
+  } catch (e) {
+    return e.kind ? { error: e } : {};     // API 오류면 모두 실패로, 그 밖(빈 응답 등)은 한 명씩 다시
+  }
+  var parsed = parseBatchResult(res.text, ids);
+  var out = {};
+  chunk.forEach(function (job, n) {
+    var t = parsed.map[ids[n]];
+    if (t) out[job.row] = { text: t, model: res.model, backup: res.backup };
+  });
+  return out;
 }
 
 /* ------------------------------------------------------- 자동 생성 트리거 */

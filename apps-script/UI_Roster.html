@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script>
+  // 첫 주소가 막혀 있으면 두 번째 주소에서 받는다. 둘 다 안 되면 CSV·붙여넣기만 쓴다.
+  if (!window.XLSX) document.write('<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"><\/script>');
+</script>
+<style>
+  :root { --line:#dde3dd; --muted:#6b7280; --accent:#35583f; --accent-soft:#e3ece4;
+          --warn:#8f2f20; --warn-soft:#f8eae6; --ok:#2c6340; --bg:#f6f8f6; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; padding:16px 18px 80px; color:#16202a; font:13.5px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
+  h2 { margin:0; font-size:16px; }
+  .sub { color:var(--muted); font-size:12px; margin:2px 0 14px; }
+  .step { display:grid; grid-template-columns:24px 1fr; gap:10px; padding:12px 0; border-top:1px solid var(--line); }
+  .num { width:22px; height:22px; border-radius:50%; background:var(--accent); color:#fff; font-size:11px; font-weight:600;
+         line-height:22px; text-align:center; margin-top:1px; }
+  .st { font-weight:600; margin:0 0 6px; }
+  .hint { font-size:11.5px; color:var(--muted); }
+  .modes { display:flex; gap:8px; flex-wrap:wrap; }
+  .mode { border:1px solid var(--line); border-radius:8px; padding:8px 12px; cursor:pointer; display:flex; gap:8px; align-items:flex-start; flex:1; min-width:220px; }
+  .mode.on { border-color:var(--accent); background:var(--accent-soft); }
+  .mode input { margin-top:4px; }
+  .mode b { display:block; font-size:13px; }
+  .mode span { font-size:11.5px; color:var(--muted); }
+  button { font:inherit; font-size:12.5px; font-weight:600; padding:7px 13px; border-radius:6px;
+           border:1px solid #c9d1c9; background:#fff; cursor:pointer; color:#16202a; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:7px; flex-wrap:wrap; align-items:center; }
+  .drop { border:1.5px dashed #b9c4b9; border-radius:9px; padding:18px; text-align:center; background:var(--bg); cursor:pointer; }
+  .drop.over { border-color:var(--accent); background:var(--accent-soft); }
+  .drop b { color:var(--accent); }
+  textarea { width:100%; font:inherit; font-size:12.5px; padding:8px 10px; border:1px solid #c9d1c9; border-radius:6px; resize:vertical; }
+  details summary { cursor:pointer; font-size:12.5px; color:#374151; margin-top:10px; }
+  select { font:inherit; padding:5px 8px; border:1px solid #c9d1c9; border-radius:6px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+  th, td { border-bottom:1px solid var(--line); padding:4px 6px; text-align:left; }
+  th { background:var(--bg); font-weight:600; }
+  td.n { font-variant-numeric:tabular-nums; }
+  .summary { font-weight:600; margin-top:6px; }
+  .summary.ok { color:var(--ok); } .summary.err { color:var(--warn); }
+  .warn { background:var(--warn-soft); color:#6b2417; border-radius:7px; padding:8px 11px; font-size:12px; margin-top:8px; }
+  .warn button { margin-left:6px; padding:3px 9px; font-size:11.5px; }
+  .more { color:var(--muted); font-size:11.5px; margin-top:4px; }
+  .foot { position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line);
+          padding:9px 18px; display:flex; gap:8px; align-items:center; }
+  .foot .msg { flex:1; font-size:12.5px; }
+  .msg.ok { color:var(--ok); } .msg.err { color:var(--warn); }
+  .spin { display:inline-block; width:10px; height:10px; border:2px solid #ccd; border-top-color:var(--accent);
+          border-radius:50%; animation:sp .8s linear infinite; vertical-align:-1px; margin-right:4px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion:reduce) { * { animation:none !important; } }
+</style>
+</head>
+<body>
+<h2>학생 명단 불러오기</h2>
+<div class="sub" id="sub">엑셀 양식에 채워 올리거나, 나이스·엑셀에서 복사해 붙여넣으세요. 기존 명단은 새 명단으로 바뀌고, 활동 시트에 적어 둔 학생 자료는 그대로 따라갑니다.</div>
+
+<div class="step">
+  <div class="num">1</div>
+  <div>
+    <p class="st">명단 방식</p>
+    <div class="modes">
+      <label class="mode" id="m-class"><input type="radio" name="mode" value="class">
+        <div><b>반 · 번호</b><span>담임·교과처럼 한 학년만 다룰 때</span></div></label>
+      <label class="mode" id="m-grade"><input type="radio" name="mode" value="grade">
+        <div><b>학년 · 반 · 번호</b><span>동아리·방과후처럼 여러 학년이 섞일 때. 시트에는 2-3 처럼 보입니다</span></div></label>
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="num">2</div>
+  <div>
+    <p class="st">양식 내려받기 <span class="hint">(처음 한 번)</span></p>
+    <div class="row">
+      <button id="bXlsx">엑셀 양식 (.xlsx)</button>
+      <button id="bCsv">CSV 양식</button>
+      <span class="hint" id="tplHint"></span>
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="num">3</div>
+  <div>
+    <p class="st">채운 파일 올리기</p>
+    <div class="drop" id="drop">
+      <b>여기를 눌러 파일 고르기</b> 또는 파일을 끌어다 놓기<br>
+      <span class="hint">.xlsx · .xls · .csv — 나이스에서 받은 명렬표도 머리글(학년·반·번호·이름·학번)을 보고 알아서 읽습니다</span>
+    </div>
+    <input type="file" id="file" accept=".xlsx,.xls,.csv,.txt" hidden>
+    <div class="row" id="sheetRow" style="margin-top:6px" hidden><span class="hint">시트:</span><select id="sheetSel"></select></div>
+    <details id="pasteBox">
+      <summary>또는 직접 붙여넣기</summary>
+      <textarea id="paste" rows="6" style="margin-top:6px"></textarea>
+    </details>
+  </div>
+</div>
+
+<div class="step" id="pvStep" hidden>
+  <div class="num">4</div>
+  <div>
+    <p class="st">확인</p>
+    <div id="pv"></div>
+  </div>
+</div>
+
+<div class="foot">
+  <div class="msg" id="msg"></div>
+  <button id="bClose">닫기</button>
+  <button class="primary" id="bSave" disabled>이 명단으로 바꾸기</button>
+</div>
+
+<script>
+var FROM_ONBOARD = <?= fromOnboard ? 'true' : 'false' ?>;
+var $ = function (id) { return document.getElementById(id); };
+var CTX = null, ROWS = null, TEXT = '', WB = null, LAST = null, timer = null;
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+function say(t, cls) { var e = $('msg'); e.className = 'msg ' + (cls || ''); e.innerHTML = t || ''; }
+function mode() { var r = document.querySelector('input[name=mode]:checked'); return r ? r.value : 'class'; }
+function setMode(m) {
+  [].forEach.call(document.querySelectorAll('input[name=mode]'), function (r) { r.checked = r.value === m; });
+  $('m-class').classList.toggle('on', m === 'class'); $('m-grade').classList.toggle('on', m === 'grade');
+  var g = m === 'grade';
+  $('tplHint').textContent = (g ? '학년 · 반 · 번호 · 이름 · 성취수준' : '반 · 번호 · 이름 · 성취수준') + ' 칸이 들어 있습니다. 성취수준(1~5)은 과세특에만 쓰며 비워도 됩니다.';
+  $('paste').placeholder = g ? '2\t3\t15\t김하늘\n1\t2\t7\t박서준\t2\n학번으로 20315 김하늘 도 됩니다' : '1\t1\t김하늘\n1\t2\t박서준\n1\t3\t이유나\t2';
+}
+[].forEach.call(document.querySelectorAll('input[name=mode]'), function (r) {
+  r.onchange = function () { setMode(r.value); preview(); };
+});
+
+google.script.run.withSuccessHandler(function (c) {
+  CTX = c; setMode(c.mode);
+  if (c.count) $('sub').innerHTML += ' <b>지금 ' + c.count + '명이 등록되어 있습니다.</b>';
+  if (FROM_ONBOARD) $('bClose').textContent = '시작하기로 돌아가기';
+}).withFailureHandler(function (e) { say(e.message, 'err'); }).rosterDialogContext();
+
+/* ---------- 양식 */
+function sampleRows(m) {
+  return m === 'grade'
+    ? [[2, 3, 15, '예시학생1', ''], [1, 2, 7, '예시학생2', 3]]
+    : [[1, 1, '예시학생1', ''], [1, 2, '예시학생2', 3]];
+}
+function tplName(ext) { return '학생명단_양식_' + (mode() === 'grade' ? '학년반번호' : '반번호') + '.' + ext; }
+function downloadBlob(blob, name) {
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+$('bXlsx').onclick = function () {
+  if (!window.XLSX) { say('엑셀 도구를 불러오지 못했습니다. CSV 양식을 받아 엑셀에서 여세요.', 'err'); return; }
+  var m = mode(), head = CTX.head[m];
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.aoa_to_sheet([head].concat(sampleRows(m)));
+  ws['!cols'] = head.map(function (h) { return { wch: h === '이름' ? 14 : (h === '성취수준' ? 10 : 7) }; });
+  XLSX.utils.book_append_sheet(wb, ws, '명단');
+  var guide = XLSX.utils.aoa_to_sheet([
+    ['학생 명단 양식 사용법'], [''],
+    ['1. [명단] 시트의 2행부터 한 줄에 한 명씩 채웁니다. 1행 머리글은 지우지 마세요.'],
+    ['2. "예시학생" 줄은 지우지 않아도 올릴 때 자동으로 건너뜁니다.'],
+    ['3. 성취수준(1~5)은 과세특에만 쓰입니다. 모르면 비워 두세요.'],
+    ['4. 다 채웠으면 저장하고, 세특 도우미 메뉴 ③ [학생 명단 불러오기]에서 이 파일을 올립니다.'],
+    [''],
+    ['※ 나이스에서 내려받은 명렬표를 그대로 올려도 됩니다. 학년·반·번호·이름(성명)·학번 머리글을 찾아 읽습니다.'],
+    ['※ 주민등록번호·연락처 같은 칸은 지우고 올리세요. 이 도구는 이름까지만 씁니다.']
+  ]);
+  guide['!cols'] = [{ wch: 90 }];
+  XLSX.utils.book_append_sheet(wb, guide, '안내');
+  XLSX.writeFile(wb, tplName('xlsx'));
+  say('양식을 내려받았습니다: ' + esc(tplName('xlsx')), 'ok');
+};
+$('bCsv').onclick = function () {
+  var m = mode(), lines = [CTX.head[m]].concat(sampleRows(m)).map(function (r) { return r.join(','); });
+  // 엑셀이 한글을 깨뜨리지 않도록 BOM 을 붙인다
+  downloadBlob(new Blob([String.fromCharCode(0xFEFF) + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), tplName('csv'));
+  say('양식을 내려받았습니다: ' + esc(tplName('csv')), 'ok');
+};
+
+/* ---------- 파일 읽기 */
+var drop = $('drop');
+drop.onclick = function () { $('file').click(); };
+drop.ondragover = function (e) { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = function () { drop.classList.remove('over'); };
+drop.ondrop = function (e) { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); };
+$('file').onchange = function () { if (this.files[0]) readFile(this.files[0]); this.value = ''; };
+
+function decodeText(buf) {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch (e) { try { return new TextDecoder('euc-kr').decode(buf); } catch (e2) { return new TextDecoder().decode(buf); } }
+}
+function csvRows(text) {
+  text = text.replace(new RegExp('^' + String.fromCharCode(0xFEFF)), '');
+  var sep = (text.split('\n')[0].match(/\t/g) || []).length > (text.split('\n')[0].match(/,/g) || []).length ? '\t' : ',';
+  var rows = [], row = [], cell = '', q = false;
+  for (var i = 0; i < text.length; i++) {
+    var ch = text.charAt(i);
+    if (q) {
+      if (ch === '"') { if (text.charAt(i + 1) === '"') { cell += '"'; i++; } else q = false; }
+      else cell += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === sep) { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text.charAt(i + 1) === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += ch;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+function sheetRows(name) {
+  var ws = WB.Sheets[name];
+  return XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+}
+function readFile(f) {
+  say('<span class="spin"></span>' + esc(f.name) + ' 읽는 중…');
+  var name = f.name.toLowerCase();
+  var rd = new FileReader();
+  rd.onerror = function () { say('파일을 읽지 못했습니다.', 'err'); };
+  rd.onload = function () {
+    try {
+      WB = null; $('sheetRow').hidden = true;
+      if (/\.(csv|txt)$/.test(name)) {
+        ROWS = csvRows(decodeText(rd.result));
+      } else {
+        if (!window.XLSX) { say('엑셀 도구를 불러오지 못했습니다. 엑셀에서 [다른 이름으로 저장 → CSV]로 저장해 올리거나, 복사해서 붙여넣어 주세요.', 'err'); return; }
+        WB = XLSX.read(new Uint8Array(rd.result), { type: 'array' });
+        var names = WB.SheetNames.filter(function (n) { return n !== '안내'; });
+        var pick = names.indexOf('명단') >= 0 ? '명단' : (names.filter(function (n) { return sheetRows(n).length > 1; })[0] || names[0]);
+        if (names.length > 1) {
+          $('sheetSel').innerHTML = names.map(function (n) { return '<option' + (n === pick ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('');
+          $('sheetRow').hidden = false;
+        }
+        ROWS = sheetRows(pick);
+      }
+      ROWS = ROWS.slice(0, 2000);
+      TEXT = '';
+      $('paste').value = '';
+      say(esc(f.name) + ' — ' + ROWS.length + '줄을 읽었습니다.');
+      preview();
+    } catch (e) { say('파일을 해석하지 못했습니다: ' + esc(e.message), 'err'); }
+  };
+  rd.readAsArrayBuffer(f);
+}
+$('sheetSel').onchange = function () { ROWS = sheetRows(this.value).slice(0, 2000); preview(); };
+$('paste').addEventListener('input', function () {
+  TEXT = this.value; ROWS = null;
+  clearTimeout(timer); timer = setTimeout(preview, 350);
+});
+
+/* ---------- 미리 보기 */
+function payload() { return ROWS ? { rows: ROWS, mode: mode() } : { text: TEXT, mode: mode() }; }
+function preview() {
+  if (!ROWS && !TEXT.trim()) { $('pvStep').hidden = true; $('bSave').disabled = true; return; }
+  google.script.run.withSuccessHandler(function (r) {
+    LAST = r;
+    $('pvStep').hidden = false;
+    var g = r.mode === 'grade', h = '';
+    h += '<div class="summary ' + (r.count ? 'ok' : 'err') + '">' +
+         (r.count ? r.count + '명을 읽었습니다' : '학생을 한 명도 알아보지 못했습니다') +
+         (r.header ? ' · 머리글을 보고 읽음' : ' · 머리글 없이 순서대로 읽음') + '</div>';
+    if (r.detected && r.detected !== r.mode) {
+      h += '<div class="warn">' + (r.detected === 'grade' ? '학년이 들어 있는 명단 같습니다.' : '학년 칸이 없는 명단 같습니다.') +
+           '<button id="bSwitch">' + (r.detected === 'grade' ? '학년 · 반 · 번호' : '반 · 번호') + '로 바꾸기</button></div>';
+    }
+    r.warnings.forEach(function (w) { h += '<div class="warn">⚠ ' + esc(w) + '</div>'; });
+    if (r.count) {
+      h += '<table><tr>' + (g ? '<th>학년</th>' : '') + '<th>반</th><th>번호</th><th>이름</th><th>성취수준</th></tr>';
+      r.students.slice(0, 12).forEach(function (s) {
+        h += '<tr>' + (g ? '<td class="n">' + esc(s.year) + '</td>' : '') + '<td class="n">' + esc(s.cls) + '</td><td class="n">' +
+             esc(s.no) + '</td><td>' + esc(s.name) + '</td><td class="n">' + esc(s.level) + '</td></tr>';
+      });
+      h += '</table>';
+      if (r.count > 12) h += '<div class="more">… 외 ' + (r.count - 12) + '명</div>';
+    }
+    if (r.skippedCount) {
+      h += '<div class="more">건너뛴 줄 ' + r.skippedCount + '개: ' + r.skipped.slice(0, 4).map(function (s) {
+        return s.line + '행(' + esc(s.reason) + ')'; }).join(', ') + (r.skippedCount > 4 ? ' …' : '') + '</div>';
+    }
+    $('pv').innerHTML = h;
+    if ($('bSwitch')) $('bSwitch').onclick = function () { setMode(r.detected); preview(); };
+    $('bSave').disabled = !r.count;
+    $('bSave').textContent = r.count ? '이 명단(' + r.count + '명)으로 바꾸기' : '이 명단으로 바꾸기';
+  }).withFailureHandler(function (e) { say(e.message, 'err'); }).rosterPreview(payload());
+}
+
+/* ---------- 저장 */
+$('bSave').onclick = function () {
+  var btn = this; btn.disabled = true;
+  say('<span class="spin"></span>저장하고 활동 시트에 반영하는 중…');
+  google.script.run.withSuccessHandler(function (r) {
+    say('✓ ' + r.count + '명 저장 · ' + (r.mode === 'grade' ? '학년·반·번호' : '반·번호') + ' 방식' +
+        (r.synced ? ' · 활동 시트 ' + r.synced + '개에 반영' : ''), 'ok');
+    btn.textContent = '저장됨';
+    if (FROM_ONBOARD) setTimeout(function () { google.script.run.openOnboard(); }, 1200);
+  }).withFailureHandler(function (e) { btn.disabled = false; say(esc(e.message), 'err'); }).rosterSave(payload());
+};
+$('bClose').onclick = function () {
+  if (FROM_ONBOARD) google.script.run.withSuccessHandler(function () {}).openOnboard();
+  else google.script.host.close();
+};
+</script>
+</body>
+</html>

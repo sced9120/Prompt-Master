@@ -1,16 +1,16 @@
 /******************************************************************************
- * 세특 작성 도우미 v3.1.0 — 설치용 합본
+ * 세특 작성 도우미 v3.2.0 — 설치용 합본
  *
  * 이 파일 하나에 모든 스크립트가 들어 있습니다.
  * Apps Script 편집기에서 Code.gs 의 내용을 전부 지우고 이 파일을 통째로 붙여넣으세요.
- * HTML 파일 4개는 각각 같은 이름으로 따로 만들어야 합니다:
- *   UI_ApiKey, UI_Observe, UI_Onboard, UI_Wizard
+ * HTML 파일 5개는 각각 같은 이름으로 따로 만들어야 합니다:
+ *   UI_ApiKey, UI_Observe, UI_Onboard, UI_Roster, UI_Wizard
  *
  * 원본은 모듈별로 나뉘어 있습니다: github.com/sced9120/Prompt-Master
  * 고칠 때는 apps-script/ 의 해당 파일을 고치고 node tools/build.js 를 다시 돌리세요.
  * 이 파일을 직접 고치면 다음 빌드 때 덮어써집니다.
  *
- * 빌드: 2026-09-21  ·  원본 16개 파일
+ * 빌드: 2026-09-22  ·  원본 17개 파일
  *****************************************************************************/
 
 /* ==========================================================================
@@ -27,7 +27,7 @@
  */
 
 var APP = {
-  VERSION: 'v3.1.0',
+  VERSION: 'v3.2.0',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -654,7 +654,7 @@ if (typeof module !== 'undefined' && module.exports) {
 /** 복사해 온 이름 정리: 앞뒤 공백·따옴표, API 목록의 'models/' 접두어 */
 function normModel(m) {
   return String(m === null || m === undefined ? '' : m)
-    .replace(/[​-‍﻿]/g, '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
     .trim()
     .replace(/^["'`“”‘’]+|["'`“”‘’]+$/g, '')
     .replace(/^models\//i, '')
@@ -761,12 +761,347 @@ function modelStatusText(res, stamp) {
   return '✗ ' + (res.short || res.message) + tail;
 }
 
+/* ------------------------------------------------------------ 비용 줄이기 */
+/**
+ * "생각(추론)을 줄이는" 요청 옵션. 모르는 모델이면 null (아무것도 안 보냄).
+ * 세특 한 편은 깊은 추론이 필요 없는 글쓰기라, 생각을 줄여도 품질 차이가 거의 없고
+ * 생각 토큰은 출력 요금으로 청구되므로 비용과 시간이 크게 준다.
+ *   Gemini 3 이후·-latest : thinkingLevel 'low'   (3.8 Flash 기본은 medium)
+ *   Gemini 2.5 Flash 계열 : thinkingBudget 0      (끄기)
+ *   Gemini 2.5 Pro        : thinkingBudget 128    (끌 수 없어 최소값)
+ *   OpenAI gpt-5·gpt-6·o  : reasoning_effort 'low' (gpt-5.x 기본은 medium)
+ */
+function thinkingFor(provider, model) {
+  var m = normModel(model).toLowerCase();
+  if (provider === 'gemini') {
+    if (/^gemini-2\.5-pro/.test(m)) return { thinkingBudget: 128 };
+    if (/^gemini-2\.5-flash/.test(m)) return { thinkingBudget: 0 };
+    var v = m.match(/^gemini-(\d+)/);
+    if (v && Number(v[1]) >= 3) return { thinkingLevel: 'low' };
+    if (/^gemini-(flash|flash-lite|pro)-latest$/.test(m)) return { thinkingLevel: 'low' };
+    return null;
+  }
+  if (provider === 'openai') {
+    if (/^(gpt-5|gpt-6|gpt-7|o\d)/.test(m) && !/chat-latest/.test(m)) return { reasoning_effort: 'low' };
+    return null;
+  }
+  return null;
+}
+
+/** 여러 학생을 한 번에 보낼 때의 응답 형식 (Gemini responseSchema 형식) */
+var BATCH_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    results: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: { id: { type: 'STRING' }, text: { type: 'STRING' } },
+        required: ['id', 'text']
+      }
+    }
+  },
+  required: ['results']
+};
+
+/**
+ * 여러 학생 자료를 한 번의 요청으로 묶는다. 규칙(시스템 프롬프트)은 그대로 두고
+ * 학생 자료만 여기 모으므로, 규칙을 학생 수만큼 되풀이해 보내지 않아도 된다.
+ * @param {Array<{id:string, block:string}>} items
+ */
+function buildBatchUser(items) {
+  var L = [];
+  L.push('# 이번에 작성할 학생 ' + items.length + '명');
+  L.push('아래 학생들의 특기사항을 한 명씩 따로 작성한다.');
+  L.push('- 위의 모든 규칙(분량 포함)을 학생마다 따로 지킨다. 분량은 학생 한 명 기준이다.');
+  L.push('- 다른 학생의 자료를 섞지 않는다. 그 학생 자료에 없는 내용을 지어내지 않는다.');
+  L.push('- 학생마다 첫 문장과 문장 구조를 다르게 하고, 같은 표현을 여러 학생에게 되풀이하지 않는다.');
+  items.forEach(function (it) {
+    L.push('');
+    L.push('## ' + it.id);
+    L.push(String(it.block || '').trim());
+  });
+  L.push('');
+  L.push('# 출력 형식 (위의 [출력] 규칙은 학생 한 명의 text 에 적용한다)');
+  L.push('JSON 하나만 출력한다. 설명이나 코드 블록 표시를 붙이지 않는다.');
+  L.push('{"results":[' + items.map(function (it) { return '{"id":"' + it.id + '","text":"특기사항 본문"}'; }).join(',') + ']}');
+  return L.join('\n');
+}
+
+/**
+ * 묶음 응답을 id → 본문으로 푼다. 형식이 조금 달라도 최대한 살린다.
+ * @return {{map:Object, missing:string[]}}
+ */
+function parseBatchResult(text, ids) {
+  var map = {}, t = String(text || '').trim();
+  t = t.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
+  var data = null;
+  var tryParse = function (s) { try { return JSON.parse(s); } catch (e) { return null; } };
+  data = tryParse(t);
+  if (!data) {
+    var a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a >= 0 && b > a) data = tryParse(t.slice(a, b + 1));
+  }
+  if (!data) {
+    var c = t.indexOf('['), d = t.lastIndexOf(']');
+    if (c >= 0 && d > c) data = tryParse(t.slice(c, d + 1));
+  }
+  var list = null;
+  if (Array.isArray(data)) list = data;
+  else if (data && Array.isArray(data.results)) list = data.results;
+  else if (data && typeof data === 'object') {
+    list = Object.keys(data).map(function (k) { return { id: k, text: data[k] }; });
+  }
+  (list || []).forEach(function (x, i) {
+    if (!x) return;
+    var id = String(x.id || x.ID || x.student || '').trim();
+    var body = typeof x === 'string' ? x : (x.text || x.result || x.content || '');
+    if (!id && ids[i]) id = ids[i];                     // id 를 빼먹었으면 순서로
+    if (ids.indexOf(id) < 0) {
+      var n = id.match(/(\d+)/);                        // "학생1" 처럼 바꿔 쓴 경우
+      if (n && ids[Number(n[1]) - 1]) id = ids[Number(n[1]) - 1];
+    }
+    body = String(body || '').trim();
+    if (id && body && ids.indexOf(id) >= 0 && !map[id]) map[id] = body;
+  });
+  return { map: map, missing: ids.filter(function (id) { return !map[id]; }) };
+}
+
+/** 대략의 토큰 수 (한글은 1.4자에 1토큰, 나머지는 3.5자에 1토큰 정도로 어림) */
+function estimateTokens(text) {
+  var s = String(text || ''), h = 0, o = 0;
+  for (var i = 0; i < s.length; i++) {
+    var c = s.charCodeAt(i);
+    if (c >= 0xAC00 && c <= 0xD7A3) h++;
+    else if (c > 32) o++;
+  }
+  return Math.round(h / 1.4 + o / 3.5);
+}
+
 /* Node 테스트용 export (Apps Script에서는 무시됨) */
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     normModel: normModel, guessProvider: guessProvider, companyToProvider: companyToProvider,
     providerLabel: providerLabel, explainApiError: explainApiError, isTextModel: isTextModel,
-    sortModelIds: sortModelIds, modelStatusText: modelStatusText
+    sortModelIds: sortModelIds, modelStatusText: modelStatusText,
+    thinkingFor: thinkingFor, BATCH_SCHEMA: BATCH_SCHEMA, buildBatchUser: buildBatchUser,
+    parseBatchResult: parseBatchResult, estimateTokens: estimateTokens
+  };
+}
+
+
+/* ==========================================================================
+   14_RosterParse.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 학생 명단 해석 (순수 로직)
+ * ---------------------------------------------------------------
+ * 붙여넣은 글이든, 엑셀·CSV 파일에서 읽은 표든 같은 함수로 해석한다.
+ *
+ *   명단 방식 'class' : 반 · 번호 · 이름 · 성취수준          (담임·교과)
+ *   명단 방식 'grade' : 학년 · 반 · 번호 · 이름 · 성취수준   (동아리·방과후처럼 학년이 섞일 때)
+ *   'auto'           : 머리글이나 값을 보고 알아서 고른다
+ *
+ * 머리글이 있으면 이름으로 열을 찾고(순서 무관), 없으면 자리 순서로 읽는다.
+ * "학번"(20315 = 2학년 3반 15번) 칸이나 "2학년 3반 15번 김하늘" 같은 글도 알아본다.
+ * Apps Script와 Node 양쪽에서 동작한다(테스트: test/roster.test.js).
+ * ---------------------------------------------------------------
+ */
+
+var ROSTER_HEAD = {
+  'class': ['반', '번호', '이름', '성취수준'],
+  'grade': ['학년', '반', '번호', '이름', '성취수준']
+};
+
+/** 머리글 한 칸이 무엇인지 */
+function rosterHeadKind(cell) {
+  var t = String(cell === null || cell === undefined ? '' : cell).replace(/\s+/g, '');
+  if (!t) return '';
+  if (/학번/.test(t)) return 'sid';
+  if (/^(학년|년)$/.test(t)) return 'year';
+  if (/^(반|학급|반명)$/.test(t)) return 'cls';
+  if (/^(번호|번|출석번호)$/.test(t)) return 'no';
+  if (/^(이름|성명|학생명|학생이름|성함)$/.test(t)) return 'name';
+  if (/성취|수준|성취도/.test(t)) return 'level';
+  return '';
+}
+
+/** 학번 → [학년, 반, 번호]. 5자리 20315, 4자리 2315(반이 한 자리일 때) */
+function splitStudentId(v) {
+  var s = String(v === null || v === undefined ? '' : v).replace(/\D/g, '');
+  if (s.length === 5) return [Number(s.charAt(0)), Number(s.slice(1, 3)), Number(s.slice(3))];
+  if (s.length === 4) return [Number(s.charAt(0)), Number(s.charAt(1)), Number(s.slice(2))];
+  return null;
+}
+
+function numOf_(v) {
+  var m = String(v === null || v === undefined ? '' : v).match(/\d+/);
+  return m ? Number(m[0]) : null;
+}
+
+function levelOf_(v) {
+  var s = String(v === null || v === undefined ? '' : v).trim();
+  if (!s) return '';
+  var n = Number(s.replace(/[^0-9.]/g, ''));
+  return (n >= 1 && n <= 5 && Math.floor(n) === n) ? n : null;   // null = 잘못된 값
+}
+
+function isSampleName_(name) {
+  return /^(예시|\(예\)|예\)|홍길동)/.test(String(name || '').trim());
+}
+
+/** 붙여넣은 글 → 칸 나눈 줄들 */
+function rosterTextToRows(text) {
+  var out = [];
+  String(text || '').split(/\r?\n/).forEach(function (line) {
+    var t = line.replace(/\u00A0/g, ' ').trim();
+    if (!t) return;
+    var cells = t.split(/\t|,|\s{2,}/).map(function (x) { return x.trim(); }).filter(String);
+    if (cells.length < 3) cells = t.split(/\s+/);
+    out.push(cells);
+  });
+  return out;
+}
+
+/**
+ * 표(2차원 배열) → 학생 목록
+ * @param {Array<Array>} rows
+ * @param {string} mode 'class' | 'grade' | 'auto'
+ * @return {{mode:string, students:Array<{year,cls,no,name,level}>, skipped:Array<{line:number, text:string, reason:string}>,
+ *           warnings:string[], header:boolean}}
+ */
+function parseRosterRows(rows, mode) {
+  rows = (rows || []).map(function (r) {
+    return (Array.isArray(r) ? r : [r]).map(function (c) { return c === null || c === undefined ? '' : String(c).trim(); });
+  });
+  var res = { mode: mode, students: [], skipped: [], warnings: [], header: false };
+
+  // 1) 머리글 줄 찾기 (앞쪽 10줄 안에서, '이름' 칸과 반/번호/학번 칸이 함께 있는 줄)
+  var hIdx = -1, map = null;
+  for (var i = 0; i < Math.min(rows.length, 10); i++) {
+    var m = {};
+    rows[i].forEach(function (c, j) { var k = rosterHeadKind(c); if (k && m[k] === undefined) m[k] = j; });
+    if (m.name !== undefined && (m.cls !== undefined || m.no !== undefined || m.sid !== undefined)) { hIdx = i; map = m; break; }
+  }
+
+  var picked = [];
+  if (map) {
+    res.header = true;
+    if (mode === 'auto') mode = (map.year !== undefined || map.sid !== undefined) ? 'grade' : 'class';
+    for (var r = hIdx + 1; r < rows.length; r++) {
+      var row = rows[r];
+      if (!row.some(String)) continue;
+      var st = { year: '', cls: '', no: '', name: '', level: '' };
+      if (map.sid !== undefined && (map.cls === undefined || !row[map.cls])) {
+        var sp = splitStudentId(row[map.sid]);
+        if (sp) { st.year = sp[0]; st.cls = sp[1]; st.no = sp[2]; }
+      }
+      if (map.year !== undefined && row[map.year] !== '') st.year = numOf_(row[map.year]);
+      if (map.cls !== undefined && row[map.cls] !== '') st.cls = numOf_(row[map.cls]);
+      if (map.no !== undefined && row[map.no] !== '') st.no = numOf_(row[map.no]);
+      st.name = String(row[map.name] || '').trim();
+      if (map.level !== undefined) st.level = levelOf_(row[map.level]);
+      else if (!rows[hIdx][map.name + 1]) {   // 머리글 없는 바로 옆 칸에 1~5 가 있으면 성취수준으로 (예전 붙여넣기 호환)
+        st.level = /^[1-5]$/.test(String(row[map.name + 1] || '').trim()) ? Number(row[map.name + 1]) : '';
+      }
+      picked.push({ st: st, line: r + 1, text: row.filter(String).join(' ') });
+    }
+  } else {
+    // 2) 머리글 없음: 줄마다 값을 보고 읽는다
+    var three = 0, sidN = 0, total = 0;
+    var parsed = rows.map(function (row, r) {
+      var cells = row.filter(String);
+      if (!cells.length) return null;
+      total++;
+      var tagged = { year: null, cls: null, no: null }, nums = [], name = '', after = [];
+      cells.forEach(function (c) {
+        if (!name) {
+          if (/^\d+\s*학년$/.test(c)) { tagged.year = numOf_(c); return; }
+          if (/^\d+\s*반$/.test(c)) { tagged.cls = numOf_(c); return; }
+          if (/^\d+\s*번$/.test(c)) { tagged.no = numOf_(c); return; }
+          if (/^\d+$/.test(c)) { nums.push(c); return; }
+          if (/[가-힣A-Za-z]/.test(c)) { name = c; return; }
+        } else after.push(c);
+      });
+      var lv = '';
+      for (var a = 0; a < after.length; a++) { if (/^\d$/.test(after[a])) { lv = levelOf_(after[a]); break; } }
+      if (nums.length === 1 && /^\d{4,5}$/.test(nums[0]) && tagged.cls === null) sidN++;
+      if (nums.length + (tagged.year !== null) + (tagged.cls !== null) + (tagged.no !== null) >= 3) three++;
+      return { tagged: tagged, nums: nums, name: name, level: lv, line: r + 1, text: cells.join(' ') };
+    });
+    if (mode === 'auto') mode = (three + sidN > total / 2) ? 'grade' : 'class';
+    parsed.forEach(function (p) {
+      if (!p) return;
+      var st = { year: '', cls: '', no: '', name: p.name, level: p.level };
+      var nums = p.nums.slice();
+      if (nums.length === 1 && /^\d{4,5}$/.test(nums[0]) && p.tagged.cls === null) {
+        var sp = splitStudentId(nums[0]);
+        st.year = sp[0]; st.cls = sp[1]; st.no = sp[2];
+      } else {
+        var order = mode === 'grade' ? ['year', 'cls', 'no'] : ['cls', 'no'];
+        order.forEach(function (k) {
+          if (p.tagged[k] !== null) st[k] = p.tagged[k];
+          else if (nums.length) st[k] = Number(nums.shift());
+        });
+        if (mode === 'class' && p.tagged.year !== null) st.year = p.tagged.year;
+      }
+      picked.push({ st: st, line: p.line, text: p.text });
+    });
+  }
+  res.mode = mode === 'grade' ? 'grade' : 'class';
+
+  // 3) 걸러 내기 · 경고
+  var seen = {}, badLevel = 0, noYear = 0;
+  picked.forEach(function (p) {
+    var st = p.st;
+    if (!st.name) { res.skipped.push({ line: p.line, text: p.text, reason: '이름 없음' }); return; }
+    if (isSampleName_(st.name)) { res.skipped.push({ line: p.line, text: p.text, reason: '양식의 예시 줄' }); return; }
+    if (rosterHeadKind(st.name)) return;                             // 머리글이 한 번 더 나온 줄
+    if (st.cls === '' || st.cls === null || st.no === '' || st.no === null) {
+      res.skipped.push({ line: p.line, text: p.text, reason: '반 또는 번호 없음' }); return;
+    }
+    if (st.level === null) { badLevel++; st.level = ''; }
+    if (res.mode === 'grade' && (st.year === '' || st.year === null)) noYear++;
+    var key = (res.mode === 'grade' ? st.year + '-' : '') + st.cls + '-' + st.no;
+    if (seen[key]) res.warnings.push('같은 ' + (res.mode === 'grade' ? '학년·' : '') + '반·번호가 두 번 있습니다: ' +
+      key.replace(/-/g, ' ') + ' (' + seen[key] + ', ' + st.name + ')');
+    else seen[key] = st.name;
+    res.students.push(st);
+  });
+  if (badLevel) res.warnings.push('성취수준이 1~5가 아닌 값 ' + badLevel + '개는 비워 두었습니다.');
+  if (noYear) res.warnings.push('학년이 비어 있는 학생이 ' + noYear + '명 있습니다.');
+
+  res.students.sort(function (a, b) {
+    return (Number(a.year) || 0) - (Number(b.year) || 0) || (Number(a.cls) || 0) - (Number(b.cls) || 0) ||
+           (Number(a.no) || 0) - (Number(b.no) || 0);
+  });
+  return res;
+}
+
+/** 학생 → 명단 시트 한 줄 */
+function rosterRowOf(st, mode) {
+  return mode === 'grade' ? [st.year, st.cls, st.no, st.name, st.level] : [st.cls, st.no, st.name, st.level];
+}
+
+/** 활동 시트 A열에 보일 반 표시: 반 방식은 "3", 학년 방식은 "2-3" */
+function classLabel(year, cls) {
+  var y = String(year === null || year === undefined ? '' : year).trim();
+  return y ? y + '-' + cls : cls;
+}
+
+/** "2학년 3반 15번 김하늘" */
+function studentLabel(st) {
+  return (st.year !== '' && st.year !== undefined && st.year !== null ? st.year + '학년 ' : '') +
+         st.cls + '반 ' + st.no + '번 ' + (st.name || '');
+}
+
+/* Node 테스트용 export (Apps Script에서는 무시됨) */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    ROSTER_HEAD: ROSTER_HEAD, rosterHeadKind: rosterHeadKind, splitStudentId: splitStudentId,
+    rosterTextToRows: rosterTextToRows, parseRosterRows: parseRosterRows, rosterRowOf: rosterRowOf,
+    classLabel: classLabel, studentLabel: studentLabel
   };
 }
 
@@ -1078,7 +1413,8 @@ function onOpen() {
   m.addItem('② AI 연결 · 모델 설정', 'openApiDialog');
   m.addItem('   모델 연결 테스트', 'testAllModels');
   m.addSeparator();
-  m.addItem('③ 학생 명단 동기화', 'syncRoster');
+  m.addItem('③ 학생 명단 불러오기 (엑셀·붙여넣기)', 'openRosterDialog');
+  m.addItem('   학생 명단 동기화', 'syncRoster');
   m.addSeparator();
   m.addItem('④ 활동 만들기 (AI 마법사) ★', 'openWizard');
   m.addItem('   활동 직접 추가', 'addActivityDialog');
@@ -1223,7 +1559,10 @@ function buildConfig() {
     ['합본용 모델', DEFAULT_MODEL, '여러 활동을 한 편으로 압축할 때 쓰는 모델. 대개 활동용과 같아도 되고, 글자수를 잘 못 맞추면 한 단계 위 모델로.'],
     ['학생 이름 마스킹', true, 'TRUE면 학생 이름을 AI에 보내지 않습니다. 개인정보 보호 권장값.'],
     ['결과 자동검증', true, 'TRUE면 생성 직후 기재 금지사항·분량·어미를 자동 점검합니다.'],
-    ['1회 최대 생성 건수', 25, '한 번에 처리할 최대 학생 수. 실행 시간(약 6분) 제한 때문에 넘치면 나눠서 처리합니다.']
+    ['1회 최대 생성 건수', 25, '한 번에 처리할 최대 학생 수. 실행 시간(약 6분) 제한 때문에 넘치면 나눠서 처리합니다.'],
+    ['예비 모델', '', '활동용·합본용 모델이 한도 초과·서버 오류 등으로 실패하면 이 모델로 한 번 더 시도합니다. 다른 회사 모델을 적어 두면 좋습니다(예: gpt-5.6-luna). 비우면 쓰지 않습니다.'],
+    ['생각 줄이기', true, 'TRUE면 모델의 생각(추론) 단계를 줄여 더 빠르고 싸게 씁니다. 생각 토큰은 출력 요금으로 청구됩니다. 세특 품질에는 거의 영향이 없습니다.'],
+    ['한 번에 묶을 학생 수', 5, '여러 학생을 한 번의 호출로 생성합니다. 규칙 부분을 한 번만 보내 비용과 호출 횟수가 줄어듭니다. 1이면 한 명씩(가장 꼼꼼, 가장 비쌈). 최대 10.']
   ];
   rows.forEach(function (r) { if (existing.hasOwnProperty(r[0])) r[1] = existing[r[0]]; });
   s.getRange(4, 1, rows.length, 3).setValues(rows);
@@ -1350,18 +1689,8 @@ function refreshActivityValidation_() {
 /* -------------------------------------------------------------- 학생명단 */
 function buildRoster() {
   var s = shOrCreate_(APP.SH.ROSTER);
-  if (s.getLastRow() > 2) return;
-  s.clear();
-  var head = ['반', '번호', '이름', '성취수준'];
-  s.getRange(2, 1, 1, head.length).setValues([head]);
-  styleHeader_(s, 2, head.length);
-  s.getRange(3, 1, 500, 4).setBackground(APP.COLORS.input);
-  s.getRange(3, 4, 500, 1).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList(['1', '2', '3', '4', '5'], true).build());
-  [70, 70, 110, 100].forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
-  s.setFrozenRows(2);
-  banner_(s, 4, '👤 학생명단',
-    '반/번호/이름을 입력한 뒤 메뉴 ③ 학생 명단 동기화 를 누르면 모든 활동 시트에 반영됩니다. 성취수준(1~5)은 과세특에만 쓰이며 비워 둬도 됩니다.');
+  if (s.getLastRow() > 2) return;          // 이미 명단이 있으면 보존
+  writeRosterSheet_([], rosterMode_());    // 머리글 방식(반·번호 / 학년·반·번호)은 그대로 둔다
 }
 
 /* ---------------------------------------------------------------- 검토 */
@@ -1371,8 +1700,10 @@ function buildReview() {
   s.getRange('A1').setValue('✅ 검토  —  반·번호·기록종류를 고르면 그 학생의 최종본을 불러옵니다. 나이스 입력 전 확인용.')
     .setFontSize(13).setFontWeight('bold');
   s.getRange(3, 1, 1, 5).setValues([['반', '번호', '기록종류', '이름', '최종본 (자동)']]);
+  s.getRange(3, 1).setValue(classHead_());
   styleHeader_(s, 3, 5);
   s.getRange('A4:C4').setBackground(APP.COLORS.input);
+  s.getRange('A4').setNumberFormat('@');   // "2-3"(학년-반)이 날짜로 바뀌지 않게
 
   var recKeys = getRecordTypes_().map(function (r) { return r.key; });
   if (recKeys.length) {
@@ -1467,13 +1798,14 @@ function onboardStatus() {
     if (getKey_(p)) { st.hasKey = true; st.keyNames.push(p); }
   });
   if (st.installed) {
-    try { st.rosterCount = getRoster_().length; } catch (e) {}
+    try { st.rosterCount = getRoster_().length; st.rosterMode = rosterMode_(); } catch (e) {}
     try {
       st.activities = getActivities_().map(function (a) {
         return { key: a.key, name: a.name, inSheet: a.inSheet, exSheet: a.exSheet };
       });
     } catch (e) {}
     try {
+      st.backupModel = normModel(cfg_('예비 모델', ''));
       st.models = modelChoices_().filter(function (m) { return m.indexOf('구독') < 0; });
       st.defaultModel = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
       st.compileModel = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
@@ -1517,11 +1849,21 @@ function onboardSaveKey(p) {
     recordModelStatus_(res, { company: guess ? '자동' : providerLabel(provider), level: preset.level, memo: preset.memo });
   } catch (e) {}
   if (res.ok) {
-    setCfg_('활동용 모델', model);
-    setCfg_('합본용 모델', model);
+    // 이미 다른 회사 키로 잘 쓰고 있으면 주 모델은 두고, 새 모델을 예비 모델로 둔다
+    var cur = normModel(cfg_('활동용 모델', DEFAULT_MODEL));
+    var curProv = providerOf_(cur);
+    var keep = curProv && curProv !== 'subscription' && curProv !== provider && !!getKey_(curProv);
+    var msg = '연결됐습니다 · ' + model + ' · ' + res.sec + '초. ';
+    if (keep) {
+      if (!normModel(cfg_('예비 모델', ''))) { setCfg_('예비 모델', model); msg += '지금 쓰는 ' + cur + ' 은 그대로 두고, ' + model + ' 을 예비 모델로 두었습니다(주 모델이 한도 초과 등으로 실패하면 대신 씀).'; }
+      else msg += '지금 쓰는 ' + cur + ' 은 그대로 두었습니다. 바꾸려면 메뉴 ② [모델] 탭에서 고르세요.';
+    } else {
+      setCfg_('활동용 모델', model);
+      setCfg_('합본용 모델', model);
+      msg += '활동용·합본용 모델을 이것으로 맞췄습니다.';
+    }
     try { refreshModelDropdowns_(); } catch (e) {}
-    return { ok: true, model: model, status: onboardStatus(),
-             message: '연결됐습니다 · ' + model + ' · ' + res.sec + '초. 활동용·합본용 모델을 이것으로 맞췄습니다.' };
+    return { ok: true, model: model, kept: keep, status: onboardStatus(), message: msg };
   }
   return { ok: false, model: model, kind: res.kind || '', status: onboardStatus(), message: res.message };
 }
@@ -1542,38 +1884,21 @@ function setCfg_(key, value) {
  * 탭·쉼표·여러 칸 공백 어느 것으로 나뉘어 있어도 받고,
  * "1반 3번 김하늘" 같은 한 줄 표기도 받는다.
  */
-function parseRoster_(text) {
-  var out = [];
-  String(text || '').split(/\r?\n/).forEach(function (line) {
-    var t = line.trim();
-    if (!t) return;
-    if (/^(반|학급)\s*[\t, ]/.test(t)) return;              // 머리글 줄 건너뛰기
-    var cells = t.split(/\t|,|\s{2,}/).map(function (x) { return x.trim(); }).filter(String);
-    if (cells.length < 3) cells = t.split(/\s+/);
-    var cls = String(cells[0] || '').replace(/[^0-9]/g, '');
-    var no = String(cells[1] || '').replace(/[^0-9]/g, '');
-    var name = String(cells[2] || '').trim();
-    var grade = String(cells[3] || '').replace(/[^1-5]/g, '');
-    if (!cls || !no || !name) return;
-    out.push([Number(cls), Number(no), name, grade ? Number(grade) : '']);
-  });
-  return out;
+/** 붙여넣은 명단 → 명단 시트 줄들 (해석은 14_RosterParse.gs) */
+function parseRoster_(text, mode) {
+  var r = parseRosterRows(rosterTextToRows(text), mode || 'class');
+  return r.students.map(function (st) { return rosterRowOf(st, r.mode); });
 }
 
-function onboardPreviewRoster(text) {
-  var rows = parseRoster_(text);
-  return { count: rows.length, sample: rows.slice(0, 3) };
+/** @param {string} text  @param {string=} mode 'class' | 'grade' | 'auto' */
+function onboardPreviewRoster(text, mode) {
+  var r = rosterPreview({ text: text, mode: mode || 'auto' });
+  return { count: r.count, mode: r.mode, warnings: r.warnings,
+           sample: r.students.slice(0, 3).map(studentLabel), skippedCount: r.skippedCount };
 }
 
-function onboardSaveRoster(text) {
-  var rows = parseRoster_(text);
-  if (!rows.length) throw new Error('명단을 알아보지 못했습니다. "1  3  김하늘" 처럼 반, 번호, 이름 순으로 한 줄에 한 명씩 넣어 주세요.');
-  var s = shRequire_(APP.SH.ROSTER);
-  if (s.getLastRow() >= 3) s.getRange(3, 1, s.getLastRow() - 2, 4).clearContent();
-  var need = 2 + rows.length;
-  if (s.getMaxRows() < need) s.insertRowsAfter(s.getMaxRows(), need - s.getMaxRows() + 5);
-  s.getRange(3, 1, rows.length, 4).setValues(rows);
-  syncRoster();
+function onboardSaveRoster(text, mode) {
+  rosterSave({ text: text, mode: mode || 'auto' });
   return onboardStatus();
 }
 
@@ -1675,7 +2000,7 @@ function buildStart() {
   P('· AI 키 하나.  Gemini 키가 가장 부담이 적습니다(무료 등급 있음). aistudio.google.com 에서 발급.');
   P('· 구글 워크스페이스 Gemini나 Google One AI Premium 구독이 있다면 키 없이도 쓸 수 있습니다.');
   P('   확인법: 빈 셀에  =AI("안녕")  을 넣어 답이 나오면 됩니다.');
-  P('· 학생 명단(반·번호·이름). 엑셀에서 복사해 붙여넣으면 됩니다.');
+  P('· 학생 명단(반·번호·이름, 동아리면 학년까지). 엑셀 양식을 내려받아 채워 올리거나, 복사해 붙여넣으면 됩니다.');
   P('');
 
   H('꼭 알아 두실 것');
@@ -1740,7 +2065,14 @@ function buildHelp() {
   P('중간에 닫아도 다시 열면 끝난 단계는 완료로 표시되고 그다음부터 이어집니다.');
   P('');
   P('손으로 하고 싶다면 메뉴를 하나씩 눌러도 됩니다.');
-  P('  ① 처음 설치 / 구조 복구  →  ② AI 연결 설정  →  👤 학생명단 입력 후 ③ 동기화  →  ④ 활동 만들기');
+  P('  ① 처음 설치 / 구조 복구  →  ② AI 연결 · 모델 설정  →  ③ 학생 명단 불러오기  →  ④ 활동 만들기');
+  P('');
+  P('학생 명단 넣기 (메뉴 ③ 학생 명단 불러오기)');
+  P('  · 명단 방식을 고릅니다: [반·번호] 담임·교과 / [학년·반·번호] 동아리·방과후처럼 학년이 섞일 때');
+  P('  · [엑셀 양식]을 내려받아 채운 뒤 그 파일을 올리면 한 번에 들어옵니다. CSV·붙여넣기도 됩니다.');
+  P('  · 나이스에서 받은 명렬표도 머리글(학년·반·번호·이름/성명·학번)을 보고 알아서 읽습니다. 학번 20315 = 2학년 3반 15번.');
+  P('  · 학년·반·번호 방식이면 활동 시트 첫 열에 2-3 처럼 [학년-반]으로 보입니다.');
+  P('  · 명단을 바꿔도 활동 시트에 적어 둔 학생 자료는 반·번호로, 그게 바뀌었으면 이름으로 찾아 따라갑니다.');
   P('');
   P('※ 사본을 남에게 나눠 줄 때: 공유 링크 끝의 /edit... 을 /copy 로 바꾸면');
   P('   링크를 연 순간 [사본 만들기] 창이 바로 떠서, 코드까지 통째로 복사됩니다.');
@@ -1820,7 +2152,23 @@ function buildHelp() {
   P('  -latest 로 끝나는 Gemini 이름은 새 모델이 나오면 자동으로 바뀌어 낡지 않습니다. 그래서 기본값입니다.');
   P('  버전 번호가 든 이름은 결과가 일정한 대신, 1년쯤 지나면 종료될 수 있습니다.');
 
-  H('10. 자주 막히는 곳');
+  P('');
+  P('키를 여러 개 함께 쓰기');
+  P('  · Gemini·OpenAI(ChatGPT)·Claude 키를 모두 넣어 둘 수 있습니다. 모델 이름을 보고 알맞은 키로 보냅니다.');
+  P('  · [⚙️ 설정]의 [예비 모델]에 다른 회사 모델을 적어 두면, 주 모델이 한도 초과 등으로 실패할 때 대신 씁니다.');
+  P('  · 입력 시트 [모델] 칸에서 학생마다 다른 모델을 골라도 됩니다. ChatGPT(Plus) 구독과 API 키는 따로입니다(API는 선불 충전).');
+  P('  · 메뉴 ② 창에서 모델명을 적으면 저절로 연결을 확인하고 저장합니다. 시트에서 직접 고치면 ⏳ 확인 전 으로 표시되고, 창을 열면 확인합니다.');
+
+  H('10. 비용 줄이기');
+  P('AI API는 호출할 때마다 기억이 없어서 규칙을 매번 함께 보내야 합니다. 이 도구는 네 가지로 비용을 줄입니다.');
+  P('  · 필요한 규칙만 조립: 그 활동의 기록종류·교과 규칙만 붙입니다(항상 켜짐).');
+  P('  · 묶어 보내기: [⚙️ 설정] 한 번에 묶을 학생 수(기본 5). 규칙을 5번이 아니라 1번만 보내고, 호출 횟수도 1/5이라 무료 한도에도 유리합니다.');
+  P('  · 생각 줄이기: [⚙️ 설정] 생각 줄이기(기본 TRUE). 모델의 "생각" 토큰은 출력 요금으로 청구되는데, 세특 글쓰기에는 깊은 추론이 필요 없습니다.');
+  P('  · 자동 캐시 할인: 규칙 부분이 늘 앞에 같은 모양으로 가서, 같은 활동을 연달아 만들면 그 부분은 약 1/10 가격이 됩니다(조건이 맞을 때 회사가 자동 적용).');
+  P('생성이 끝나면 알림에 실제로 쓴 토큰 수가 나옵니다. ⑧ 프롬프트 미리보기에서 규칙 부분의 길이도 볼 수 있습니다.');
+  P('※ "스킬(Skills)"은 Claude 앱 안에서 필요한 지침만 꺼내 읽는 기능이라, 시트에서 API를 부르는 이 도구에는 쓸 수 없습니다. 위 방법이 같은 효과를 냅니다.');
+
+  H('11. 자주 막히는 곳');
   P('Q. 호출이 실패해요 → 메뉴 ② 아래 [모델 연결 테스트]. ✗ 옆에 이유가 나옵니다(모델명 오류 · 무료 등급 불가 · 한도 초과 · 키 오류).');
   P('Q. "모델명을 찾을 수 없습니다" → 모델이 종료됐거나 철자가 틀렸습니다. 위 9번의 공식 목록에서 새 이름으로 바꾸세요.');
   P('Q. 한 번에 많이 돌리면 중간에 멈춰요 → 실행 시간 제한(약 6분) 때문입니다. 남은 행은 체크가 그대로 있으니 한 번 더 누르세요.');
@@ -1853,33 +2201,141 @@ function buildHelp() {
 
 /**
  * 세특 작성 도우미 v3 — 학생 명단 동기화
- * 명단 시트의 반/번호/이름/성취수준을 모든 활동 입력 시트와 최종취합에 반영.
- * 이미 입력된 학생 데이터는 반·번호를 키로 보존한다.
+ * 명단 시트의 (학년)/반/번호/이름/성취수준을 모든 활동 입력 시트와 최종취합에 반영.
+ * 이미 입력된 학생 데이터는 반·번호를 키로 보존하고, 키가 바뀌면 이름으로 한 번 더 찾는다.
+ * 명단은 붙여넣기·엑셀·CSV 파일 어느 것으로도 넣을 수 있다(해석은 14_RosterParse.gs).
  */
 
+/** 명단 방식: 명단 시트 머리글 첫 칸이 '학년'이면 'grade', 아니면 'class' */
+function rosterMode_() {
+  var s = sh_(APP.SH.ROSTER);
+  if (!s || s.getLastRow() < 2) return 'class';
+  return String(s.getRange(2, 1).getValue()).trim() === '학년' ? 'grade' : 'class';
+}
+
+/** 활동·취합·검토 시트의 첫 열 머리글 */
+function classHead_(mode) { return (mode || rosterMode_()) === 'grade' ? '학년-반' : '반'; }
+
+/**
+ * 명단 읽기 — 머리글 이름으로 열을 찾으므로 [반·번호]·[학년·반·번호] 어느 방식이든 읽힌다.
+ * cls 는 활동 시트 A열에 쓰는 표시값(학년 방식이면 "2-3"), id 는 "A열-번호".
+ */
 function getRoster_() {
   var s = shRequire_(APP.SH.ROSTER);
   var last = s.getLastRow();
   if (last < 3) return [];
-  var v = s.getRange(3, 1, last - 2, 4).getValues();
+  var width = Math.max(s.getLastColumn(), 4);
+  var head = s.getRange(2, 1, 1, width).getValues()[0].map(function (h) { return String(h).trim(); });
+  var ix = function (n) { return head.indexOf(n); };
+  var iY = ix('학년'), iC = ix('반'), iN = ix('번호'), iName = ix('이름'), iL = ix('성취수준');
+  if (iC < 0 || iN < 0 || iName < 0) { iY = -1; iC = 0; iN = 1; iName = 2; iL = 3; }   // 머리글이 지워진 옛 명단
+  var v = s.getRange(3, 1, last - 2, width).getValues();
   var out = [];
   for (var i = 0; i < v.length; i++) {
-    var cls = String(v[i][0]).trim(), no = String(v[i][1]).trim();
-    if (!cls && !no) continue;
-    out.push({ cls: v[i][0], no: v[i][1], name: v[i][2], grade: v[i][3], id: cls + '-' + no });
+    var year = iY >= 0 ? String(v[i][iY]).trim() : '';
+    var clsRaw = v[i][iC], no = v[i][iN];
+    if (!String(clsRaw).trim() && !String(no).trim()) continue;
+    var cls = classLabel(year, clsRaw);
+    var st = { year: year, clsRaw: clsRaw, cls: cls, no: no, name: v[i][iName],
+               grade: iL >= 0 ? v[i][iL] : '', id: String(cls).trim() + '-' + String(no).trim() };
+    st.label = studentLabel({ year: year, cls: clsRaw, no: no, name: st.name });
+    out.push(st);
   }
   return out;
 }
 
-function syncRoster() {
+/* --------------------------------------------------------- 명단 불러오기 */
+/** 메뉴 ③ — 파일·붙여넣기로 명단 넣기 */
+function openRosterDialog(fromOnboard) {
+  var t = HtmlService.createTemplateFromFile('UI_Roster');
+  t.fromOnboard = !!fromOnboard;
+  ui_().showModalDialog(t.evaluate().setWidth(720).setHeight(660), '학생 명단 불러오기');
+}
+
+function rosterDialogContext() {
+  var cnt = 0;
+  try { cnt = getRoster_().length; } catch (e) {}
+  return { mode: rosterMode_(), count: cnt, head: ROSTER_HEAD, masked: maskName_() };
+}
+
+/**
+ * 미리 보기 — 저장하지 않는다
+ * @param {{rows?:Array<Array>, text?:string, mode:string}} p  파일에서 읽은 표(rows) 또는 붙여넣은 글(text)
+ */
+function rosterPreview(p) {
+  var rows = p.rows || rosterTextToRows(p.text || '');
+  var r = parseRosterRows(rows, p.mode || 'auto');
+  var detected = (p.mode && p.mode !== 'auto') ? parseRosterRows(rows, 'auto').mode : r.mode;
+  return {
+    mode: r.mode, detected: detected, header: r.header, count: r.students.length,
+    labels: r.students.slice(0, 300).map(studentLabel),
+    students: r.students.slice(0, 300), skipped: r.skipped.slice(0, 20), skippedCount: r.skipped.length,
+    warnings: r.warnings.slice(0, 10)
+  };
+}
+
+/** 저장 — 명단 시트를 통째로 바꾸고 모든 활동 시트에 반영한다 */
+function rosterSave(p) {
+  var rows = p.rows || rosterTextToRows(p.text || '');
+  var r = parseRosterRows(rows, p.mode || 'auto');
+  if (!r.students.length) {
+    throw new Error('명단을 알아보지 못했습니다. ' + (r.mode === 'grade' ? '학년, 반, 번호, 이름' : '반, 번호, 이름') +
+                    ' 순서로 한 줄에 한 명씩 넣거나, 양식 파일을 내려받아 채워 주세요.');
+  }
+  writeRosterSheet_(r.students, r.mode);
+  var n = syncRosterAll_();
+  return { count: r.students.length, mode: r.mode, synced: n, warnings: r.warnings };
+}
+
+/** 명단 시트 다시 쓰기 (방식이 바뀌면 머리글과 열 수도 바뀐다) */
+function writeRosterSheet_(students, mode) {
+  var s = shOrCreate_(APP.SH.ROSTER);
+  var head = ROSTER_HEAD[mode] || ROSTER_HEAD['class'];
+  var n = head.length, W = 5;
+  ensureCols_(s, W);
+  var last = s.getLastRow();
+  if (last >= 2) s.getRange(2, 1, last - 1, W).clearContent();
+  s.getRange(2, 1, 1, W).setBackground(null).setFontColor(null);
+  s.getRange(3, 1, Math.max(s.getMaxRows() - 2, 1), W).clearDataValidations().setBackground(null);
+  s.getRange(2, 1, 1, n).setValues([head]);
+  styleHeader_(s, 2, n);
+  var need = 2 + students.length + 50;
+  if (s.getMaxRows() < need) s.insertRowsAfter(s.getMaxRows(), need - s.getMaxRows());
+  if (students.length) {
+    s.getRange(3, 1, students.length, n).setValues(students.map(function (st) { return rosterRowOf(st, mode); }));
+  }
+  s.getRange(3, 1, students.length + 50, n).setBackground(APP.COLORS.input);
+  s.getRange(3, n, students.length + 50, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(['1', '2', '3', '4', '5'], true).setAllowInvalid(true).build());
+  (mode === 'grade' ? [60, 60, 60, 110, 100] : [70, 70, 110, 100]).forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
+  s.setFrozenRows(2);
+  rosterBanner_(s, mode);
+}
+
+function rosterBanner_(s, mode) {
+  var n = (ROSTER_HEAD[mode] || ROSTER_HEAD['class']).length;
+  banner_(s, Math.max(n, 5), '👤 학생명단 — ' + (mode === 'grade' ? '학년·반·번호 방식 (동아리·방과후)' : '반·번호 방식'),
+    '메뉴 ③ [학생 명단 불러오기]에서 엑셀 양식을 내려받아 채운 뒤 파일을 올리면 한 번에 들어옵니다. ' +
+    '여기서 직접 고쳤다면 메뉴 ③ 아래 [학생 명단 동기화]를 누르세요. 성취수준(1~5)은 과세특에만 쓰이며 비워 둬도 됩니다.');
+}
+
+/** 모든 활동 시트·취합 시트·검토 시트에 명단 반영. 반영한 활동 시트 수 */
+function syncRosterAll_() {
   var roster = getRoster_();
-  if (!roster.length) { ui_().alert(APP.MENU, '[👤 학생명단] 시트에 학생을 먼저 입력하세요.', ui_().ButtonSet.OK); return; }
-  var acts = getActivities_();
   var done = 0;
-  acts.forEach(function (a) {
+  getActivities_().forEach(function (a) {
     if (a.inSheet && sh_(a.inSheet)) { syncRosterInto_(sh_(a.inSheet), roster); done++; }
   });
   if (compileSheets_().length) { try { buildCompileCore_(); } catch (e) {} }
+  var rv = sh_(APP.SH.REVIEW);
+  if (rv) { try { rv.getRange(3, 1).setValue(classHead_()); rv.getRange(4, 1).setNumberFormat('@'); } catch (e) {} }
+  return done;
+}
+
+function syncRoster() {
+  var roster = getRoster_();
+  if (!roster.length) { ui_().alert(APP.MENU, '[👤 학생명단] 시트에 학생을 먼저 입력하세요.\n(메뉴 ③ 학생 명단 불러오기)', ui_().ButtonSet.OK); return; }
+  var done = syncRosterAll_();
   toast_('학생 ' + roster.length + '명 → 활동 시트 ' + done + '개 동기화 완료', APP.MENU);
 }
 
@@ -1893,7 +2349,7 @@ function syncRosterInto_(sheet, roster) {
   var lastRow = sheet.getLastRow();
   if (lastCol < 4) return;
 
-  var existing = {};
+  var existing = {}, byName = {}, nameCount = {};
   if (lastRow >= first) {
     var vals = sheet.getRange(first, 1, lastRow - first + 1, lastCol).getValues();
     var forms = sheet.getRange(first, 1, lastRow - first + 1, lastCol).getFormulas();
@@ -1903,20 +2359,30 @@ function syncRosterInto_(sheet, roster) {
       var row = [];
       for (var c = 0; c < lastCol; c++) row.push(forms[i][c] ? forms[i][c] : vals[i][c]);
       existing[id] = row;
+      var nm = String(vals[i][2]).trim();
+      if (nm) { nameCount[nm] = (nameCount[nm] || 0) + 1; byName[nm] = row; }
     }
   }
 
-  var out = [];
+  var out = [], used = {};
   roster.forEach(function (st) {
     var row = existing[st.id];
-    if (!row) { row = []; for (var c = 0; c < lastCol; c++) row.push(''); }
+    // 명단 방식을 바꿨거나 반이 바뀌어 id 가 달라져도, 이름이 한 명뿐이면 그 학생 자료를 따라 옮긴다
+    var nm = String(st.name).trim();
+    if (!row && nm && nameCount[nm] === 1 && !used[nm]) row = byName[nm];
+    if (row) used[nm] = true;
+    row = row ? row.slice() : [];
+    while (row.length < lastCol) row.push('');
     row[0] = st.cls; row[1] = st.no; row[2] = st.name; row[3] = st.grade;
     out.push(row);
   });
+  sheet.getRange(head, 1).setValue(classHead_());
 
   var needRows = first + out.length - 1;
   if (sheet.getMaxRows() < needRows) sheet.insertRowsAfter(sheet.getMaxRows(), needRows - sheet.getMaxRows() + 5);
   if (lastRow >= first) sheet.getRange(first, 1, Math.max(lastRow - first + 1, out.length), lastCol).clearContent();
+  // "2-3" 이 날짜(2월 3일)로 바뀌지 않도록 첫 열은 글자 서식
+  sheet.getRange(first, 1, Math.max(out.length, 1), 1).setNumberFormat('@');
   if (out.length) sheet.getRange(first, 1, out.length, lastCol).setValues(out);
 
   applyRowFormat_(sheet, out.length);
@@ -1940,10 +2406,7 @@ function applyRowFormat_(sheet, nRows) {
     for (var i = 0; i < nRows; i++) blanks.push([cur[i][0] === true]);
     sheet.getRange(first, cGen, nRows, 1).setValues(blanks);
   }
-  if (cModel) {
-    sheet.getRange(first, cModel, nRows, 1).setDataValidation(
-      SpreadsheetApp.newDataValidation().requireValueInList(modelChoices_(), true).build());
-  }
+  if (cModel) sheet.getRange(first, cModel, nRows, 1).setDataValidation(modelValidation_());
   if (cAi) sheet.getRange(first, cAi, nRows, 1).setBackground(APP.COLORS.output).setWrap(true).setVerticalAlignment('top');
   if (cFinal) sheet.getRange(first, cFinal, nRows, 1).setBackground(APP.COLORS.paste).setWrap(true).setVerticalAlignment('top');
   if (cBytes && cFinal) {
@@ -2032,6 +2495,7 @@ function buildActivityInputSheet_(key, name, cols, rec) {
   var head = ['반', '번호', '이름', '성취수준']
     .concat(cols)
     .concat(['생성', '모델', 'AI 결과', '최종본', '바이트', '검증']);
+  head[0] = classHead_();                 // 학년·반·번호 방식이면 '학년-반'
   var n = head.length;
 
   splitBanner_(s, 3, n,
@@ -2222,10 +2686,15 @@ function previewPrompt() {
     if (!target) { ui_().alert('번호가 올바르지 않습니다.'); return; }
   }
   var p = promptFor_(target);
+  var tok = estimateTokens(p);
+  var batchN = Math.max(1, Math.min(10, Number(cfg_('한 번에 묶을 학생 수', 5)) || 1));
+  var costLine = '규칙 부분 약 ' + fmtNum_(tok) + '토큰(추정)' +
+    (batchN > 1 ? ' · 학생 ' + batchN + '명씩 묶어 보내므로 학생 1명당 약 ' + fmtNum_(Math.round(tok / batchN)) + '토큰' : ' · 학생마다 이만큼 보냄') +
+    ' · 생각 줄이기 ' + (cfgBool_('생각 줄이기', true) ? '켜짐' : '꺼짐');
   var html = HtmlService.createHtmlOutput(
     '<div style="font:13px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;padding:8px">' +
     '<div style="color:#555;margin-bottom:8px">활동 <b>' + escHtml_(target.key) + '</b> · ' +
-    byteLen(p) + '바이트</div>' +
+    byteLen(p) + '바이트 · ' + escHtml_(costLine) + '</div>' +
     '<textarea style="width:100%;height:520px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;' +
     'border:1px solid #ccd;border-radius:6px;padding:10px" readonly>' + escHtml_(p) + '</textarea>' +
     '<p style="color:#777;font-size:12px">이 프롬프트는 [기록종류]·[교과영역]·[공통규칙]·[활동목록]에서 자동 조립됩니다. ' +
@@ -2474,7 +2943,7 @@ function suggestExamples_(act, existing, want, model) {
     user = '기존 예시가 없다. 위 활동 설명과 입력 항목만 보고 예시 ' + want + '개를 만들어라.';
   }
 
-  var raw = callAI_(sys, user, model);
+  var raw = callWithBackup_(sys, user, model).text;
   var obj = parseJsonLoose_(raw);
   var arr = (obj && Array.isArray(obj.examples)) ? obj.examples
           : (Array.isArray(obj) ? obj : []);
@@ -2582,7 +3051,7 @@ function wizardSuggest(p) {
             '\n\n위 초안을 교사의 요청에 맞게 수정해서 같은 JSON 형식으로 다시 출력하라.';
   }
 
-  var raw = callAI_(system, user, model);
+  var raw = callWithBackup_(system, user, model).text;
   var def = parseJsonLoose_(raw);
   if (!def || !def.columns || !def.columns.length) {
     throw new Error('AI 응답을 이해하지 못했습니다. 설명을 조금 더 구체적으로 적어 주세요.');
@@ -2861,6 +3330,9 @@ function getAiSettings() {
     }),
     activity: normModel(cfg_('활동용 모델', DEFAULT_MODEL)),
     compile: normModel(cfg_('합본용 모델', DEFAULT_MODEL)),
+    backup: normModel(cfg_('예비 모델', '')),
+    thinkingLow: cfgBool_('생각 줄이기', true),
+    batch: Number(cfg_('한 번에 묶을 학생 수', 5)) || 1,
     presets: presetModelRows_(),
     links: MODEL_LINKS,
     defaults: PROVIDER_DEFAULT_MODEL,
@@ -2884,8 +3356,8 @@ function saveKeys(obj) {
 }
 
 /**
- * 모델 표 저장 (설정 창의 [저장])
- * @param {{rows:Array, activity:string, compile:string}} p
+ * 모델 표 저장 (설정 창은 바뀔 때마다 자동으로 부른다)
+ * @param {{rows:Array, activity:string, compile:string, backup?:string, thinkingLow?:boolean, batch?:number}} p
  */
 function saveModelSettings(p) {
   var s = sh_(APP.SH.CONFIG);
@@ -2901,16 +3373,47 @@ function saveModelSettings(p) {
 
   var head = modelTableRow_(s);
   if (!head) { buildConfig(); head = modelTableRow_(s); }
+  var before = readModelRowsAt_(s, head).map(function (r) { return r.model; }).join('|') +
+               '#' + normModel(cfg_('활동용 모델', DEFAULT_MODEL)) + '#' + normModel(cfg_('합본용 모델', DEFAULT_MODEL));
   writeModelTable_(s, head, rows);
 
   var act = normModel(p.activity) || rows[0].model;
   var cmp = normModel(p.compile) || act;
   setCfg_('활동용 모델', act);
   setCfg_('합본용 모델', cmp);
-  var n = refreshModelDropdowns_();
-  return '저장했습니다. 활동용 ' + act + ' · 합본용 ' + cmp +
-         (n ? ' · 시트 ' + n + '곳의 모델 드롭다운을 새로 고쳤습니다.' : '');
+  if (p.backup !== undefined) setCfg_('예비 모델', normModel(p.backup));
+  if (p.thinkingLow !== undefined) setCfg_('생각 줄이기', !!p.thinkingLow);
+  if (p.batch !== undefined) setCfg_('한 번에 묶을 학생 수', Math.max(1, Math.min(10, Number(p.batch) || 1)));
+
+  // 이름이 바뀐 때만 모든 시트의 드롭다운을 새로 입힌다 (연결 확인 결과만 바뀐 저장은 가볍게)
+  var after = rows.map(function (r) { return r.model; }).join('|') + '#' + act + '#' + cmp;
+  var n = before === after ? 0 : refreshModelDropdowns_();
+  return '저장됨 · 활동용 ' + act + ' · 합본용 ' + cmp +
+         (n ? ' · 시트 ' + n + '곳의 모델 드롭다운 갱신' : '');
 }
+
+/**
+ * 시트에서 모델 표를 직접 고치면 [연결 확인]을 "확인 전"으로 바꿔 둔다.
+ * 단순 트리거라 여기서 AI를 부를 수는 없고(구글 제한), 메뉴 ② 창을 열면 자동으로 확인한다.
+ */
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    var s = e.range.getSheet();
+    if (s.getName() !== APP.SH.CONFIG) return;
+    var head = modelTableRow_(s);
+    var r1 = e.range.getRow(), nr = e.range.getNumRows();
+    if (!head || r1 + nr - 1 <= head) return;
+    var c1 = e.range.getColumn(), c2 = c1 + e.range.getNumColumns() - 1;
+    var hit = function (c) { return c1 <= c && c <= c2; };
+    if (!hit(modelCol_('model')) && !hit(modelCol_('company'))) return;
+    for (var r = Math.max(r1, head + 1); r < r1 + nr; r++) {
+      var name = String(s.getRange(r, modelCol_('model')).getValue()).trim();
+      s.getRange(r, modelCol_('status')).setValue(name ? UNCHECKED_MARK + ' — 메뉴 ② 를 열면 자동으로 확인합니다' : '');
+    }
+  } catch (err) {}
+}
+var UNCHECKED_MARK = '⏳ 확인 전';
 
 /* ------------------------------------------------------------ 연결 확인 */
 /**
@@ -3043,13 +3546,15 @@ function listAvailableModels() {
 
 /* ------------------------------------------------------------- 호출 본체 */
 /**
- * @param {string} system  조립된 프롬프트(규칙 전체)
+ * @param {string} system  조립된 프롬프트(규칙 전체) — 학생이 바뀌어도 똑같아서 회사 쪽 캐시 할인을 받는다
  * @param {string} user    학생 자료
  * @param {string} model
  * @param {string=} provider  회사를 직접 지정할 때(연결 테스트)
+ * @param {{json?:boolean, schema?:Object, thinking?:boolean}=} opts
+ *        json: JSON 으로만 답하게(묶음 생성) · thinking:false 면 생각 줄이기를 끈다
  * @return {string}
  */
-function callAI_(system, user, model, provider) {
+function callAI_(system, user, model, provider, opts) {
   var m = normModel(model);
   var p = provider || providerOf_(m);
   if (p === 'subscription') throw new Error(SUBSCRIPTION_MODEL + ' 은(는) 셀 수식으로 동작합니다. 메뉴 ⑥ 대신 체크박스를 사용하세요.');
@@ -3058,10 +3563,57 @@ function callAI_(system, user, model, provider) {
   }
   var key = getKey_(p);
   if (!key) throw new Error(providerLabel(p) + ' API 키가 없습니다. 메뉴 > ② AI 연결 · 모델 설정 에서 입력하세요.');
+  opts = opts || {};
+  if (opts.thinking === undefined) opts.thinking = thinkLow_();
 
-  if (p === 'openai') return callOpenAI_(key, m, system, user);
-  if (p === 'gemini') return callGemini_(key, m, system, user);
-  return callAnthropic_(key, m, system, user);
+  if (p === 'openai') return callOpenAI_(key, m, system, user, opts);
+  if (p === 'gemini') return callGemini_(key, m, system, user, opts);
+  return callAnthropic_(key, m, system, user, opts);
+}
+
+/**
+ * 주 모델이 실패하면 [⚙️ 설정]의 예비 모델로 한 번 더.
+ * @return {{text:string, model:string, backup:boolean, reason?:string}}
+ */
+function callWithBackup_(system, user, model, opts) {
+  try {
+    return { text: callAI_(system, user, model, null, opts), model: normModel(model), backup: false };
+  } catch (e) {
+    var bk = normModel(cfg_('예비 모델', ''));
+    if (!bk || bk === normModel(model) || bk === SUBSCRIPTION_MODEL) throw e;
+    var bp = providerOf_(bk);
+    if (!bp || !getKey_(bp)) throw e;
+    var t = callAI_(system, user, bk, null, opts);
+    return { text: t, model: bk, backup: true, reason: e.hint || e.message };
+  }
+}
+
+/* 실행 한 번 동안만 기억하는 것들 */
+var __thinkLow = null;       // [생각 줄이기] 설정
+var __noThink = {};          // 생각 옵션을 거절한 모델
+var __noJsonMode = {};       // JSON 모드를 거절한 모델
+var __usage = null;          // 토큰 사용량
+
+function thinkLow_() {
+  if (__thinkLow === null) { try { __thinkLow = cfgBool_('생각 줄이기', true); } catch (e) { __thinkLow = true; } }
+  return __thinkLow;
+}
+
+function usageReset_() { __usage = { calls: 0, input: 0, output: 0, cached: 0 }; }
+function usageAdd_(input, output, cached) {
+  if (!__usage) usageReset_();
+  __usage.calls++;
+  __usage.input += Number(input) || 0;
+  __usage.output += Number(output) || 0;
+  __usage.cached += Number(cached) || 0;
+}
+function fmtNum_(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+/** "호출 3번 · 입력 12,340 · 출력 5,210 토큰 (그중 캐시 할인 8,000)" */
+function usageText_() {
+  var u = __usage;
+  if (!u || !u.calls) return '';
+  return '호출 ' + u.calls + '번 · 입력 ' + fmtNum_(u.input) + ' · 출력 ' + fmtNum_(u.output) + ' 토큰' +
+         (u.cached ? ' (입력 중 ' + fmtNum_(u.cached) + '은 캐시 할인)' : '');
 }
 
 function fetchJson_(url, options, label) {
@@ -3093,33 +3645,68 @@ function fetchJson_(url, options, label) {
   throw err;
 }
 
-function callOpenAI_(key, model, system, user) {
-  var json = fetchJson_('https://api.openai.com/v1/chat/completions', {
-    method: 'post', contentType: 'application/json',
-    headers: { Authorization: 'Bearer ' + key },
-    payload: JSON.stringify({
-      model: model,
-      messages: [{ role: 'system', content: system }, { role: 'user', content: user }]
-    }),
-    muteHttpExceptions: true
-  }, 'OpenAI');
+/** 400 오류가 특정 옵션 때문인지 */
+function rejects_(e, re) { return e && e.code === 400 && re.test(String(e.message || '')); }
+
+function callOpenAI_(key, model, system, user, opts) {
+  opts = opts || {};
+  var body = {
+    model: model,
+    messages: [{ role: 'system', content: system }, { role: 'user', content: user }]
+  };
+  var think = opts.thinking && !__noThink[model] ? thinkingFor('openai', model) : null;
+  if (think) body.reasoning_effort = think.reasoning_effort;
+  if (opts.json && !__noJsonMode[model]) body.response_format = { type: 'json_object' };
+  var json;
+  try {
+    json = fetchJson_('https://api.openai.com/v1/chat/completions', {
+      method: 'post', contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + key },
+      payload: JSON.stringify(body), muteHttpExceptions: true
+    }, 'OpenAI');
+  } catch (e) {
+    if (think && rejects_(e, /reasoning/i)) { __noThink[model] = true; return callOpenAI_(key, model, system, user, opts); }
+    if (body.response_format && rejects_(e, /response_format|json/i)) { __noJsonMode[model] = true; return callOpenAI_(key, model, system, user, opts); }
+    throw e;
+  }
+  var u = json.usage || {};
+  usageAdd_(u.prompt_tokens, u.completion_tokens, u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens);
   var c = json.choices && json.choices[0];
   var txt = c && c.message && c.message.content;
   if (!txt) throw new Error('OpenAI 응답이 비었습니다.');
   return String(txt).trim();
 }
 
-function callGemini_(key, model, system, user) {
+function callGemini_(key, model, system, user, opts) {
+  opts = opts || {};
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
             encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
-  var json = fetchJson_(url, {
-    method: 'post', contentType: 'application/json',
-    payload: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [{ text: user }] }]
-    }),
-    muteHttpExceptions: true
-  }, 'Gemini');
+  var body = {
+    systemInstruction: { parts: [{ text: system }] },
+    contents: [{ role: 'user', parts: [{ text: user }] }]
+  };
+  var gen = {};
+  var think = opts.thinking && !__noThink[model] ? thinkingFor('gemini', model) : null;
+  if (think) gen.thinkingConfig = think;
+  if (opts.json && !__noJsonMode[model]) {
+    gen.responseMimeType = 'application/json';
+    if (opts.schema) gen.responseSchema = opts.schema;
+  }
+  if (Object.keys(gen).length) body.generationConfig = gen;
+  var json;
+  try {
+    json = fetchJson_(url, {
+      method: 'post', contentType: 'application/json',
+      payload: JSON.stringify(body), muteHttpExceptions: true
+    }, 'Gemini');
+  } catch (e) {
+    if (think && rejects_(e, /thinking/i)) { __noThink[model] = true; return callGemini_(key, model, system, user, opts); }
+    if (gen.responseMimeType && rejects_(e, /schema|mime|json/i)) { __noJsonMode[model] = true; return callGemini_(key, model, system, user, opts); }
+    throw e;
+  }
+  var um = json.usageMetadata || {};
+  usageAdd_(um.promptTokenCount, (Number(um.candidatesTokenCount) || 0) + (Number(um.thoughtsTokenCount) || 0),
+            um.cachedContentTokenCount);
   var cand = json.candidates && json.candidates[0];
   var parts = cand && cand.content && cand.content.parts;
   var txt = '';
@@ -3128,16 +3715,21 @@ function callGemini_(key, model, system, user) {
   return txt.trim();
 }
 
-function callAnthropic_(key, model, system, user) {
+function callAnthropic_(key, model, system, user, opts) {
+  // 규칙 부분에 캐시 표시 — 5분 안에 같은 활동을 다시 부르면 이 부분은 할인된 값으로 읽는다
   var json = fetchJson_('https://api.anthropic.com/v1/messages', {
     method: 'post', contentType: 'application/json',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
     payload: JSON.stringify({
-      model: model, max_tokens: 2000, system: system,
+      model: model, max_tokens: (opts && opts.json) ? 8000 : 2000,
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: user }]
     }),
     muteHttpExceptions: true
   }, 'Anthropic');
+  var u = json.usage || {};
+  usageAdd_((Number(u.input_tokens) || 0) + (Number(u.cache_read_input_tokens) || 0) + (Number(u.cache_creation_input_tokens) || 0),
+            u.output_tokens, u.cache_read_input_tokens);
   var txt = '';
   (json.content || []).forEach(function (b) { if (b.type === 'text') txt += b.text; });
   if (!txt) throw new Error('Anthropic 응답이 비었습니다.');
@@ -3239,46 +3831,67 @@ function runGeneration_(act, sheet, rows) {
     var system = promptFor_(act);
     var defModel = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
     var autoValidate = cfgBool_('결과 자동검증', true);
-    var banned = PRESET_BANNED, fmt = PRESET_FORMAT_RULES;
+    var batchN = Math.max(1, Math.min(10, Number(cfg_('한 번에 묶을 학생 수', 5)) || 1));
+    var rec = findByKey(getRecordTypes_(), act.recordKey);
+    var masked = maskName_();
+    usageReset_();
 
-    var okN = 0, skipN = 0, errN = 0, subN = 0, leftN = 0;
+    var okN = 0, skipN = 0, errN = 0, subN = 0, leftN = 0, backupN = 0;
     var t0 = Date.now();
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i];
-      // Apps Script 한 번 실행은 약 6분까지. 넘기기 전에 멈추고, 남은 행은 체크를 그대로 둔다.
-      if (Date.now() - t0 > RUN_BUDGET_MS) { leftN = rows.length - i; break; }
+
+    // 1) 행마다 학생 자료와 모델을 먼저 모은다
+    var jobs = [];
+    rows.forEach(function (row) {
       var vals = sheet.getRange(row, 5, 1, cols.length).getValues()[0];
       var filled = vals.some(function (v) { return String(v).trim() !== ''; });
-      if (!filled) { skipN++; if (cGen) sheet.getRange(row, cGen).setValue(false); continue; }
-
+      if (!filled) { skipN++; if (cGen) sheet.getRange(row, cGen).setValue(false); return; }
       var grade = sheet.getRange(row, 4).getValue();
-      var rec = findByKey(getRecordTypes_(), act.recordKey);
       var user = buildStudentBlock(cols, vals, { grade: (rec && rec.useGrade) ? grade : '' });
-      if (!maskName_()) user = '학생 이름: ' + sheet.getRange(row, 3).getValue() + '\n' + user;
+      if (!masked) user = '학생 이름: ' + sheet.getRange(row, 3).getValue() + '\n' + user;
+      var model = cModel ? normModel(sheet.getRange(row, cModel).getValue()) : '';
+      jobs.push({ row: row, user: user, model: model || defModel });
+    });
 
-      var model = cModel ? String(sheet.getRange(row, cModel).getValue()).trim() : '';
-      if (!model) model = defModel;
-
-      toast_((i + 1) + '/' + rows.length + ' 생성 중… (' + model + ')', act.name);
-
-      try {
-        if (providerOf_(model) === 'subscription') {
-          sheet.getRange(row, cAi).setFormula(subscriptionFormula_(system, user));
-          subN++;
-          continue;   // 수식 결과는 시트가 계산하므로 체크 유지
-        }
-        var txt = cleanResult_(callAI_(system, user, model));
-        sheet.getRange(row, cAi).setValue(txt);
-        if (autoValidate && cValid) {
-          sheet.getRange(row, cValid).setValue(formatIssues(validateResult(txt, limit, banned, fmt)));
-        }
-        if (cGen) sheet.getRange(row, cGen).setValue(false);
-        okN++;
-      } catch (e) {
-        sheet.getRange(row, cAi).setValue('⚠ 실패: ' + e.message);
-        if (cGen) sheet.getRange(row, cGen).setValue(false);
-        errN++;
+    var write = function (job, res) {
+      var txt = cleanResult_(res.text);
+      sheet.getRange(job.row, cAi).setValue(txt);
+      if (autoValidate && cValid) {
+        var v = formatIssues(validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES));
+        if (res.backup) v += '\n(예비 모델 ' + res.model + ' 로 생성)';
+        sheet.getRange(job.row, cValid).setValue(v);
       }
+      if (cGen) sheet.getRange(job.row, cGen).setValue(false);
+      okN++; if (res.backup) backupN++;
+    };
+    var fail = function (job, e) {
+      sheet.getRange(job.row, cAi).setValue('⚠ 실패: ' + e.message);
+      if (cGen) sheet.getRange(job.row, cGen).setValue(false);
+      errN++;
+    };
+
+    // 2) 같은 모델끼리 batchN 명씩 묶어서 부른다
+    var i = 0;
+    while (i < jobs.length) {
+      // Apps Script 한 번 실행은 약 6분까지. 넘기기 전에 멈추고, 남은 행은 체크를 그대로 둔다.
+      if (Date.now() - t0 > RUN_BUDGET_MS) { leftN = jobs.length - i; break; }
+      var first = jobs[i];
+      if (providerOf_(first.model) === 'subscription') {
+        sheet.getRange(first.row, cAi).setFormula(subscriptionFormula_(system, first.user));
+        subN++; i++;
+        continue;   // 수식 결과는 시트가 계산하므로 체크 유지
+      }
+      var chunk = [first], k = i + 1;
+      while (chunk.length < batchN && k < jobs.length && jobs[k].model === first.model) { chunk.push(jobs[k]); k++; }
+      i = k;
+      toast_((i) + '/' + jobs.length + ' 생성 중… (' + first.model + (chunk.length > 1 ? ' · ' + chunk.length + '명 묶음' : '') + ')', act.name);
+
+      var got = chunk.length > 1 ? generateBatch_(system, chunk, first.model) : {};
+      if (got.error) { chunk.forEach(function (job) { fail(job, got.error); }); SpreadsheetApp.flush(); continue; }
+      chunk.forEach(function (job) {
+        try {
+          write(job, got[job.row] || callWithBackup_(system, job.user, job.model));
+        } catch (e) { fail(job, e); }
+      });
       SpreadsheetApp.flush();
     }
 
@@ -3286,12 +3899,38 @@ function runGeneration_(act, sheet, rows) {
     if (subN) msg += ' / 구독수식 ' + subN + '건(셀에서 [생성] 버튼을 눌러 주세요)';
     if (skipN) msg += ' / 자료 없음 ' + skipN + '건';
     if (errN) msg += ' / 실패 ' + errN + '건';
+    if (backupN) msg += ' / 예비 모델 ' + backupN + '건';
+    var used = usageText_();
     if (leftN) {
       ui_().alert(APP.MENU, msg + '\n\n실행 시간 제한(약 6분)에 가까워져 ' + leftN + '건을 남기고 멈췄습니다.\n' +
         '남은 행은 [생성] 체크가 그대로 있으니 메뉴 ⑥ 을 한 번 더 누르세요.\n' +
-        '(자주 멈춘다면 [⚙️ 설정]의 1회 최대 생성 건수를 줄이거나 더 빠른 모델을 쓰세요)', ui_().ButtonSet.OK);
-    } else toast_(msg, act.name);
+        '(자주 멈춘다면 [⚙️ 설정]의 1회 최대 생성 건수를 줄이거나 더 빠른 모델을 쓰세요)' +
+        (used ? '\n\n' + used : ''), ui_().ButtonSet.OK);
+    } else toast_(msg + (used ? '\n' + used : ''), act.name);
   } finally { lock.releaseLock(); }
+}
+
+/**
+ * 여러 학생을 한 번의 호출로 생성한다.
+ * @return {Object} row → {text, model, backup}. 호출 자체가 실패하면 {error: Error}.
+ *         응답에서 빠진 학생은 결과에 없으므로, 부르는 쪽이 한 명씩 다시 부른다.
+ */
+function generateBatch_(system, chunk, model) {
+  var ids = chunk.map(function (job, n) { return 'S' + (n + 1); });
+  var user = buildBatchUser(chunk.map(function (job, n) { return { id: ids[n], block: job.user }; }));
+  var res;
+  try {
+    res = callWithBackup_(system, user, model, { json: true, schema: BATCH_SCHEMA });
+  } catch (e) {
+    return e.kind ? { error: e } : {};     // API 오류면 모두 실패로, 그 밖(빈 응답 등)은 한 명씩 다시
+  }
+  var parsed = parseBatchResult(res.text, ids);
+  var out = {};
+  chunk.forEach(function (job, n) {
+    var t = parsed.map[ids[n]];
+    if (t) out[job.row] = { text: t, model: res.model, backup: res.backup };
+  });
+  return out;
 }
 
 /* ------------------------------------------------------- 자동 생성 트리거 */
@@ -3461,6 +4100,7 @@ function buildCompileFor_(recKey, acts, roster) {
   var head = ['반', '번호', '이름', '성취수준']
     .concat(acts.map(function (a) { return a.name; }))
     .concat(['합본', '합본 바이트', '압축', '모델', 'AI 압축결과', '최종본', '바이트', '검증']);
+  head[0] = classHead_();
   var n = head.length;
 
   splitBanner_(s, 3, n,
@@ -3497,6 +4137,7 @@ function buildCompileFor_(recKey, acts, roster) {
     rows.push(r);
   });
 
+  if (rows.length) s.getRange(APP.DATA_ROW, 1, rows.length, 1).setNumberFormat('@');
   if (rows.length) s.getRange(APP.DATA_ROW, 1, rows.length, n).setValues(rows);
 
   var base = 4 + acts.length;
@@ -3585,7 +4226,8 @@ function compileChecked() {
 
   var defModel = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
   var system = compressPrompt_(rec);
-  var okN = 0, errN = 0, leftN = 0, t0 = Date.now();
+  var okN = 0, errN = 0, leftN = 0, backupN = 0, t0 = Date.now();
+  usageReset_();
 
   for (var k = 0; k < rows.length; k++) {
     var row = rows[k];
@@ -3600,10 +4242,13 @@ function compileChecked() {
         s.getRange(row, cAi).setFormula(subscriptionFormula_(system, merged));
         continue;
       }
-      var txt = cleanResult_(callAI_(system, merged, model));
+      var res = callWithBackup_(system, merged, model);
+      var txt = cleanResult_(res.text);
       if (byteLen(txt) > limit) txt = trimToBytes(txt, limit);
       s.getRange(row, cAi).setValue(txt);
-      if (cValid) s.getRange(row, cValid).setValue(formatIssues(validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES)));
+      if (cValid) s.getRange(row, cValid).setValue(formatIssues(validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES)) +
+        (res.backup ? '\n(예비 모델 ' + res.model + ' 로 생성)' : ''));
+      if (res.backup) backupN++;
       s.getRange(row, cChk).setValue(false);
       okN++;
     } catch (e) {
@@ -3613,7 +4258,9 @@ function compileChecked() {
     }
     SpreadsheetApp.flush();
   }
-  var done = '압축 완료 ' + okN + '건' + (errN ? ' / 실패 ' + errN + '건' : '');
+  var done = '압축 완료 ' + okN + '건' + (errN ? ' / 실패 ' + errN + '건' : '') + (backupN ? ' / 예비 모델 ' + backupN + '건' : '');
+  var used = usageText_();
+  if (used) done += '\n' + used;
   if (leftN) {
     ui_().alert(APP.MENU, done + '\n\n실행 시간 제한(약 6분)에 가까워져 ' + leftN + '건을 남기고 멈췄습니다.\n' +
       '남은 행은 [압축] 체크가 그대로 있으니 한 번 더 실행하세요.', ui_().ButtonSet.OK);
@@ -3793,7 +4440,7 @@ function observeContext() {
       return { key: a.key, name: a.name, firstCol: parseColumns(a.columns)[0] || '관찰 내용' };
     }),
     students: getRoster_().map(function (s) {
-      return { id: s.id, label: s.cls + '반 ' + s.no + '번 ' + (s.name || '') };
+      return { id: s.id, label: s.label };
     })
   };
 }

@@ -83,7 +83,7 @@ function wizardSuggest(p) {
             '\n\n위 초안을 교사의 요청에 맞게 수정해서 같은 JSON 형식으로 다시 출력하라.';
   }
 
-  var raw = callAI_(system, user, model);
+  var raw = callWithBackup_(system, user, model).text;
   var def = parseJsonLoose_(raw);
   if (!def || !def.columns || !def.columns.length) {
     throw new Error('AI 응답을 이해하지 못했습니다. 설명을 조금 더 구체적으로 적어 주세요.');

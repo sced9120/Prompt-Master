@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta charset="utf-8">
 <base target="_top">
 <style>
   :root { --line:#dde3dd; --muted:#6b7280; --accent:#35583f; --accent-soft:#e3ece4;
           --warn:#8f2f20; --warn-soft:#f8eae6; --ok:#2c6340; --bg:#f6f8f6; }
   * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
   body { margin:0; color:#16202a; font:13.5px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
   .top { padding:14px 18px 0; }
   h2 { margin:0; font-size:16px; }
@@ -71,6 +73,17 @@
   @keyframes sp { to { transform:rotate(360deg); } }
   @media (prefers-reduced-motion:reduce) { * { animation:none !important; } }
 
+  .keys { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px; font-size:11.5px; }
+  .kc { border:1px solid var(--line); border-radius:12px; padding:2px 9px; color:var(--muted); }
+  .kc.on { background:var(--accent-soft); color:var(--ok); border-color:#c6d8c9; font-weight:600; }
+  .keys a { margin-left:4px; }
+  .pbadge { font-size:10.5px; font-weight:600; border-radius:4px; padding:2px 6px; width:54px; text-align:center; flex:none; }
+  .p-gemini { background:#e3edf9; color:#1f4f8f; } .p-openai { background:#e6f2ec; color:#1f5f3f; }
+  .p-anthropic { background:#f6ece3; color:#7a4a1f; } .p-none { background:#f1f1f1; color:#888; }
+  .line2 { display:flex; gap:8px; align-items:center; margin:6px 0 4px; font-size:12.5px; }
+  .line2 select { padding:5px 7px; }
+  label.inline { display:flex; gap:6px; align-items:center; font-weight:400; font-size:12.5px; margin:6px 0 2px; }
+  label.inline input { margin:0; }
   .foot { position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line);
           padding:9px 18px; display:flex; gap:8px; align-items:center; }
   .foot .msg { margin:0; flex:1; }
@@ -80,7 +93,7 @@
 
 <div class="top">
   <h2>AI 연결 · 모델 설정</h2>
-  <div class="sub">키는 <b>내 구글 계정에만</b> 저장됩니다. 모델 목록은 이 파일의 [⚙️ 설정] 시트에 저장됩니다.</div>
+  <div class="sub">키는 회사마다 하나씩, <b>여러 개를 함께</b> 넣어 둘 수 있습니다. 키는 내 구글 계정에만, 모델 목록은 이 파일의 [⚙️ 설정] 시트에 저장됩니다.</div>
 </div>
 <div class="tabs">
   <button class="tab on" data-tab="keys">① API 키</button>
@@ -96,7 +109,7 @@
 
   <label>OpenAI API 키 <span id="has-openai"></span></label>
   <input class="full" type="password" id="k-openai" placeholder="sk-...">
-  <div class="hint"><a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a> → Create new secret key (선불 충전 필요)</div>
+  <div class="hint"><a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a> → Create new secret key. <b>ChatGPT(Plus) 구독과 API는 따로입니다</b> — API는 선불 충전이 필요합니다.</div>
 
   <label>Anthropic(Claude) API 키 <span id="has-anthropic"></span></label>
   <input class="full" type="password" id="k-anthropic" placeholder="sk-ant-...">
@@ -123,8 +136,9 @@
 
 <!-- ─────────────────────────────── ② 모델 -->
 <div class="pane" id="p-models">
+  <div class="keys" id="keyChips"></div>
   <div class="hint" style="margin:0 0 8px">
-    모델명을 <b>직접 적거나 고친 뒤</b> [시험] 또는 [전체 연결 테스트]를 누르세요. 모르는 이름이면 <a href="#" id="toHelp">③ 도움말</a>에서 내 키로 쓸 수 있는 목록을 불러올 수 있습니다.
+    모델명을 <b>적으면 자동으로 연결을 확인하고 저장</b>합니다. 따로 누를 버튼이 없습니다. 모르는 이름이면 <a href="#" id="toHelp">③ 도움말</a>에서 내 키로 쓸 수 있는 목록을 불러올 수 있습니다.
   </div>
   <div class="legend"><span><b>활동</b> = 활동별 세특 생성에 쓸 모델</span><span><b>합본</b> = 여러 활동을 한 편으로 압축할 때</span></div>
   <datalist id="dl"></datalist>
@@ -133,8 +147,30 @@
     <button id="bAdd">+ 모델 추가</button>
     <button id="bPreset" title="지금 목록에 없는 기본 추천 모델을 아래에 덧붙입니다">기본 추천 목록 넣기</button>
     <span class="spacer"></span>
-    <button id="bTestAll">전체 연결 테스트</button>
+    <button id="bTestAll">전체 다시 확인</button>
   </div>
+
+  <div class="box">
+    <b class="t">여러 회사 키를 함께 쓰기</b>
+    <div class="line2">
+      <span>예비 모델</span>
+      <select id="backup"></select>
+    </div>
+    <div class="hint">활동용·합본용 모델이 호출 한도 초과·서버 오류 등으로 실패하면 이 모델로 한 번 더 시도합니다.
+      예) 주 모델 <code>gemini-flash-latest</code> + 예비 <code>gpt-5.6-luna</code>. 입력 시트의 [모델] 칸에서 학생마다 다른 모델을 골라도 됩니다.</div>
+  </div>
+
+  <div class="box">
+    <b class="t">비용 줄이기</b>
+    <label class="inline"><input type="checkbox" id="think"> <b>생각 줄이기</b> — 모델의 생각(추론) 단계를 줄여 더 빠르고 싸게 씁니다 (권장)</label>
+    <div class="line2">
+      <span>한 번에 묶을 학생 수</span>
+      <select id="batch"><option value="1">1명씩 (가장 꼼꼼 · 가장 비쌈)</option><option value="3">3명</option><option value="5">5명 (권장)</option><option value="10">10명</option></select>
+    </div>
+    <div class="hint">규칙 부분을 학생마다 되풀이해 보내지 않고 한 번만 보냅니다. 호출 횟수도 줄어 무료 등급 한도에 덜 걸립니다.
+      규칙 부분은 늘 앞에 같은 모양으로 가기 때문에, 조건이 맞으면 회사 쪽에서 자동 캐시 할인도 받습니다. 자세한 건 <a href="#" id="toHelp2">③ 도움말</a>.</div>
+  </div>
+
   <div class="box">
     <b class="t">이 정도면 충분합니다</b>
     세특·창체·행발은 <b>Flash급(<code>gemini-flash-latest</code>)</b>으로 충분합니다. 결과 품질은 모델 등급보다
@@ -157,7 +193,21 @@
     <tr><td><b>필요 없음</b></td><td>각 회사의 최상위 모델</td>
         <td>세특 작성에서는 비용 대비 차이가 거의 없습니다.</td></tr>
   </table>
-  <div class="hint">Flash급을 유료로 써도 학생 1명당 대략 수십 원 이하입니다(예시 개수·글자수에 따라 달라짐). 무료 등급은 분당·하루 호출 횟수 제한이 있어, 한꺼번에 많이 돌리면 일부가 실패할 수 있습니다 — 나눠서 실행하세요.</div>
+  <div class="hint">무료 등급은 분당·하루 호출 횟수 제한이 있어, 한꺼번에 많이 돌리면 일부가 실패할 수 있습니다. [묶어 보내기]를 켜 두면 호출 횟수가 줄어 덜 걸립니다.</div>
+
+  <h3>비용을 줄이는 방법 — "스킬"처럼 필요한 만큼만</h3>
+  <div class="hint" style="font-size:12px;color:#374151">
+    AI API는 호출할 때마다 기억이 없어서, 규칙을 매번 함께 보내야 합니다. 이 도구는 대신 세 가지로 비용을 줄입니다.
+  </div>
+  <table class="g">
+    <tr><td style="width:150px"><b>필요한 규칙만 조립</b></td><td>프롬프트는 그 활동의 기록종류·교과 규칙만 골라 붙입니다. 다른 교과·다른 기록의 규칙은 보내지 않습니다. (항상 켜짐)</td></tr>
+    <tr><td><b>묶어 보내기</b></td><td>5명을 한 번에 보내면 규칙을 5번이 아니라 1번만 보냅니다. 학생들 문장이 서로 비슷해지지 않도록 "첫 문장과 구조를 다르게" 쓰라는 지시가 함께 갑니다.</td></tr>
+    <tr><td><b>생각 줄이기</b></td><td>요즘 모델은 답하기 전에 "생각"을 하는데, 이 생각도 출력 요금(입력의 약 5배)으로 청구됩니다. 세특 글쓰기는 깊은 추론이 필요 없어 줄여도 품질 차이가 거의 없습니다.</td></tr>
+    <tr><td><b>자동 캐시 할인</b></td><td>규칙 부분이 늘 앞에 같은 모양으로 가도록 짜여 있어, 같은 활동을 연달아 만들면 그 부분은 약 1/10 가격으로 계산됩니다.
+      OpenAI는 1,024토큰 이상이면 자동, Gemini는 프롬프트가 4,096토큰(3.x Flash 기준) 이상일 때 자동, Claude는 이 도구가 캐시 표시를 붙입니다.</td></tr>
+  </table>
+  <div class="hint">생성이 끝나면 알림에 실제로 쓴 토큰 수(입력·출력·캐시 할인)가 나옵니다. [⑧ 프롬프트 미리보기]에서 프롬프트 길이도 볼 수 있습니다.<br>
+    ※ "스킬(Skills)"은 Claude 앱 안에서 필요한 지침만 꺼내 읽는 기능이라, 시트에서 Gemini·ChatGPT API를 부르는 방식에는 쓸 수 없습니다. 위 방법들이 같은 효과를 냅니다.</div>
 
   <h3>최신 모델명은 어디서 보나요?</h3>
   <ul>
@@ -168,41 +218,42 @@
   <div class="hint">
     · 화면에 보이는 "Gemini 3.8 Flash" 같은 표시 이름이 아니라, 영문 소문자로 된 <b>모델 코드</b>(<code>gemini-3.8-flash</code>)를 그대로 적습니다.<br>
     · <code>-latest</code>로 끝나는 Gemini 이름은 구글이 새 모델을 낼 때마다 자동으로 바뀝니다. 그래서 기본값으로 넣었습니다.<br>
-    · 버전 번호가 든 이름은 고정이라 결과가 일정하지만, 1년쯤 지나면 종료될 수 있습니다. 학기 초에 한 번 연결 테스트를 하세요.<br>
+    · 버전 번호가 든 이름은 고정이라 결과가 일정하지만, 1년쯤 지나면 종료될 수 있습니다. 학기 초에 한 번 [전체 다시 확인]을 누르세요.<br>
     · <code>preview</code>·<code>exp</code>가 붙은 이름은 시험판이라 예고 없이 바뀌거나 무료 등급에서 막힐 수 있습니다.
   </div>
 
   <h3>내 키로 쓸 수 있는 모델 불러오기</h3>
-  <div class="hint">저장된 키로 각 회사에 직접 물어봅니다(호출 비용 없음). 이름을 누르면 [② 모델] 목록에 추가하고 바로 시험합니다.</div>
+  <div class="hint">저장된 키로 각 회사에 직접 물어봅니다(호출 비용 없음). 이름을 누르면 [② 모델] 목록에 추가하고 바로 확인합니다.</div>
   <div class="actions"><button id="bList">목록 불러오기</button></div>
   <div id="avail"></div>
 
-  <h3>연결 테스트 결과 읽는 법</h3>
+  <h3>연결 확인 결과 읽는 법</h3>
   <table class="g">
     <tr><td style="width:190px"><span style="color:var(--ok);font-weight:600">✓ 연결됨 · 1.8초</span></td><td>쓸 수 있습니다. 초는 짧은 답 하나에 걸린 시간입니다(실제 세특은 몇 배 더 걸림).</td></tr>
     <tr><td>✗ 모델명을 찾을 수 없습니다</td><td>철자를 확인하세요. 예전에 되던 이름이면 종료된 것 → 위 공식 목록에서 새 이름으로.</td></tr>
     <tr><td>✗ 무료 등급에서는 쓸 수 없습니다</td><td>그 모델은 결제를 등록해야 합니다. Flash급으로 바꾸면 무료로 됩니다.</td></tr>
-    <tr><td>✗ 호출 한도를 넘었습니다</td><td>무료 등급 횟수 제한. 1분쯤 뒤 다시 시험하세요.</td></tr>
+    <tr><td>✗ 호출 한도를 넘었습니다</td><td>무료 등급 횟수 제한. 1분쯤 뒤 다시 확인하세요.</td></tr>
     <tr><td>✗ API 키가 올바르지 않습니다</td><td>[① API 키] 탭에서 키를 다시 붙여넣으세요.</td></tr>
-    <tr><td>– 키 없음</td><td>그 회사 키를 넣지 않았습니다. 안 쓰는 회사 모델은 목록에서 지워도 됩니다.</td></tr>
+    <tr><td>– 키 없음</td><td>그 회사 키를 넣지 않았습니다. 키를 넣으면 자동으로 다시 확인합니다.</td></tr>
+    <tr><td>⏳ 확인 전</td><td>시트에서 직접 고친 이름입니다. 이 창을 열면 자동으로 확인합니다.</td></tr>
   </table>
 </div>
 
 <div class="foot">
   <div class="msg" id="mFoot"></div>
-  <button id="bClose">닫기</button>
-  <button class="primary" id="bSave">모델 저장</button>
+  <button class="primary" id="bClose">닫기</button>
 </div>
 
 <script>
 var $ = function (id) { return document.getElementById(id); };
 var SUB = 'Gemini(구독)';
-var S = null, ROWS = [], ACT = '', CMP = '', DIRTY = false, AVAIL = {};
+var S = null, ROWS = [], ACT = '', CMP = '', BK = '', THINK = true, BATCH = 5, AVAIL = {};
+var SAVE_T = null, SAVING = false, PENDING = false, CLOSING = false;
+var QUEUE = [], TESTING = false;
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
-function norm(m) { return String(m || '').replace(/[​-‍﻿]/g, '').trim().replace(/^["'`]+|["'`]+$/g, '').replace(/^models\//i, '').trim(); }
+function norm(m) { return String(m || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim().replace(/^["'`]+|["'`]+$/g, '').replace(/^models\//i, '').trim(); }
 function say(id, t, cls) { var e = $(id); e.className = 'msg ' + (cls || ''); e.innerHTML = t || ''; }
-function dirty(on) { DIRTY = on; $('bClose').textContent = on ? '저장 안 하고 닫기' : '닫기'; if (on) say('mFoot', '저장하지 않은 변경이 있습니다.'); }
 function hhmm() { var d = new Date(); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
 
 /* ---------- 탭 */
@@ -211,21 +262,26 @@ function showTab(k) {
   [].forEach.call(document.querySelectorAll('.pane'), function (p) { p.classList.toggle('on', p.id === 'p-' + k); });
 }
 [].forEach.call(document.querySelectorAll('.tab'), function (t) { t.onclick = function () { showTab(t.dataset.tab); }; });
-$('toHelp').onclick = function (e) { e.preventDefault(); showTab('help'); };
+$('toHelp').onclick = $('toHelp2').onclick = function (e) { e.preventDefault(); showTab('help'); };
 
 /* ---------- 불러오기 */
 google.script.run.withSuccessHandler(function (s) {
   S = s;
   ROWS = s.rows.map(function (r) { return { model: r.model, company: r.company || '자동', level: r.level, memo: r.memo, status: r.status }; });
-  ACT = s.activity || s.fallback; CMP = s.compile || ACT;
-  [ACT, CMP].forEach(function (m) {
+  ACT = s.activity || s.fallback; CMP = s.compile || ACT; BK = s.backup || '';
+  THINK = s.thinkingLow !== false; BATCH = s.batch || 1;
+  [ACT, CMP, BK].forEach(function (m) {
     if (m && m !== SUB && !ROWS.some(function (r) { return r.model === m; }))
       ROWS.push({ model: m, company: '자동', level: '', memo: '[⚙️ 설정]에 적혀 있던 모델', status: '' });
   });
+  $('think').checked = THINK;
+  $('batch').value = String([1, 3, 5, 10].indexOf(BATCH) >= 0 ? BATCH : 5);
   drawKeys(); drawRows(); fillDatalist();
   $('lg').href = s.links.gemini; $('lo').href = s.links.openai; $('la').href = s.links.anthropic;
-  if (!s.has.gemini && !s.has.openai && !s.has.anthropic) say('mKeys', '먼저 키를 하나 넣으세요. 처음이라면 Gemini를 권합니다.');
-  else showTab('models');
+  if (!s.has.gemini && !s.has.openai && !s.has.anthropic) { say('mKeys', '먼저 키를 하나 넣으세요. 처음이라면 Gemini를 권합니다.'); return; }
+  showTab('models');
+  // 아직 확인하지 않았거나, 시트에서 직접 고친(⏳) 모델은 창을 열자마자 확인한다
+  ROWS.forEach(function (r) { var st = r.status || ''; if ((!st || st.charAt(0) === '⏳') && S.has[provOf(r)]) enqueue(r); });
 }).withFailureHandler(function (e) { say('mFoot', e.message, 'err'); }).getAiSettings();
 
 /* ---------- ① 키 */
@@ -238,15 +294,24 @@ function drawKeys() {
   [].forEach.call(document.querySelectorAll('[data-del]'), function (b) {
     b.onclick = function () { var o = { gemini: '__KEEP__', openai: '__KEEP__', anthropic: '__KEEP__' }; o[b.dataset.del] = '__DELETE__'; sendKeys(o); };
   });
+  $('keyChips').innerHTML = ['gemini', 'openai', 'anthropic'].map(function (p) {
+    return '<span class="kc' + (S.has[p] ? ' on' : '') + '">' + label(p) + (S.has[p] ? ' ✓ 키 있음' : ' – 키 없음') + '</span>';
+  }).join('') + '<a href="#" id="toKeys">키 넣기·바꾸기</a>';
+  $('toKeys').onclick = function (e) { e.preventDefault(); showTab('keys'); };
 }
 function kv(p) { var v = $('k-' + p).value.trim(); return v === '' ? '__KEEP__' : v; }
 function sendKeys(o) {
   say('mKeys', '<span class="spin"></span>저장 중…');
+  var changed = Object.keys(o).filter(function (p) { return o[p] !== '__KEEP__'; });
   google.script.run.withSuccessHandler(function (r) {
     S.has = r.has; drawKeys(); drawRows();
     ['gemini', 'openai', 'anthropic'].forEach(function (p) { $('k-' + p).value = ''; });
-    say('mKeys', r.message + ' <a href="#" id="goM">[② 모델] 탭에서 연결 테스트 →</a>', 'ok');
-    $('goM').onclick = function (e) { e.preventDefault(); showTab('models'); };
+    say('mKeys', esc(r.message) + ' 이 회사 모델들을 자동으로 확인합니다.', 'ok');
+    // 새로 넣은(바꾼) 키의 모델은 바로 다시 확인
+    var n = 0;
+    ROWS.forEach(function (row) { if (changed.indexOf(provOf(row)) >= 0) { row.status = ''; if (S.has[provOf(row)]) { enqueue(row); n++; } } });
+    if (n) setTimeout(function () { showTab('models'); }, 700);
+    scheduleSave();
   }).withFailureHandler(function (e) { say('mKeys', e.message, 'err'); }).saveKeys(o);
 }
 $('bSaveKeys').onclick = function () { sendKeys({ gemini: kv('gemini'), openai: kv('openai'), anthropic: kv('anthropic') }); };
@@ -263,12 +328,14 @@ function provOf(r) { return { 'Gemini': 'gemini', 'OpenAI': 'openai', 'Claude': 
 function label(p) { return { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude' }[p] || '회사 모름'; }
 
 function statusHtml(r) {
-  if (r.running) return '<span class="s-run"><span class="spin"></span>시험 중…</span>';
+  if (r.running) return '<span class="s-run"><span class="spin"></span>연결 확인 중…</span>';
+  if (r.queued) return '<span class="s-run">확인 대기…</span>';
   var t = r.status || '';
+  if (!norm(r.model)) return '<span>모델명을 적으면 자동으로 확인합니다</span>';
   if (!t) {
     var p = provOf(r);
     if (!p) return '<span class="s-bad">회사를 알 수 없음 — [회사]를 고르세요</span>';
-    return S && !S.has[p] ? '<span>– ' + label(p) + ' 키 없음</span>' : '<span>아직 시험 안 함</span>';
+    return S && !S.has[p] ? '<span>– ' + label(p) + ' 키 없음 (키를 넣으면 자동 확인)</span>' : '<span>확인 전</span>';
   }
   var cls = t.charAt(0) === '✓' ? 's-ok' : t.charAt(0) === '✗' ? 's-bad' : '';
   return '<span class="' + cls + '">' + esc(t) + '</span>';
@@ -278,24 +345,24 @@ function drawRows() {
   var box = $('rows'), h = '';
   var counts = {};
   ROWS.forEach(function (r) { var m = norm(r.model); if (m) counts[m] = (counts[m] || 0) + 1; });
-  // 구독(키 없이) 고정 줄
   h += '<div class="mrow fixed"><div class="line1">' +
        '<div class="name" style="padding:6px 2px">Gemini(구독) <span class="hint">— 키 없이 =AI() 셀 수식으로</span></div>' +
        '<label class="radio">활동<input type="radio" name="act" value="' + SUB + '"' + (ACT === SUB ? ' checked' : '') + '></label>' +
        '<label class="radio">합본<input type="radio" name="cmp" value="' + SUB + '"' + (CMP === SUB ? ' checked' : '') + '></label>' +
        '<span style="width:34px"></span></div></div>';
   ROWS.forEach(function (r, i) {
-    var m = norm(r.model);
+    var m = norm(r.model), p = provOf(r);
     h += '<div class="mrow' + (counts[m] > 1 ? ' dup' : '') + '" data-i="' + i + '"><div class="line1">' +
+      '<span class="pbadge p-' + (p || 'none') + '" title="회사">' + (p ? label(p) : '?') + '</span>' +
       '<input class="name" list="dl" data-f="model" value="' + esc(r.model) + '" placeholder="모델명 (예: gemini-flash-latest)">' +
       '<input class="level" data-f="level" value="' + esc(r.level) + '" placeholder="수준">' +
-      '<select data-f="company">' + ['자동', 'Gemini', 'OpenAI', 'Claude'].map(function (c) {
+      '<select data-f="company" title="회사 — 보통은 자동">' + ['자동', 'Gemini', 'OpenAI', 'Claude'].map(function (c) {
         return '<option' + (r.company === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select>' +
       '<label class="radio">활동<input type="radio" name="act" value="' + esc(m) + '"' + (m && ACT === m ? ' checked' : '') + '></label>' +
       '<label class="radio">합본<input type="radio" name="cmp" value="' + esc(m) + '"' + (m && CMP === m ? ' checked' : '') + '></label>' +
       '<button class="del" title="목록에서 빼기" data-act="del">✕</button></div>' +
       '<input class="memo" data-f="memo" value="' + esc(r.memo) + '" placeholder="언제 쓰나 (메모)">' +
-      '<div class="stat"><button class="small" data-act="test">시험</button>' + statusHtml(r) +
+      '<div class="stat"><button class="small" data-act="test">다시 확인</button>' + statusHtml(r) +
       (counts[m] > 1 ? '<span class="s-bad">· 같은 이름이 두 번 있습니다</span>' : '') + '</div></div>';
   });
   box.innerHTML = h;
@@ -303,32 +370,49 @@ function drawRows() {
   [].forEach.call(box.querySelectorAll('.mrow[data-i]'), function (el) {
     var i = +el.dataset.i;
     [].forEach.call(el.querySelectorAll('[data-f]'), function (inp) {
-      var ev = inp.tagName === 'SELECT' ? 'change' : 'input';
-      inp.addEventListener(ev, function () {
-        var f = inp.dataset.f, before = norm(ROWS[i].model);
+      var f = inp.dataset.f;
+      if (f === 'company') {
+        inp.onchange = function () { ROWS[i].company = inp.value; ROWS[i].status = ''; drawRows(); enqueue(ROWS[i]); scheduleSave(); };
+        return;
+      }
+      inp.addEventListener('input', function () {
+        var before = norm(ROWS[i].model);
         ROWS[i][f] = inp.value;
-        if (f === 'model' || f === 'company') ROWS[i].status = '';
-        if (f === 'model') { if (ACT === before) ACT = norm(inp.value); if (CMP === before) CMP = norm(inp.value); }
-        dirty(true);
-        if (f === 'company') drawRows();
+        if (f === 'model') { ROWS[i].status = ''; if (ACT === before) ACT = norm(inp.value); if (CMP === before) CMP = norm(inp.value); if (BK === before) BK = norm(inp.value); }
       });
-      if (inp.dataset.f === 'model') inp.addEventListener('change', drawRows);
+      // 칸을 벗어나거나 엔터를 치면 확정 → 모델명이면 자동 확인, 모두 자동 저장
+      inp.addEventListener('change', function () {
+        if (f === 'model') { ROWS[i].model = norm(inp.value); drawRows(); drawBackup(); fillDatalist(); enqueue(ROWS[i]); }
+        scheduleSave();
+      });
     });
     el.querySelector('[data-act="del"]').onclick = function () {
       var m = norm(ROWS[i].model);
       ROWS.splice(i, 1);
-      if (ACT === m || CMP === m) {
-        var first = ROWS.length ? norm(ROWS[0].model) : S.fallback;
-        if (ACT === m) ACT = first; if (CMP === m) CMP = first;
-      }
-      dirty(true); drawRows();
+      var first = ROWS.length ? norm(ROWS[0].model) : S.fallback;
+      if (ACT === m) ACT = first; if (CMP === m) CMP = first; if (BK === m) BK = '';
+      drawRows(); drawBackup(); scheduleSave();
     };
-    el.querySelector('[data-act="test"]').onclick = function () { testRow(i); };
+    el.querySelector('[data-act="test"]').onclick = function () { ROWS[i].status = ''; enqueue(ROWS[i], true); };
   });
   [].forEach.call(box.querySelectorAll('input[type=radio]'), function (rb) {
-    rb.onchange = function () { if (rb.name === 'act') ACT = rb.value; else CMP = rb.value; dirty(true); };
+    rb.onchange = function () { if (rb.name === 'act') ACT = rb.value; else CMP = rb.value; scheduleSave(); };
   });
+  drawBackup();
 }
+
+function drawBackup() {
+  var sel = $('backup'), h = '<option value="">(쓰지 않음)</option>';
+  ROWS.forEach(function (r) {
+    var m = norm(r.model); if (!m) return;
+    var ok = (r.status || '').charAt(0) === '✓';
+    h += '<option value="' + esc(m) + '"' + (BK === m ? ' selected' : '') + '>' + esc(m) + ' · ' + label(provOf(r)) + (ok ? ' ✓' : '') + '</option>';
+  });
+  sel.innerHTML = h;
+}
+$('backup').onchange = function () { BK = this.value; scheduleSave(); };
+$('think').onchange = function () { THINK = this.checked; scheduleSave(); };
+$('batch').onchange = function () { BATCH = Number(this.value); scheduleSave(); };
 
 function fillDatalist() {
   var seen = {}, h = '';
@@ -340,79 +424,78 @@ function fillDatalist() {
 
 $('bAdd').onclick = function () {
   ROWS.push({ model: '', company: '자동', level: '', memo: '', status: '' });
-  dirty(true); drawRows();
+  drawRows();
   var ins = $('rows').querySelectorAll('input.name'); if (ins.length) ins[ins.length - 1].focus();
 };
 $('bPreset').onclick = function () {
-  var n = 0;
+  var added = [];
   S.presets.forEach(function (p) {
-    if (!ROWS.some(function (r) { return norm(r.model) === p.model; })) { ROWS.push(JSON.parse(JSON.stringify(p))); n++; }
+    if (!ROWS.some(function (r) { return norm(r.model) === p.model; })) { var r = JSON.parse(JSON.stringify(p)); ROWS.push(r); added.push(r); }
   });
-  if (n) { dirty(true); drawRows(); say('mFoot', '기본 추천 모델 ' + n + '개를 덧붙였습니다.', 'ok'); }
-  else say('mFoot', '기본 추천 모델이 이미 모두 있습니다.');
+  if (!added.length) { say('mFoot', '기본 추천 모델이 이미 모두 있습니다.'); return; }
+  drawRows(); added.forEach(function (r) { enqueue(r); }); scheduleSave();
 };
+$('bTestAll').onclick = function () { ROWS.forEach(function (r) { r.status = ''; enqueue(r, true); }); };
 
-/* 한 줄 시험 — 끝나면 cb */
-function testRow(i, cb) {
-  var r = ROWS[i];
-  if (!r || !norm(r.model)) { if (cb) cb(); return; }
+/* ---------- 자동 연결 확인 (한 줄씩 차례로) */
+function enqueue(r, force) {
+  if (!r || !norm(r.model)) return;
   var p = provOf(r);
-  if (p && !S.has[p]) { r.status = '– ' + label(p) + ' 키 없음'; drawRows(); if (cb) cb(); return; }
-  r.running = true; drawRows();
+  if (!p) { drawRows(); return; }
+  if (!S.has[p]) { r.status = '– ' + label(p) + ' 키 없음'; drawRows(); return; }
+  if (QUEUE.indexOf(r) >= 0 || r.running) return;
+  r.queued = true; QUEUE.push(r); drawRows(); runQueue();
+}
+function runQueue() {
+  if (TESTING) return;
+  var r = QUEUE.shift();
+  if (!r) { say('mFoot', '', ''); return; }
+  if (ROWS.indexOf(r) < 0) { runQueue(); return; }     // 그사이 지운 줄
+  TESTING = true; r.queued = false; r.running = true; drawRows();
+  say('mFoot', '<span class="spin"></span>' + esc(r.model) + ' 연결 확인 중…' + (QUEUE.length ? ' (남은 ' + QUEUE.length + '개)' : ''));
   google.script.run.withSuccessHandler(function (res) {
-    r.running = false;
+    TESTING = false; r.running = false;
     if (res.ok === true) r.status = '✓ 연결됨 · ' + res.sec + '초 · ' + hhmm();
     else if (res.skipped) r.status = '– ' + res.message;
+    else if (res.ok === null) r.status = 'ⓘ ' + res.message;
     else r.status = '✗ ' + (res.short || res.message) + ' · ' + hhmm();
-    r.detail = res.ok ? '' : res.message;
-    dirty(true); drawRows();
-    if (!cb && !res.ok && res.message) say('mFoot', esc(res.model + ' — ' + res.message), 'err');
-    if (cb) cb(res);
+    drawRows(); scheduleSave();
+    if (res.ok === false && !res.skipped && !QUEUE.length) say('mFoot', esc(res.model + ' — ' + res.message), 'err');
+    runQueue();
   }).withFailureHandler(function (e) {
-    r.running = false; r.status = '✗ ' + e.message; drawRows(); if (cb) cb();
+    TESTING = false; r.running = false; r.status = '✗ ' + e.message; drawRows(); scheduleSave(); runQueue();
   }).testModel({ model: norm(r.model), company: r.company });
 }
 
-$('bTestAll').onclick = function () {
-  var btn = this; btn.disabled = true;
-  var i = 0, ok = 0, bad = 0, skip = 0;
-  say('mFoot', '<span class="spin"></span>연결 테스트 중…');
-  (function next() {
-    if (i >= ROWS.length) {
-      btn.disabled = false;
-      say('mFoot', '통과 ' + ok + ' · 실패 ' + bad + (skip ? ' · 키 없어 건너뜀 ' + skip : '') + ' — 결과를 저장합니다…', bad ? 'err' : 'ok');
-      save(true);
-      return;
-    }
-    var k = i++;
-    testRow(k, function (res) {
-      var st = ROWS[k] && ROWS[k].status || '';
-      if (st.charAt(0) === '✓') ok++; else if (st.charAt(0) === '–') skip++; else if (st) bad++;
-      next();
-    });
-  })();
-};
-
-/* ---------- 저장 */
-function save(afterTest) {
+/* ---------- 자동 저장 */
+function scheduleSave() { clearTimeout(SAVE_T); SAVE_T = setTimeout(save, 900); }
+function save() {
+  if (SAVING) { PENDING = true; return; }
   var rows = ROWS.map(function (r) { return { model: norm(r.model), company: r.company, level: r.level, memo: r.memo, status: r.status }; })
                  .filter(function (r) { return r.model; });
   var seen = {}, dup = '';
   rows.forEach(function (r) { if (seen[r.model]) dup = r.model; seen[r.model] = 1; });
-  if (dup) { say('mFoot', '같은 이름이 두 번 있습니다: ' + esc(dup) + ' — 하나를 지워 주세요.', 'err'); return; }
+  if (dup) { say('mFoot', '같은 이름이 두 번 있습니다: ' + esc(dup) + ' — 하나를 지우면 저장됩니다.', 'err'); return; }
   if (!rows.length) { say('mFoot', '모델을 한 개 이상 적어 주세요.', 'err'); return; }
   var act = ACT && (ACT === SUB || seen[ACT]) ? ACT : rows[0].model;
   var cmp = CMP && (CMP === SUB || seen[CMP]) ? CMP : act;
-  var prefix = afterTest ? $('mFoot').textContent.replace(/ — 결과를 저장합니다…$/, '') + ' · ' : '';
-  $('bSave').disabled = true;
+  var bk = BK && seen[BK] ? BK : '';
+  SAVING = true;
+  if (!TESTING) say('mFoot', '<span class="spin"></span>저장 중…');
   google.script.run.withSuccessHandler(function (m) {
-    $('bSave').disabled = false; ACT = act; CMP = cmp; dirty(false); drawRows();
-    say('mFoot', esc(prefix + m), 'ok');
-  }).withFailureHandler(function (e) { $('bSave').disabled = false; say('mFoot', e.message, 'err'); })
-    .saveModelSettings({ rows: rows, activity: act, compile: cmp });
+    SAVING = false; ACT = act; CMP = cmp; BK = bk;
+    if (PENDING) { PENDING = false; save(); return; }
+    if (CLOSING) { google.script.host.close(); return; }
+    if (!TESTING && !QUEUE.length) say('mFoot', '✓ ' + esc(m), 'ok');
+  }).withFailureHandler(function (e) { SAVING = false; say('mFoot', e.message, 'err'); })
+    .saveModelSettings({ rows: rows, activity: act, compile: cmp, backup: bk, thinkingLow: THINK, batch: BATCH });
 }
-$('bSave').onclick = function () { save(false); };
-$('bClose').onclick = function () { google.script.host.close(); };
+$('bClose').onclick = function () {
+  // 저장이 남아 있으면 마치고 닫는다
+  if (SAVE_T && !SAVING) { clearTimeout(SAVE_T); SAVE_T = null; CLOSING = true; save(); return; }
+  if (SAVING) { CLOSING = true; say('mFoot', '<span class="spin"></span>저장을 마치고 닫습니다…'); return; }
+  google.script.host.close();
+};
 
 /* ---------- ③ 내 키로 쓸 수 있는 모델 */
 $('bList').onclick = function () {
@@ -440,10 +523,10 @@ function drawAvail() {
   $('avail').innerHTML = h;
   [].forEach.call($('avail').querySelectorAll('.chip:not(.have)'), function (c) {
     c.onclick = function () {
-      var m = c.dataset.m;
-      ROWS.push({ model: m, company: '자동', level: '', memo: '내 키 목록에서 추가', status: '' });
-      dirty(true); drawRows(); drawAvail(); showTab('models');
-      testRow(ROWS.length - 1);
+      var r = { model: c.dataset.m, company: '자동', level: '', memo: '내 키 목록에서 추가', status: '' };
+      ROWS.push(r);
+      drawRows(); drawAvail(); showTab('models');
+      enqueue(r); scheduleSave();
       var last = $('rows').lastElementChild; if (last) last.scrollIntoView({ block: 'nearest' });
     };
   });

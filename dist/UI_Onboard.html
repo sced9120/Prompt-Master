@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta charset="utf-8">
 <base target="_top">
 <style>
   :root { --line:#dde3dd; --muted:#6b7280; --accent:#35583f; --accent-soft:#e3ece4;
           --warn:#8f2f20; --warn-soft:#f8eae6; --ok:#2c6340; --bg:#f6f8f6; }
   * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
   body { margin:0; padding:18px; color:#16202a;
          font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
   h2 { margin:0 0 2px; font-size:17px; }
@@ -64,6 +66,7 @@
 
 <script>
 var $ = function (id) { return document.getElementById(id); };
+var LABEL = { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude' };
 var ST = null, CTX = null, ACT = null, OPEN;   // undefined = 아직 안 정함, null = 사용자가 접음
 
 var STEPS = [
@@ -141,12 +144,14 @@ function renderInstall(b, done) {
 /* ───────────────────────── 2. AI 연결 */
 function renderAi(b, done) {
   b.innerHTML =
-    (done ? '<div class="note">연결된 키: <b>' + ST.keyNames.join(', ') + '</b> · 지금 모델: <b>' + esc(ST.defaultModel) + '</b>. ' +
-            '바꾸려면 아래에서 다시 확인하세요.</div>' : '') +
+    (done ? '<div class="note">연결된 키: <b>' + ST.keyNames.map(function (k) { return LABEL[k] + ' ✓'; }).join(' · ') + '</b>' +
+            ' · 주 모델 <b>' + esc(ST.defaultModel) + '</b>' + (ST.backupModel ? ' · 예비 <b>' + esc(ST.backupModel) + '</b>' : '') + '<br>' +
+            '<b>키는 여러 개 함께 쓸 수 있습니다.</b> 다른 회사 키도 넣으려면 회사를 바꿔 한 번 더 저장하세요. ' +
+            '주 모델은 그대로 두고, 새로 넣은 쪽을 예비 모델(주 모델이 실패하면 대신)로 둡니다.</div>' : '') +
     '<label>어디 키를 쓰시나요</label>' +
     '<select id="prov">' +
       '<option value="gemini">Gemini — 무료 등급이 있어 가장 부담이 적습니다 (권장)</option>' +
-      '<option value="openai">OpenAI</option>' +
+      '<option value="openai">OpenAI (ChatGPT) — ChatGPT 구독과 별개로 API 선불 충전 필요</option>' +
       '<option value="anthropic">Anthropic (Claude)</option>' +
     '</select>' +
     '<label>API 키</label>' +
@@ -202,7 +207,8 @@ function renderAi(b, done) {
     });
   };
   $('prov').onchange = function () { typed = false; upd(); };
-  if (ST.hasKey && ST.keyNames.length) $('prov').value = ST.keyNames[0];
+  // 이미 키가 있으면 아직 안 넣은 회사를 먼저 보여 준다 (두 번째 키 넣기)
+  if (ST.hasKey) { var rest = ['gemini', 'openai', 'anthropic'].filter(function (k) { return ST.keyNames.indexOf(k) < 0; }); if (rest.length) $('prov').value = rest[0]; }
   upd();
 
   $('bKey').onclick = function () {
@@ -213,7 +219,7 @@ function renderAi(b, done) {
     google.script.run
       .withSuccessHandler(function (r) {
         busy(btn, false); ST = r.status;
-        if (r.ok) { say('mKey', '✓ ' + r.message, 'ok'); OPEN = 'roster'; setTimeout(draw, 900); }
+        if (r.ok) { say('mKey', '✓ ' + r.message, 'ok'); if (!r.kept) { OPEN = 'roster'; setTimeout(draw, 900); } }
         else { say('mKey', '키는 저장했지만 연결이 실패했습니다 — ' + r.message, 'err'); }
       })
       .withFailureHandler(function (e) { busy(btn, false); say('mKey', e.message, 'err'); })
@@ -223,35 +229,54 @@ function renderAi(b, done) {
 
 /* ───────────────────────── 3. 학생 명단 */
 function renderRoster(b, done) {
+  var mode = ST.rosterMode || 'class';
   b.innerHTML =
-    '<div class="note">엑셀이나 한글에서 <b>반 · 번호 · 이름</b> 순서로 복사해 그대로 붙여넣으세요. ' +
-    '성취수준(1~5)은 네 번째 칸에 넣으면 되고, 비워 두어도 됩니다.</div>' +
-    (done ? '<div class="note">지금 <b>' + ST.rosterCount + '명</b>이 등록되어 있습니다. 다시 붙여넣으면 교체됩니다.</div>' : '') +
-    '<label>명단 붙여넣기</label>' +
-    '<textarea id="roster" rows="7" placeholder="1&#9;1&#9;김하늘&#10;1&#9;2&#9;박서준&#10;1&#9;3&#9;이유나&#9;2"></textarea>' +
-    '<div class="note" id="rPrev">한 줄에 한 명씩. 탭·쉼표·빈칸 어느 것으로 나뉘어 있어도 됩니다.</div>' +
+    '<label>명단 방식</label>' +
+    '<div class="row" style="gap:14px">' +
+      '<label style="font-weight:400;margin:0"><input type="radio" name="rmode" value="class" style="width:auto"' + (mode === 'class' ? ' checked' : '') + '> 반 · 번호 <span style="color:var(--muted)">(담임·교과)</span></label>' +
+      '<label style="font-weight:400;margin:0"><input type="radio" name="rmode" value="grade" style="width:auto"' + (mode === 'grade' ? ' checked' : '') + '> 학년 · 반 · 번호 <span style="color:var(--muted)">(동아리·방과후)</span></label>' +
+    '</div>' +
+    '<div class="actions" style="margin-top:10px"><button id="bFile">📄 엑셀 양식 받기 · 파일로 불러오기</button>' +
+    '<span class="note" style="margin:0">양식에 채워 올리면 제일 편합니다.</span></div>' +
+    (done ? '<div class="note">지금 <b>' + ST.rosterCount + '명</b>이 등록되어 있습니다. 다시 넣으면 교체됩니다.</div>' : '') +
+    '<label>또는 바로 붙여넣기</label>' +
+    '<textarea id="roster" rows="6"></textarea>' +
+    '<div class="note" id="rPrev"></div>' +
     '<div class="actions"><button class="primary" id="bRoster">명단 저장</button></div>' +
     '<div class="msg" id="mRoster"></div>';
 
   var ta = $('roster'), timer = null;
-  ta.addEventListener('input', function () {
-    clearTimeout(timer);
-    timer = setTimeout(function () {
-      if (!ta.value.trim()) { $('rPrev').textContent = '한 줄에 한 명씩. 탭·쉼표·빈칸 어느 것으로 나뉘어 있어도 됩니다.'; return; }
-      google.script.run.withSuccessHandler(function (p) {
-        $('rPrev').textContent = p.count
-          ? p.count + '명으로 읽었습니다. 예) ' + p.sample.map(function (r) { return r[0] + '반 ' + r[1] + '번 ' + r[2]; }).join(' / ')
-          : '아직 알아보지 못했습니다. 반, 번호, 이름 순인지 확인해 주세요.';
-      }).onboardPreviewRoster(ta.value);
-    }, 350);
-  });
+  var cur = function () { var r = document.querySelector('input[name=rmode]:checked'); return r ? r.value : 'class'; };
+  var hint = function () {
+    var g = cur() === 'grade';
+    ta.placeholder = g ? '2\t3\t15\t김하늘\n1\t2\t7\t박서준\t2\n(학번 20315 김하늘 도 됩니다)' : '1\t1\t김하늘\n1\t2\t박서준\n1\t3\t이유나\t2';
+    if (!ta.value.trim()) $('rPrev').textContent = (g ? '학년 · 반 · 번호 · 이름' : '반 · 번호 · 이름') +
+      ' 순서로 한 줄에 한 명씩. 성취수준(1~5)은 맨 뒤에 넣거나 비워 두세요. 탭·쉼표·빈칸 어느 것으로 나뉘어도 됩니다.';
+  };
+  var preview = function () {
+    if (!ta.value.trim()) { hint(); return; }
+    google.script.run.withSuccessHandler(function (p) {
+      $('rPrev').textContent = p.count
+        ? p.count + '명으로 읽었습니다. 예) ' + p.sample.join(' / ') +
+          (p.mode !== cur() ? '  ※ ' + (p.mode === 'grade' ? '학년이 있는 명단 같습니다' : '학년이 없는 명단 같습니다') : '') +
+          (p.warnings.length ? '  ⚠ ' + p.warnings[0] : '')
+        : '아직 알아보지 못했습니다. 순서를 확인해 주세요.';
+    }).onboardPreviewRoster(ta.value, cur());
+  };
+  [].forEach.call(document.querySelectorAll('input[name=rmode]'), function (r) { r.onchange = function () { hint(); preview(); }; });
+  hint();
+  ta.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(preview, 350); });
 
+  $('bFile').onclick = function () {
+    // 한 번에 창 하나만 열 수 있어서, 명단 창으로 넘어갔다가 저장하면 이 창으로 돌아온다
+    google.script.run.openRosterDialog(true);
+  };
   $('bRoster').onclick = function () {
     var btn = this; busy(btn, true, '저장 중'); say('mRoster', '');
     google.script.run
       .withSuccessHandler(function (s) { ST = s; busy(btn, false); OPEN = 'act'; draw(); })
       .withFailureHandler(function (e) { busy(btn, false); say('mRoster', e.message, 'err'); })
-      .onboardSaveRoster(ta.value);
+      .onboardSaveRoster(ta.value, cur());
   };
 }
 

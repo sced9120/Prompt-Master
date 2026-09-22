@@ -172,7 +172,7 @@ t('선생님이 적은 목록 저장 — 중복·models/ 접두어 정리', () =
            { model: 'my-proxy', company: 'OpenAI', level: '', memo: '학교 프록시' }],
     activity: 'gemini-3.8-flash', compile: 'gemini-flash-latest'
   });
-  ok(/저장했습니다/.test(msg), msg);
+  ok(/저장됨/.test(msg), msg);
   eq(A.readModelTable_().map(r => r.model).join(','), 'gemini-3.8-flash,gemini-flash-latest,my-proxy');
   eq(A.cfg_('활동용 모델', ''), 'gemini-3.8-flash');
 });
@@ -338,6 +338,203 @@ t('시간 제한에 걸리면 남은 행은 체크를 두고 알림', () => {
   D.generateChecked();
   ok(/2건을 남기고 멈췄습니다/.test(D.__alerts.join('\n')), D.__alerts.join(' / '));
   eq(s.getRange(5, cGen).getValue(), true, '남은 행 체크 유지');
+});
+
+
+console.log('\n[비용 줄이기 — 순수 로직]');
+t('생각 줄이기 옵션: 모델마다 맞는 이름으로', () => {
+  eq(JSON.stringify(M.thinkingFor('gemini', 'gemini-flash-latest')), '{"thinkingLevel":"low"}');
+  eq(JSON.stringify(M.thinkingFor('gemini', 'gemini-3.8-flash')), '{"thinkingLevel":"low"}');
+  eq(JSON.stringify(M.thinkingFor('gemini', 'gemini-2.5-flash')), '{"thinkingBudget":0}');
+  eq(JSON.stringify(M.thinkingFor('gemini', 'gemini-2.5-pro')), '{"thinkingBudget":128}');
+  eq(JSON.stringify(M.thinkingFor('openai', 'gpt-5.6-luna')), '{"reasoning_effort":"low"}');
+  eq(M.thinkingFor('openai', 'gpt-4.1'), null); eq(M.thinkingFor('anthropic', 'claude-haiku-4-5'), null);
+});
+t('묶음 요청에 학생 id·JSON 형식·다양성 지시가 들어감', () => {
+  const u = M.buildBatchUser([{ id: 'S1', block: '주제: 가' }, { id: 'S2', block: '주제: 나' }]);
+  ok(/## S1[\s\S]*## S2/.test(u), u); ok(/"results"/.test(u), 'JSON 형식 없음'); ok(/첫 문장과 문장 구조를 다르게/.test(u), '다양성 지시 없음');
+});
+t('묶음 응답 풀기 — 정석', () => {
+  const r = M.parseBatchResult('{"results":[{"id":"S1","text":"가 문장."},{"id":"S2","text":"나 문장."}]}', ['S1', 'S2']);
+  eq(r.map.S1, '가 문장.'); eq(r.missing.length, 0);
+});
+t('묶음 응답 풀기 — 코드블록·앞말이 붙어도, id 를 "학생2"로 바꿔 써도', () => {
+  const r = M.parseBatchResult('결과입니다\n```json\n{"results":[{"id":"학생1","text":"가"},{"id":"학생2","text":"나"}]}\n```', ['S1', 'S2']);
+  eq(r.map.S2, '나'); eq(r.missing.length, 0);
+});
+t('묶음 응답 풀기 — 빠진 학생은 missing 으로', () => {
+  const r = M.parseBatchResult('[{"id":"S1","text":"가"}]', ['S1', 'S2', 'S3']);
+  eq(r.missing.join(','), 'S2,S3');
+});
+t('묶음 응답 풀기 — 망가진 JSON 이면 모두 missing', () => eq(M.parseBatchResult('죄송합니다', ['S1', 'S2']).missing.length, 2));
+t('토큰 어림: 한글 1,400자 ≈ 1,000토큰', () => { const n = M.estimateTokens('가'.repeat(1400)); ok(n > 900 && n < 1100, n); });
+
+console.log('\n[비용 줄이기 — 가짜 인터넷]');
+function genSetup(n) {
+  const D = boot(); D.installCore_();
+  D.onboardSaveRoster(Array.from({ length: n }, (_, i) => '1\t' + (i + 1) + '\t학생' + (i + 1)).join('\n'));
+  const made = D.createActivity_({ key: '탐구', name: '데이터 탐구', recordKey: '동아리', subjectKey: '공통', columns: '탐구 주제', desc: '', examples: [] });
+  const s = D.__ss.getSheetByName(made.inSheet);
+  const cGen = D.colOf_(s, 3, '생성'), cAi = D.colOf_(s, 3, 'AI 결과'), cValid = D.colOf_(s, 3, '검증');
+  s.getRange(4, 5, n, 1).setValues(Array.from({ length: n }, (_, i) => ['주제' + (i + 1)]));
+  s.getRange(4, cGen, n, 1).setValues(Array.from({ length: n }, () => [true]));
+  D.setKey_('gemini', 'AIza-x');
+  D.__ss.setActiveSheet(s);
+  return { D, s, cGen, cAi, cValid };
+}
+const batchReply = (payload) => {
+  const user = payload.contents[0].parts[0].text;
+  const ids = [...user.matchAll(/## (S\d+)/g)].map(m => m[1]);
+  return { code: 200, body: { candidates: [{ content: { parts: [{ text: JSON.stringify({ results: ids.map(id => ({ id, text: id + ' 학생의 특기사항 문장.' })) }) }] } }],
+                               usageMetadata: { promptTokenCount: 3000, candidatesTokenCount: 900, thoughtsTokenCount: 100, cachedContentTokenCount: 2000 } } };
+};
+t('7명 · 5명씩 묶기 → 호출 2번, 모두 채워짐', () => {
+  const { D, s, cGen, cAi } = genSetup(7);
+  const calls = [];
+  D.__fetch.handler = (url, opt) => { const p = JSON.parse(opt.payload); calls.push(p); return batchReply(p); };
+  D.generateChecked();
+  eq(calls.length, 2, '호출 수');
+  const out = s.getRange(4, cAi, 7, 1).getValues().map(r => r[0]);
+  ok(out.every(x => /특기사항 문장/.test(x)), out.join(' / '));
+  ok(/^S1 /.test(out[0]) && /^S2 /.test(out[6]), '순서: ' + out[0] + ' / ' + out[6]);
+  eq(s.getRange(4, cGen, 7, 1).getValues().filter(r => r[0] === true).length, 0, '체크 해제');
+});
+t('묶음 요청: 규칙은 systemInstruction 에 그대로, JSON·생각 줄이기 옵션이 붙음', () => {
+  const { D } = genSetup(3);
+  let pay = null;
+  D.__fetch.handler = (url, opt) => { pay = JSON.parse(opt.payload); return batchReply(pay); };
+  D.generateChecked();
+  ok(/# 역할/.test(pay.systemInstruction.parts[0].text), '규칙이 system 에 없음');
+  eq(pay.generationConfig.responseMimeType, 'application/json');
+  eq(pay.generationConfig.thinkingConfig.thinkingLevel, 'low');
+  ok(!/# 역할/.test(pay.contents[0].parts[0].text), '규칙이 학생 쪽에 섞임');
+});
+t('완료 알림에 실제 사용 토큰', () => {
+  const { D } = genSetup(2);
+  D.__fetch.handler = (url, opt) => batchReply(JSON.parse(opt.payload));
+  D.__ss.__toasts.length = 0;
+  D.generateChecked();
+  const last = D.__ss.__toasts[D.__ss.__toasts.length - 1] || '';
+  ok(/호출 1번 · 입력 3,000 · 출력 1,000 토큰/.test(last) && /캐시/.test(last), last);
+});
+t('묶음 응답에서 빠진 학생만 한 명씩 다시', () => {
+  const { D, s, cAi } = genSetup(3);
+  const calls = [];
+  D.__fetch.handler = (url, opt) => {
+    const p = JSON.parse(opt.payload); calls.push(p);
+    if (p.generationConfig && p.generationConfig.responseMimeType) {
+      return { code: 200, body: { candidates: [{ content: { parts: [{ text: '{"results":[{"id":"S1","text":"첫째."},{"id":"S3","text":"셋째."}]}' }] } }] } };
+    }
+    return gemOk('따로 쓴 둘째.');
+  };
+  D.generateChecked();
+  eq(calls.length, 2, '호출 수');
+  eq(s.getRange(5, cAi).getValue(), '따로 쓴 둘째.');
+});
+t('묶음 호출이 API 오류면 한 명씩 되풀이하지 않음', () => {
+  const { D, s, cAi } = genSetup(4);
+  let n = 0;
+  D.__fetch.handler = () => { n++; return { code: 404, body: 'is not found' }; };
+  D.generateChecked();
+  eq(n, 1, '호출 수');
+  ok(/⚠ 실패/.test(s.getRange(7, cAi).getValue()), s.getRange(7, cAi).getValue());
+});
+t('[한 번에 묶을 학생 수] 1 이면 한 명씩', () => {
+  const { D } = genSetup(3);
+  D.setCfg_('한 번에 묶을 학생 수', 1);
+  let n = 0;
+  D.__fetch.handler = () => { n++; return gemOk('문장.'); };
+  D.generateChecked();
+  eq(n, 3);
+});
+t('생각 옵션을 거절하는 모델이면 빼고 다시 보냄', () => {
+  const { D, s, cAi } = genSetup(1);
+  const seen = [];
+  D.__fetch.handler = (url, opt) => {
+    const p = JSON.parse(opt.payload); seen.push(!!(p.generationConfig && p.generationConfig.thinkingConfig));
+    if (p.generationConfig && p.generationConfig.thinkingConfig) return { code: 400, body: 'Invalid JSON payload received. Unknown name "thinkingLevel"' };
+    return gemOk('문장.');
+  };
+  D.generateChecked();
+  eq(seen.join(','), 'true,false'); eq(s.getRange(4, cAi).getValue(), '문장.');
+});
+t('[생각 줄이기] FALSE 면 생각 옵션을 보내지 않음', () => {
+  const { D } = genSetup(1);
+  D.setCfg_('생각 줄이기', false);
+  let p = null;
+  D.__fetch.handler = (url, opt) => { p = JSON.parse(opt.payload); return gemOk('문장.'); };
+  D.generateChecked();
+  ok(!p.generationConfig || !p.generationConfig.thinkingConfig, JSON.stringify(p.generationConfig));
+});
+t('OpenAI: reasoning_effort 거절하면 빼고 다시', () => {
+  const D = boot(); D.installCore_(); D.setKey_('openai', 'sk');
+  const seen = [];
+  D.__fetch.handler = (url, opt) => {
+    const p = JSON.parse(opt.payload); seen.push(p.reasoning_effort || '-');
+    return p.reasoning_effort ? { code: 400, body: "Unsupported parameter: 'reasoning_effort'" } : oaOk('됨');
+  };
+  eq(D.callAI_('s', 'u', 'gpt-5.6-luna'), '됨'); eq(seen.join(','), 'low,-');
+});
+t('Claude: 규칙 부분에 캐시 표시', () => {
+  const D = boot(); D.installCore_(); D.setKey_('anthropic', 'k');
+  let p = null;
+  D.__fetch.handler = (url, opt) => { p = JSON.parse(opt.payload); return { code: 200, body: { content: [{ type: 'text', text: '됨' }], usage: { input_tokens: 10, output_tokens: 5 } } }; };
+  D.callAI_('규칙', '학생', 'claude-haiku-4-5');
+  eq(p.system[0].cache_control.type, 'ephemeral'); eq(p.system[0].text, '규칙');
+});
+
+console.log('\n[여러 키 — 예비 모델]');
+t('주 모델이 한도 초과면 예비 모델(다른 회사)로 생성', () => {
+  const { D, s, cAi, cValid } = genSetup(1);
+  D.setKey_('openai', 'sk');
+  D.setCfg_('예비 모델', 'gpt-5.6-luna');
+  D.__fetch.handler = (url) => /googleapis/.test(url) ? { code: 429, body: 'limit: 10' } : oaOk('오픈AI가 쓴 문장.');
+  D.generateChecked();
+  eq(s.getRange(4, cAi).getValue(), '오픈AI가 쓴 문장.');
+  ok(/예비 모델 gpt-5.6-luna/.test(s.getRange(4, cValid).getValue()), s.getRange(4, cValid).getValue());
+});
+t('예비 모델 키가 없으면 원래 오류 그대로', () => {
+  const { D, s, cAi } = genSetup(1);
+  D.setCfg_('예비 모델', 'gpt-5.6-luna');
+  D.__fetch.handler = (url) => /googleapis/.test(url) ? { code: 429, body: 'limit: 10' } : oaOk('x');
+  D.generateChecked();
+  ok(/호출 한도/.test(s.getRange(4, cAi).getValue()), s.getRange(4, cAi).getValue());
+});
+t('시작하기에서 두 번째 키를 넣으면 주 모델은 두고 예비로', () => {
+  const C = boot(); C.installCore_();
+  C.__fetch.handler = (url) => /googleapis/.test(url) ? gemOk() : oaOk();
+  eq(C.onboardSaveKey({ provider: 'gemini', key: 'AIza', model: '' }).ok, true);
+  const r = C.onboardSaveKey({ provider: 'openai', key: 'sk', model: '' });
+  eq(r.ok, true); eq(r.kept, true);
+  eq(C.cfg_('활동용 모델', ''), 'gemini-flash-latest'); eq(C.cfg_('예비 모델', ''), 'gpt-5.6-luna');
+  ok(C.getKey_('gemini') && C.getKey_('openai'), '두 키 모두 보관');
+});
+t('설정 창 저장: 예비·생각 줄이기·묶음 수', () => {
+  const C = boot(); C.installCore_();
+  C.saveModelSettings({ rows: [{ model: 'gemini-flash-latest' }, { model: 'gpt-5.6-luna' }], activity: 'gemini-flash-latest',
+                        compile: 'gemini-flash-latest', backup: 'gpt-5.6-luna', thinkingLow: false, batch: 3 });
+  eq(C.cfg_('예비 모델', ''), 'gpt-5.6-luna'); eq(C.cfgBool_('생각 줄이기', true), false); eq(Number(C.cfg_('한 번에 묶을 학생 수', 0)), 3);
+  const g = C.getAiSettings();
+  eq(g.backup, 'gpt-5.6-luna'); eq(g.thinkingLow, false); eq(g.batch, 3);
+});
+
+console.log('\n[시트에서 모델을 직접 고치면]');
+t('[연결 확인] 칸이 "확인 전"으로 바뀜', () => {
+  const C = boot(); C.installCore_();
+  const s = C.__ss.getSheetByName('⚙️ 설정');
+  const row = C.readModelTable_()[1].row;
+  s.getRange(row, 1).setValue('gemini-3.7-flash');
+  C.onEdit({ range: s.getRange(row, 1) });
+  ok(/^⏳ 확인 전/.test(s.getRange(row, 5).getValue()), s.getRange(row, 5).getValue());
+});
+t('다른 시트·다른 칸을 고치면 아무 일도 없음', () => {
+  const C = boot(); C.installCore_();
+  const s = C.__ss.getSheetByName('⚙️ 설정');
+  const row = C.readModelTable_()[0].row;
+  s.getRange(row, 5).setValue('그대로');
+  C.onEdit({ range: s.getRange(row, 3) });
+  C.onEdit({ range: C.__ss.getSheetByName('👤 학생명단').getRange(3, 1) });
+  eq(s.getRange(row, 5).getValue(), '그대로');
 });
 
 console.log('\n' + (fail ? `실패 ${fail}개 / ` : '') + `통과 ${pass}개`);

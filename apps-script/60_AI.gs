@@ -197,6 +197,9 @@ function getAiSettings() {
     }),
     activity: normModel(cfg_('활동용 모델', DEFAULT_MODEL)),
     compile: normModel(cfg_('합본용 모델', DEFAULT_MODEL)),
+    backup: normModel(cfg_('예비 모델', '')),
+    thinkingLow: cfgBool_('생각 줄이기', true),
+    batch: Number(cfg_('한 번에 묶을 학생 수', 5)) || 1,
     presets: presetModelRows_(),
     links: MODEL_LINKS,
     defaults: PROVIDER_DEFAULT_MODEL,
@@ -220,8 +223,8 @@ function saveKeys(obj) {
 }
 
 /**
- * 모델 표 저장 (설정 창의 [저장])
- * @param {{rows:Array, activity:string, compile:string}} p
+ * 모델 표 저장 (설정 창은 바뀔 때마다 자동으로 부른다)
+ * @param {{rows:Array, activity:string, compile:string, backup?:string, thinkingLow?:boolean, batch?:number}} p
  */
 function saveModelSettings(p) {
   var s = sh_(APP.SH.CONFIG);
@@ -237,16 +240,47 @@ function saveModelSettings(p) {
 
   var head = modelTableRow_(s);
   if (!head) { buildConfig(); head = modelTableRow_(s); }
+  var before = readModelRowsAt_(s, head).map(function (r) { return r.model; }).join('|') +
+               '#' + normModel(cfg_('활동용 모델', DEFAULT_MODEL)) + '#' + normModel(cfg_('합본용 모델', DEFAULT_MODEL));
   writeModelTable_(s, head, rows);
 
   var act = normModel(p.activity) || rows[0].model;
   var cmp = normModel(p.compile) || act;
   setCfg_('활동용 모델', act);
   setCfg_('합본용 모델', cmp);
-  var n = refreshModelDropdowns_();
-  return '저장했습니다. 활동용 ' + act + ' · 합본용 ' + cmp +
-         (n ? ' · 시트 ' + n + '곳의 모델 드롭다운을 새로 고쳤습니다.' : '');
+  if (p.backup !== undefined) setCfg_('예비 모델', normModel(p.backup));
+  if (p.thinkingLow !== undefined) setCfg_('생각 줄이기', !!p.thinkingLow);
+  if (p.batch !== undefined) setCfg_('한 번에 묶을 학생 수', Math.max(1, Math.min(10, Number(p.batch) || 1)));
+
+  // 이름이 바뀐 때만 모든 시트의 드롭다운을 새로 입힌다 (연결 확인 결과만 바뀐 저장은 가볍게)
+  var after = rows.map(function (r) { return r.model; }).join('|') + '#' + act + '#' + cmp;
+  var n = before === after ? 0 : refreshModelDropdowns_();
+  return '저장됨 · 활동용 ' + act + ' · 합본용 ' + cmp +
+         (n ? ' · 시트 ' + n + '곳의 모델 드롭다운 갱신' : '');
 }
+
+/**
+ * 시트에서 모델 표를 직접 고치면 [연결 확인]을 "확인 전"으로 바꿔 둔다.
+ * 단순 트리거라 여기서 AI를 부를 수는 없고(구글 제한), 메뉴 ② 창을 열면 자동으로 확인한다.
+ */
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    var s = e.range.getSheet();
+    if (s.getName() !== APP.SH.CONFIG) return;
+    var head = modelTableRow_(s);
+    var r1 = e.range.getRow(), nr = e.range.getNumRows();
+    if (!head || r1 + nr - 1 <= head) return;
+    var c1 = e.range.getColumn(), c2 = c1 + e.range.getNumColumns() - 1;
+    var hit = function (c) { return c1 <= c && c <= c2; };
+    if (!hit(modelCol_('model')) && !hit(modelCol_('company'))) return;
+    for (var r = Math.max(r1, head + 1); r < r1 + nr; r++) {
+      var name = String(s.getRange(r, modelCol_('model')).getValue()).trim();
+      s.getRange(r, modelCol_('status')).setValue(name ? UNCHECKED_MARK + ' — 메뉴 ② 를 열면 자동으로 확인합니다' : '');
+    }
+  } catch (err) {}
+}
+var UNCHECKED_MARK = '⏳ 확인 전';
 
 /* ------------------------------------------------------------ 연결 확인 */
 /**
@@ -379,13 +413,15 @@ function listAvailableModels() {
 
 /* ------------------------------------------------------------- 호출 본체 */
 /**
- * @param {string} system  조립된 프롬프트(규칙 전체)
+ * @param {string} system  조립된 프롬프트(규칙 전체) — 학생이 바뀌어도 똑같아서 회사 쪽 캐시 할인을 받는다
  * @param {string} user    학생 자료
  * @param {string} model
  * @param {string=} provider  회사를 직접 지정할 때(연결 테스트)
+ * @param {{json?:boolean, schema?:Object, thinking?:boolean}=} opts
+ *        json: JSON 으로만 답하게(묶음 생성) · thinking:false 면 생각 줄이기를 끈다
  * @return {string}
  */
-function callAI_(system, user, model, provider) {
+function callAI_(system, user, model, provider, opts) {
   var m = normModel(model);
   var p = provider || providerOf_(m);
   if (p === 'subscription') throw new Error(SUBSCRIPTION_MODEL + ' 은(는) 셀 수식으로 동작합니다. 메뉴 ⑥ 대신 체크박스를 사용하세요.');
@@ -394,10 +430,57 @@ function callAI_(system, user, model, provider) {
   }
   var key = getKey_(p);
   if (!key) throw new Error(providerLabel(p) + ' API 키가 없습니다. 메뉴 > ② AI 연결 · 모델 설정 에서 입력하세요.');
+  opts = opts || {};
+  if (opts.thinking === undefined) opts.thinking = thinkLow_();
 
-  if (p === 'openai') return callOpenAI_(key, m, system, user);
-  if (p === 'gemini') return callGemini_(key, m, system, user);
-  return callAnthropic_(key, m, system, user);
+  if (p === 'openai') return callOpenAI_(key, m, system, user, opts);
+  if (p === 'gemini') return callGemini_(key, m, system, user, opts);
+  return callAnthropic_(key, m, system, user, opts);
+}
+
+/**
+ * 주 모델이 실패하면 [⚙️ 설정]의 예비 모델로 한 번 더.
+ * @return {{text:string, model:string, backup:boolean, reason?:string}}
+ */
+function callWithBackup_(system, user, model, opts) {
+  try {
+    return { text: callAI_(system, user, model, null, opts), model: normModel(model), backup: false };
+  } catch (e) {
+    var bk = normModel(cfg_('예비 모델', ''));
+    if (!bk || bk === normModel(model) || bk === SUBSCRIPTION_MODEL) throw e;
+    var bp = providerOf_(bk);
+    if (!bp || !getKey_(bp)) throw e;
+    var t = callAI_(system, user, bk, null, opts);
+    return { text: t, model: bk, backup: true, reason: e.hint || e.message };
+  }
+}
+
+/* 실행 한 번 동안만 기억하는 것들 */
+var __thinkLow = null;       // [생각 줄이기] 설정
+var __noThink = {};          // 생각 옵션을 거절한 모델
+var __noJsonMode = {};       // JSON 모드를 거절한 모델
+var __usage = null;          // 토큰 사용량
+
+function thinkLow_() {
+  if (__thinkLow === null) { try { __thinkLow = cfgBool_('생각 줄이기', true); } catch (e) { __thinkLow = true; } }
+  return __thinkLow;
+}
+
+function usageReset_() { __usage = { calls: 0, input: 0, output: 0, cached: 0 }; }
+function usageAdd_(input, output, cached) {
+  if (!__usage) usageReset_();
+  __usage.calls++;
+  __usage.input += Number(input) || 0;
+  __usage.output += Number(output) || 0;
+  __usage.cached += Number(cached) || 0;
+}
+function fmtNum_(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+/** "호출 3번 · 입력 12,340 · 출력 5,210 토큰 (그중 캐시 할인 8,000)" */
+function usageText_() {
+  var u = __usage;
+  if (!u || !u.calls) return '';
+  return '호출 ' + u.calls + '번 · 입력 ' + fmtNum_(u.input) + ' · 출력 ' + fmtNum_(u.output) + ' 토큰' +
+         (u.cached ? ' (입력 중 ' + fmtNum_(u.cached) + '은 캐시 할인)' : '');
 }
 
 function fetchJson_(url, options, label) {
@@ -429,33 +512,68 @@ function fetchJson_(url, options, label) {
   throw err;
 }
 
-function callOpenAI_(key, model, system, user) {
-  var json = fetchJson_('https://api.openai.com/v1/chat/completions', {
-    method: 'post', contentType: 'application/json',
-    headers: { Authorization: 'Bearer ' + key },
-    payload: JSON.stringify({
-      model: model,
-      messages: [{ role: 'system', content: system }, { role: 'user', content: user }]
-    }),
-    muteHttpExceptions: true
-  }, 'OpenAI');
+/** 400 오류가 특정 옵션 때문인지 */
+function rejects_(e, re) { return e && e.code === 400 && re.test(String(e.message || '')); }
+
+function callOpenAI_(key, model, system, user, opts) {
+  opts = opts || {};
+  var body = {
+    model: model,
+    messages: [{ role: 'system', content: system }, { role: 'user', content: user }]
+  };
+  var think = opts.thinking && !__noThink[model] ? thinkingFor('openai', model) : null;
+  if (think) body.reasoning_effort = think.reasoning_effort;
+  if (opts.json && !__noJsonMode[model]) body.response_format = { type: 'json_object' };
+  var json;
+  try {
+    json = fetchJson_('https://api.openai.com/v1/chat/completions', {
+      method: 'post', contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + key },
+      payload: JSON.stringify(body), muteHttpExceptions: true
+    }, 'OpenAI');
+  } catch (e) {
+    if (think && rejects_(e, /reasoning/i)) { __noThink[model] = true; return callOpenAI_(key, model, system, user, opts); }
+    if (body.response_format && rejects_(e, /response_format|json/i)) { __noJsonMode[model] = true; return callOpenAI_(key, model, system, user, opts); }
+    throw e;
+  }
+  var u = json.usage || {};
+  usageAdd_(u.prompt_tokens, u.completion_tokens, u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens);
   var c = json.choices && json.choices[0];
   var txt = c && c.message && c.message.content;
   if (!txt) throw new Error('OpenAI 응답이 비었습니다.');
   return String(txt).trim();
 }
 
-function callGemini_(key, model, system, user) {
+function callGemini_(key, model, system, user, opts) {
+  opts = opts || {};
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
             encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
-  var json = fetchJson_(url, {
-    method: 'post', contentType: 'application/json',
-    payload: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [{ text: user }] }]
-    }),
-    muteHttpExceptions: true
-  }, 'Gemini');
+  var body = {
+    systemInstruction: { parts: [{ text: system }] },
+    contents: [{ role: 'user', parts: [{ text: user }] }]
+  };
+  var gen = {};
+  var think = opts.thinking && !__noThink[model] ? thinkingFor('gemini', model) : null;
+  if (think) gen.thinkingConfig = think;
+  if (opts.json && !__noJsonMode[model]) {
+    gen.responseMimeType = 'application/json';
+    if (opts.schema) gen.responseSchema = opts.schema;
+  }
+  if (Object.keys(gen).length) body.generationConfig = gen;
+  var json;
+  try {
+    json = fetchJson_(url, {
+      method: 'post', contentType: 'application/json',
+      payload: JSON.stringify(body), muteHttpExceptions: true
+    }, 'Gemini');
+  } catch (e) {
+    if (think && rejects_(e, /thinking/i)) { __noThink[model] = true; return callGemini_(key, model, system, user, opts); }
+    if (gen.responseMimeType && rejects_(e, /schema|mime|json/i)) { __noJsonMode[model] = true; return callGemini_(key, model, system, user, opts); }
+    throw e;
+  }
+  var um = json.usageMetadata || {};
+  usageAdd_(um.promptTokenCount, (Number(um.candidatesTokenCount) || 0) + (Number(um.thoughtsTokenCount) || 0),
+            um.cachedContentTokenCount);
   var cand = json.candidates && json.candidates[0];
   var parts = cand && cand.content && cand.content.parts;
   var txt = '';
@@ -464,16 +582,21 @@ function callGemini_(key, model, system, user) {
   return txt.trim();
 }
 
-function callAnthropic_(key, model, system, user) {
+function callAnthropic_(key, model, system, user, opts) {
+  // 규칙 부분에 캐시 표시 — 5분 안에 같은 활동을 다시 부르면 이 부분은 할인된 값으로 읽는다
   var json = fetchJson_('https://api.anthropic.com/v1/messages', {
     method: 'post', contentType: 'application/json',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
     payload: JSON.stringify({
-      model: model, max_tokens: 2000, system: system,
+      model: model, max_tokens: (opts && opts.json) ? 8000 : 2000,
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: user }]
     }),
     muteHttpExceptions: true
   }, 'Anthropic');
+  var u = json.usage || {};
+  usageAdd_((Number(u.input_tokens) || 0) + (Number(u.cache_read_input_tokens) || 0) + (Number(u.cache_creation_input_tokens) || 0),
+            u.output_tokens, u.cache_read_input_tokens);
   var txt = '';
   (json.content || []).forEach(function (b) { if (b.type === 'text') txt += b.text; });
   if (!txt) throw new Error('Anthropic 응답이 비었습니다.');

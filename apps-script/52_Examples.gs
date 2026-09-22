@@ -229,7 +229,7 @@ function suggestExamples_(act, existing, want, model) {
     user = '기존 예시가 없다. 위 활동 설명과 입력 항목만 보고 예시 ' + want + '개를 만들어라.';
   }
 
-  var raw = callAI_(sys, user, model);
+  var raw = callWithBackup_(sys, user, model).text;
   var obj = parseJsonLoose_(raw);
   var arr = (obj && Array.isArray(obj.examples)) ? obj.examples
           : (Array.isArray(obj) ? obj : []);

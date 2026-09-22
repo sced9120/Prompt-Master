@@ -53,13 +53,14 @@ function onboardStatus() {
     if (getKey_(p)) { st.hasKey = true; st.keyNames.push(p); }
   });
   if (st.installed) {
-    try { st.rosterCount = getRoster_().length; } catch (e) {}
+    try { st.rosterCount = getRoster_().length; st.rosterMode = rosterMode_(); } catch (e) {}
     try {
       st.activities = getActivities_().map(function (a) {
         return { key: a.key, name: a.name, inSheet: a.inSheet, exSheet: a.exSheet };
       });
     } catch (e) {}
     try {
+      st.backupModel = normModel(cfg_('예비 모델', ''));
       st.models = modelChoices_().filter(function (m) { return m.indexOf('구독') < 0; });
       st.defaultModel = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
       st.compileModel = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
@@ -103,11 +104,21 @@ function onboardSaveKey(p) {
     recordModelStatus_(res, { company: guess ? '자동' : providerLabel(provider), level: preset.level, memo: preset.memo });
   } catch (e) {}
   if (res.ok) {
-    setCfg_('활동용 모델', model);
-    setCfg_('합본용 모델', model);
+    // 이미 다른 회사 키로 잘 쓰고 있으면 주 모델은 두고, 새 모델을 예비 모델로 둔다
+    var cur = normModel(cfg_('활동용 모델', DEFAULT_MODEL));
+    var curProv = providerOf_(cur);
+    var keep = curProv && curProv !== 'subscription' && curProv !== provider && !!getKey_(curProv);
+    var msg = '연결됐습니다 · ' + model + ' · ' + res.sec + '초. ';
+    if (keep) {
+      if (!normModel(cfg_('예비 모델', ''))) { setCfg_('예비 모델', model); msg += '지금 쓰는 ' + cur + ' 은 그대로 두고, ' + model + ' 을 예비 모델로 두었습니다(주 모델이 한도 초과 등으로 실패하면 대신 씀).'; }
+      else msg += '지금 쓰는 ' + cur + ' 은 그대로 두었습니다. 바꾸려면 메뉴 ② [모델] 탭에서 고르세요.';
+    } else {
+      setCfg_('활동용 모델', model);
+      setCfg_('합본용 모델', model);
+      msg += '활동용·합본용 모델을 이것으로 맞췄습니다.';
+    }
     try { refreshModelDropdowns_(); } catch (e) {}
-    return { ok: true, model: model, status: onboardStatus(),
-             message: '연결됐습니다 · ' + model + ' · ' + res.sec + '초. 활동용·합본용 모델을 이것으로 맞췄습니다.' };
+    return { ok: true, model: model, kept: keep, status: onboardStatus(), message: msg };
   }
   return { ok: false, model: model, kind: res.kind || '', status: onboardStatus(), message: res.message };
 }
@@ -128,38 +139,21 @@ function setCfg_(key, value) {
  * 탭·쉼표·여러 칸 공백 어느 것으로 나뉘어 있어도 받고,
  * "1반 3번 김하늘" 같은 한 줄 표기도 받는다.
  */
-function parseRoster_(text) {
-  var out = [];
-  String(text || '').split(/\r?\n/).forEach(function (line) {
-    var t = line.trim();
-    if (!t) return;
-    if (/^(반|학급)\s*[\t, ]/.test(t)) return;              // 머리글 줄 건너뛰기
-    var cells = t.split(/\t|,|\s{2,}/).map(function (x) { return x.trim(); }).filter(String);
-    if (cells.length < 3) cells = t.split(/\s+/);
-    var cls = String(cells[0] || '').replace(/[^0-9]/g, '');
-    var no = String(cells[1] || '').replace(/[^0-9]/g, '');
-    var name = String(cells[2] || '').trim();
-    var grade = String(cells[3] || '').replace(/[^1-5]/g, '');
-    if (!cls || !no || !name) return;
-    out.push([Number(cls), Number(no), name, grade ? Number(grade) : '']);
-  });
-  return out;
+/** 붙여넣은 명단 → 명단 시트 줄들 (해석은 14_RosterParse.gs) */
+function parseRoster_(text, mode) {
+  var r = parseRosterRows(rosterTextToRows(text), mode || 'class');
+  return r.students.map(function (st) { return rosterRowOf(st, r.mode); });
 }
 
-function onboardPreviewRoster(text) {
-  var rows = parseRoster_(text);
-  return { count: rows.length, sample: rows.slice(0, 3) };
+/** @param {string} text  @param {string=} mode 'class' | 'grade' | 'auto' */
+function onboardPreviewRoster(text, mode) {
+  var r = rosterPreview({ text: text, mode: mode || 'auto' });
+  return { count: r.count, mode: r.mode, warnings: r.warnings,
+           sample: r.students.slice(0, 3).map(studentLabel), skippedCount: r.skippedCount };
 }
 
-function onboardSaveRoster(text) {
-  var rows = parseRoster_(text);
-  if (!rows.length) throw new Error('명단을 알아보지 못했습니다. "1  3  김하늘" 처럼 반, 번호, 이름 순으로 한 줄에 한 명씩 넣어 주세요.');
-  var s = shRequire_(APP.SH.ROSTER);
-  if (s.getLastRow() >= 3) s.getRange(3, 1, s.getLastRow() - 2, 4).clearContent();
-  var need = 2 + rows.length;
-  if (s.getMaxRows() < need) s.insertRowsAfter(s.getMaxRows(), need - s.getMaxRows() + 5);
-  s.getRange(3, 1, rows.length, 4).setValues(rows);
-  syncRoster();
+function onboardSaveRoster(text, mode) {
+  rosterSave({ text: text, mode: mode || 'auto' });
   return onboardStatus();
 }
 
@@ -261,7 +255,7 @@ function buildStart() {
   P('· AI 키 하나.  Gemini 키가 가장 부담이 적습니다(무료 등급 있음). aistudio.google.com 에서 발급.');
   P('· 구글 워크스페이스 Gemini나 Google One AI Premium 구독이 있다면 키 없이도 쓸 수 있습니다.');
   P('   확인법: 빈 셀에  =AI("안녕")  을 넣어 답이 나오면 됩니다.');
-  P('· 학생 명단(반·번호·이름). 엑셀에서 복사해 붙여넣으면 됩니다.');
+  P('· 학생 명단(반·번호·이름, 동아리면 학년까지). 엑셀 양식을 내려받아 채워 올리거나, 복사해 붙여넣으면 됩니다.');
   P('');
 
   H('꼭 알아 두실 것');

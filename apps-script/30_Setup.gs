@@ -11,7 +11,8 @@ function onOpen() {
   m.addItem('② AI 연결 · 모델 설정', 'openApiDialog');
   m.addItem('   모델 연결 테스트', 'testAllModels');
   m.addSeparator();
-  m.addItem('③ 학생 명단 동기화', 'syncRoster');
+  m.addItem('③ 학생 명단 불러오기 (엑셀·붙여넣기)', 'openRosterDialog');
+  m.addItem('   학생 명단 동기화', 'syncRoster');
   m.addSeparator();
   m.addItem('④ 활동 만들기 (AI 마법사) ★', 'openWizard');
   m.addItem('   활동 직접 추가', 'addActivityDialog');
@@ -156,7 +157,10 @@ function buildConfig() {
     ['합본용 모델', DEFAULT_MODEL, '여러 활동을 한 편으로 압축할 때 쓰는 모델. 대개 활동용과 같아도 되고, 글자수를 잘 못 맞추면 한 단계 위 모델로.'],
     ['학생 이름 마스킹', true, 'TRUE면 학생 이름을 AI에 보내지 않습니다. 개인정보 보호 권장값.'],
     ['결과 자동검증', true, 'TRUE면 생성 직후 기재 금지사항·분량·어미를 자동 점검합니다.'],
-    ['1회 최대 생성 건수', 25, '한 번에 처리할 최대 학생 수. 실행 시간(약 6분) 제한 때문에 넘치면 나눠서 처리합니다.']
+    ['1회 최대 생성 건수', 25, '한 번에 처리할 최대 학생 수. 실행 시간(약 6분) 제한 때문에 넘치면 나눠서 처리합니다.'],
+    ['예비 모델', '', '활동용·합본용 모델이 한도 초과·서버 오류 등으로 실패하면 이 모델로 한 번 더 시도합니다. 다른 회사 모델을 적어 두면 좋습니다(예: gpt-5.6-luna). 비우면 쓰지 않습니다.'],
+    ['생각 줄이기', true, 'TRUE면 모델의 생각(추론) 단계를 줄여 더 빠르고 싸게 씁니다. 생각 토큰은 출력 요금으로 청구됩니다. 세특 품질에는 거의 영향이 없습니다.'],
+    ['한 번에 묶을 학생 수', 5, '여러 학생을 한 번의 호출로 생성합니다. 규칙 부분을 한 번만 보내 비용과 호출 횟수가 줄어듭니다. 1이면 한 명씩(가장 꼼꼼, 가장 비쌈). 최대 10.']
   ];
   rows.forEach(function (r) { if (existing.hasOwnProperty(r[0])) r[1] = existing[r[0]]; });
   s.getRange(4, 1, rows.length, 3).setValues(rows);
@@ -283,18 +287,8 @@ function refreshActivityValidation_() {
 /* -------------------------------------------------------------- 학생명단 */
 function buildRoster() {
   var s = shOrCreate_(APP.SH.ROSTER);
-  if (s.getLastRow() > 2) return;
-  s.clear();
-  var head = ['반', '번호', '이름', '성취수준'];
-  s.getRange(2, 1, 1, head.length).setValues([head]);
-  styleHeader_(s, 2, head.length);
-  s.getRange(3, 1, 500, 4).setBackground(APP.COLORS.input);
-  s.getRange(3, 4, 500, 1).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList(['1', '2', '3', '4', '5'], true).build());
-  [70, 70, 110, 100].forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
-  s.setFrozenRows(2);
-  banner_(s, 4, '👤 학생명단',
-    '반/번호/이름을 입력한 뒤 메뉴 ③ 학생 명단 동기화 를 누르면 모든 활동 시트에 반영됩니다. 성취수준(1~5)은 과세특에만 쓰이며 비워 둬도 됩니다.');
+  if (s.getLastRow() > 2) return;          // 이미 명단이 있으면 보존
+  writeRosterSheet_([], rosterMode_());    // 머리글 방식(반·번호 / 학년·반·번호)은 그대로 둔다
 }
 
 /* ---------------------------------------------------------------- 검토 */
@@ -304,8 +298,10 @@ function buildReview() {
   s.getRange('A1').setValue('✅ 검토  —  반·번호·기록종류를 고르면 그 학생의 최종본을 불러옵니다. 나이스 입력 전 확인용.')
     .setFontSize(13).setFontWeight('bold');
   s.getRange(3, 1, 1, 5).setValues([['반', '번호', '기록종류', '이름', '최종본 (자동)']]);
+  s.getRange(3, 1).setValue(classHead_());
   styleHeader_(s, 3, 5);
   s.getRange('A4:C4').setBackground(APP.COLORS.input);
+  s.getRange('A4').setNumberFormat('@');   // "2-3"(학년-반)이 날짜로 바뀌지 않게
 
   var recKeys = getRecordTypes_().map(function (r) { return r.key; });
   if (recKeys.length) {
