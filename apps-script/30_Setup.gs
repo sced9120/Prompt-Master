@@ -14,8 +14,8 @@ function onOpen() {
   m.addItem('③ 학생 명단 불러오기 (엑셀·붙여넣기)', 'openRosterDialog');
   m.addItem('   학생 명단 동기화', 'syncRoster');
   m.addSeparator();
-  m.addItem('④ 활동 만들기 (AI 마법사) ★', 'openWizard');
-  m.addItem('   활동 직접 추가', 'addActivityDialog');
+  m.addItem('④ 활동 만들기 · 입력 항목 바꾸기 ★', 'openWizard');
+  m.addItem('   활동 직접 추가 (질문에 답하기)', 'addActivityDialog');
   m.addItem('   활동 복제', 'duplicateActivityDialog');
   m.addItem('   활동 삭제', 'deleteActivityDialog');
   m.addSeparator();

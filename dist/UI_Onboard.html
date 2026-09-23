@@ -283,18 +283,26 @@ function renderRoster(b, done) {
 /* ───────────────────────── 4. 첫 활동 */
 function renderAct(b, done) {
   b.innerHTML =
-    '<div class="note">세특을 만들 <b>활동</b>을 하나 정의합니다. 편한 말로 설명하면 AI가 ' +
-    '입력 항목과 예시 초안을 제안하고, 입력 시트까지 한 번에 만듭니다.</div>' +
+    '<div class="note">세특을 만들 <b>활동</b>을 하나 정의합니다. <b>입력 항목을 직접 적어</b> 바로 만들거나, ' +
+    '설명만 적고 AI에게 항목·예시 초안을 맡길 수 있습니다.</div>' +
     (done ? '<div class="note">이미 만든 활동: <b>' + ST.activities.map(function (a) { return a.name; }).join(', ') + '</b></div>' : '') +
     '<div class="row"><div><label>어떤 기록인가요</label><select id="rec"></select></div>' +
     '<div><label>교과 · 영역</label><select id="sub"></select></div></div>' +
-    '<label>활동 설명</label>' +
-    '<textarea id="desc" rows="4" placeholder="예) 2학기에 통합과학 실험 보고서를 씁니다. 가설을 세우고 실험을 직접 설계해서 결과를 해석하고, 오차 원인과 개선점까지 적게 했어요."></textarea>' +
-    '<div class="note">무엇을 시켰는지, 학생이 무엇을 제출했는지 정도면 충분합니다. 창의적 체험활동이나 행동특성이면 교과는 <b>공통</b>을 고르세요.</div>' +
-    '<div class="actions"><button class="primary" id="bAct">활동 만들기</button>' +
-    '<span class="note" style="margin:0">20초쯤 걸립니다</span></div>' +
+    '<label>활동 이름</label>' +
+    '<input id="aName" placeholder="예) 데이터 탐구 보고서">' +
+    '<label>입력 항목 <span style="font-weight:400;color:var(--muted)">— 학생 한 명당 채울 칸. 쉼표로 구분</span></label>' +
+    '<input id="aCols" placeholder="예) 탐구 주제, 선정 이유, 탐구 과정, 알게 된 점">' +
+    '<div id="aSets" class="note" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center"></div>' +
+    '<div class="note">여기 적은 대로 시트의 열 머리글이 됩니다. 비워 두면 AI가 아래 설명을 보고 정합니다.</div>' +
+    '<label>활동 설명 <span style="font-weight:400;color:var(--muted)">— AI에게 맡길 때 필요</span></label>' +
+    '<textarea id="desc" rows="3" placeholder="예) 2학기에 통합과학 실험 보고서를 씁니다. 가설을 세우고 실험을 직접 설계해서 결과를 해석하고, 오차 원인과 개선점까지 적게 했어요."></textarea>' +
+    '<div class="note">창의적 체험활동이나 행동특성이면 교과는 <b>공통</b>을 고르세요.</div>' +
+    '<div class="actions"><button class="primary" id="bActDirect">적은 대로 바로 만들기</button>' +
+    '<button id="bAct">AI에게 맡기기 (예시까지)</button>' +
+    '<span class="note" style="margin:0">AI는 20초쯤 걸립니다</span></div>' +
     '<div class="msg" id="mAct"></div>';
 
+  var sets = [];
   google.script.run.withSuccessHandler(function (c) {
     CTX = c;
     c.records.forEach(function (r) {
@@ -308,12 +316,28 @@ function renderAct(b, done) {
       if (s.key === c.defaultSubject) o.selected = true;
       if ($('sub')) $('sub').appendChild(o);
     });
+    var draw = function () {
+      if (!$('aSets')) return;
+      var rk = $('rec').value;
+      sets = (c.columnSets || []).filter(function (x) { return !x.for || !x.for.length || x.for.indexOf(rk) >= 0; });
+      $('aSets').innerHTML = sets.length ? '많이 쓰는 묶음: ' + sets.map(function (x, i) {
+        return '<a href="#" data-i="' + i + '" style="text-decoration:none;border:1px solid var(--line);border-radius:12px;padding:2px 9px">' +
+               esc(x.label) + '</a>'; }).join('') : '';
+      [].forEach.call($('aSets').querySelectorAll('a'), function (a) {
+        a.onclick = function (e) { e.preventDefault(); $('aCols').value = sets[+a.dataset.i].cols.join(', '); };
+      });
+    };
+    if ($('rec')) $('rec').onchange = draw;
+    draw();
   }).withFailureHandler(function (e) { say('mAct', e.message, 'err'); }).wizardContext();
 
-  $('bAct').onclick = function () {
-    var btn = this, text = $('desc').value.trim();
-    if (!text) { say('mAct', '활동 설명을 적어 주세요.', 'err'); return; }
-    busy(btn, true, '만드는 중'); say('mAct', 'AI가 입력 항목과 예시를 짜고 있습니다…');
+  var send = function (btn, direct) {
+    var text = $('desc').value.trim(), colsRaw = $('aCols').value.trim(), name = $('aName').value.trim();
+    if (direct && !colsRaw) { say('mAct', '입력 항목을 적어 주세요. 위 묶음을 눌러 넣어도 됩니다.', 'err'); return; }
+    if (direct && !name) { say('mAct', '활동 이름을 적어 주세요.', 'err'); return; }
+    if (!direct && !text && !colsRaw) { say('mAct', '활동 설명을 적거나 입력 항목을 직접 적어 주세요.', 'err'); return; }
+    busy(btn, true, '만드는 중');
+    say('mAct', direct ? '시트를 만드는 중…' : 'AI가 입력 항목과 예시를 짜고 있습니다…');
     google.script.run
       .withSuccessHandler(function (r) {
         busy(btn, false); ST = r.status; ACT = r.made;
@@ -321,8 +345,11 @@ function renderAct(b, done) {
         OPEN = 'test'; setTimeout(draw, 600);
       })
       .withFailureHandler(function (e) { busy(btn, false); say('mAct', e.message, 'err'); })
-      .onboardCreateActivity({ text: text, recordKey: $('rec').value, subjectKey: $('sub').value, model: ST.defaultModel });
+      .onboardCreateActivity({ text: text, recordKey: $('rec').value, subjectKey: $('sub').value,
+                               model: ST.defaultModel, columns: colsRaw || null, name: name, direct: !!direct });
   };
+  $('bActDirect').onclick = function () { send(this, true); };
+  $('bAct').onclick = function () { send(this, false); };
 }
 
 /* ───────────────────────── 5. 시험 생성 */

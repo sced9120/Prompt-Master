@@ -96,7 +96,7 @@ t('압축 프롬프트도 같은 키만 씀', () => {
 
 console.log('\n[활동 시트 열 구조]');
 t('입력 시트가 colOf_ 로 찾는 열을 모두 가짐', () => {
-  const i = all.indexOf('function buildActivityInputSheet_(');
+  const i = all.indexOf('function layoutInputSheet_(');
   const body = all.slice(i, i + 900);
   const fixed = [...body.matchAll(/'([^']+)'/g)].map(x => x[1]);
   ['생성', '모델', 'AI 결과', '최종본', '바이트', '검증', '반', '번호', '이름', '성취수준']
@@ -190,6 +190,23 @@ t('HTML 이 호출하는 서버 함수가 모두 정의되어 있음', () => {
   const bad = calls.filter(n => !defined.has(n));
   ok(calls.length >= 5, '검출된 호출이 너무 적음: ' + calls.join(','));
   ok(!bad.length, '없는 함수: ' + bad.join(', '));
+});
+
+console.log('\n[활동 입력 항목]');
+t('직접 적은 항목을 다루는 함수가 모두 있음', () => {
+  const defined = new Set([...all.matchAll(/function\s+([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]));
+  ['validateColumns_', 'updateActivity_', 'layoutInputSheet_', 'wizardApply', 'wizardCreate']
+    .forEach(n => ok(defined.has(n), '없는 함수: ' + n));
+});
+t('입력 항목 묶음 프리셋이 있음', () => {
+  ok(/var PRESET_COLUMN_SETS = \[/.test(src['00_Presets.gs']), 'PRESET_COLUMN_SETS 없음');
+  const n = (src['00_Presets.gs'].match(/cols: \[/g) || []).length;
+  ok(n >= 6, '묶음 ' + n + '개');
+});
+t('만들기와 바꾸기가 같은 검사를 씀', () => {
+  const i = all.indexOf('function createActivity_(');
+  const body = all.slice(i, all.indexOf('\n}', i));
+  ok(/validateColumns_\(/.test(body), 'createActivity_ 가 validateColumns_ 를 쓰지 않음');
 });
 
 console.log('\n[AI 모델 기본값]');

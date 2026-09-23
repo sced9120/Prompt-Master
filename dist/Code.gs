@@ -1,5 +1,5 @@
 /******************************************************************************
- * 세특 작성 도우미 v3.2.0 — 설치용 합본
+ * 세특 작성 도우미 v3.3.0 — 설치용 합본
  *
  * 이 파일 하나에 모든 스크립트가 들어 있습니다.
  * Apps Script 편집기에서 Code.gs 의 내용을 전부 지우고 이 파일을 통째로 붙여넣으세요.
@@ -10,7 +10,7 @@
  * 고칠 때는 apps-script/ 의 해당 파일을 고치고 node tools/build.js 를 다시 돌리세요.
  * 이 파일을 직접 고치면 다음 빌드 때 덮어써집니다.
  *
- * 빌드: 2026-09-22  ·  원본 17개 파일
+ * 빌드: 2026-09-23  ·  원본 17개 파일
  *****************************************************************************/
 
 /* ==========================================================================
@@ -27,7 +27,7 @@
  */
 
 var APP = {
-  VERSION: 'v3.2.0',
+  VERSION: 'v3.3.0',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -383,6 +383,35 @@ var MODEL_LINKS = {
   openai: 'https://platform.openai.com/docs/models',
   anthropic: 'https://platform.claude.com/docs/en/models/overview'
 };
+
+/* ============================================================ 입력 항목 */
+/**
+ * 활동을 만들 때 고를 수 있는 [입력 항목] 묶음.
+ * 선생님이 직접 적는 것이 기본이고, 이 목록은 "이렇게들 많이 쓴다"는 출발점입니다.
+ * for: 어울리는 기록종류 키. 비어 있으면 어디서나 보여 줍니다.
+ */
+var PRESET_COLUMN_SETS = [
+  { label: '탐구·보고서', for: ['과세특', '개세특', '동아리', '진로'],
+    cols: ['탐구 주제', '선정 이유', '탐구 과정', '알게 된 점', '한계와 개선점'] },
+  { label: '실험', for: ['과세특', '동아리'],
+    cols: ['실험 주제', '세운 가설', '실험 설계', '결과 해석', '오차와 개선점'] },
+  { label: '수업 참여', for: ['과세특', '개세특'],
+    cols: ['단원·주제', '수업 중 모습', '질문·발표', '어려움과 극복', '성장한 점'] },
+  { label: '발표·토론', for: ['과세특', '동아리', '자율'],
+    cols: ['주제', '맡은 역할', '준비 과정', '발표·토론 내용', '배운 점'] },
+  { label: '독서 연계', for: ['과세특', '개세특', '진로'],
+    cols: ['읽은 책·계기', '인상 깊은 내용', '교과와 연결한 점', '더 알아본 것'] },
+  { label: '제작·산출물', for: ['과세특', '동아리', '진로'],
+    cols: ['만든 것', '설계·계획', '만드는 과정', '어려움과 해결', '결과와 소감'] },
+  { label: '자율·자치', for: ['자율'],
+    cols: ['활동명', '맡은 역할', '준비와 과정', '기여한 점', '변화·성장'] },
+  { label: '진로 탐색', for: ['진로'],
+    cols: ['관심 분야', '탐색 방법', '알게 된 점', '진로 계획의 변화'] },
+  { label: '행동특성', for: ['행발'],
+    cols: ['학습 태도', '인성·관계', '자기관리', '성장한 점', '보완할 점'] },
+  { label: '간단하게', for: [],
+    cols: ['무엇을 했나', '어떻게 했나', '무엇을 알게 되었나'] }
+];
 
 
 /* ==========================================================================
@@ -1416,8 +1445,8 @@ function onOpen() {
   m.addItem('③ 학생 명단 불러오기 (엑셀·붙여넣기)', 'openRosterDialog');
   m.addItem('   학생 명단 동기화', 'syncRoster');
   m.addSeparator();
-  m.addItem('④ 활동 만들기 (AI 마법사) ★', 'openWizard');
-  m.addItem('   활동 직접 추가', 'addActivityDialog');
+  m.addItem('④ 활동 만들기 · 입력 항목 바꾸기 ★', 'openWizard');
+  m.addItem('   활동 직접 추가 (질문에 답하기)', 'addActivityDialog');
   m.addItem('   활동 복제', 'duplicateActivityDialog');
   m.addItem('   활동 삭제', 'deleteActivityDialog');
   m.addSeparator();
@@ -1903,11 +1932,25 @@ function onboardSaveRoster(text, mode) {
 }
 
 /* -------------------------------------------------------------- 4단계 */
+/**
+ * @param {{text:string, recordKey:string, subjectKey:string, model:string,
+ *          columns?:(string|string[]), name?:string, direct?:boolean}} p
+ *   direct: AI 없이 적어 준 항목 그대로 만든다
+ */
 function onboardCreateActivity(p) {
-  var def = wizardSuggest({
-    text: p.text, recordKey: p.recordKey, subjectKey: p.subjectKey,
-    model: p.model, count: 2
-  });
+  var cols = p.columns ? validateColumns_(p.columns) : null;
+  var def;
+  if (p.direct) {
+    if (!cols) throw new Error('입력 항목을 적어 주세요.');
+    var name = String(p.name || '').trim() || String(p.text || '').trim().slice(0, 12) || '활동';
+    def = { name: name, key: name, columns: cols, desc: String(p.text || '').trim(),
+            recordKey: p.recordKey, subjectKey: p.subjectKey, examples: [] };
+  } else {
+    def = wizardSuggest({
+      text: p.text, recordKey: p.recordKey, subjectKey: p.subjectKey,
+      model: p.model, count: 2, columns: cols, name: p.name
+    });
+  }
   var made = wizardCreate(def);
   return { made: made, def: def, status: onboardStatus() };
 }
@@ -2078,14 +2121,25 @@ function buildHelp() {
   P('   링크를 연 순간 [사본 만들기] 창이 바로 떠서, 코드까지 통째로 복사됩니다.');
   P('   단, 자동 생성 트리거와 수업관찰 웹앱 배포는 사본마다 각자 한 번씩 눌러야 합니다.');
 
-  H('2. 활동 만들기 — 마법사를 쓰세요');
-  P('메뉴 ④ 활동 만들기 (AI 마법사) 를 열고, 활동을 편한 말로 설명합니다.');
-  P('  예) "통합과학 실험 보고서인데 가설, 실험 설계, 결과 해석, 오차와 개선점을 받았어요"');
-  P('AI가 입력 항목과 예시 초안을 제안합니다. 항목을 고친 뒤 [이 활동 만들기]를 누르면');
-  P('입력 시트와 예시 시트가 한 번에 만들어집니다.');
+  H('2. 활동 만들기 — 입력 항목은 직접 적어도, AI에게 맡겨도 됩니다');
+  P('메뉴 ④ 활동 만들기 · 입력 항목 바꾸기 를 엽니다. 두 가지 길이 있습니다.');
+  P('');
+  P('① 직접 적기 (빠르고 비용 없음)');
+  P('  · [활동 이름]과 [입력 항목]을 적고 [입력 항목대로 바로 만들기].');
+  P('  · 입력 항목은 쉼표로 구분합니다. 예) 탐구 주제, 선정 이유, 탐구 과정, 알게 된 점, 한계와 개선점');
+  P('  · 아래 [많이 쓰는 묶음]을 누르면 기록종류에 맞는 항목 묶음이 한 번에 채워집니다. 거기서 고쳐 쓰세요.');
+  P('  · 여기 적은 이름이 그대로 입력 시트의 열 머리글이 됩니다.');
+  P('');
+  P('② AI에게 맡기기');
+  P('  · 활동을 편한 말로 설명하고 [AI 초안 만들기]. 예) "통합과학 실험 보고서인데 가설, 실험 설계, 결과 해석, 오차와 개선점을 받았어요"');
+  P('  · 입력 항목을 적어 두면 AI도 그 항목을 그대로 쓰고, 예시만 만들어 줍니다.');
+  P('  · 예시 개수를 1~3개로 고를 수 있고, 만들어진 예시는 예시 시트에 저장됩니다.');
+  P('');
+  P('③ 나중에 입력 항목 바꾸기');
+  P('  · 같은 창 맨 위에서 [이미 만든 활동의 입력 항목 고치기]를 고르면 항목을 더하거나 빼거나 순서를 바꿀 수 있습니다.');
+  P('  · 학생이 채워 둔 자료는 항목 이름을 따라 옮겨집니다. 이름이 바뀐 항목은 새 항목으로 보고 비웁니다(창에서 미리 알려 줍니다).');
+  P('  · AI 결과·최종본·예시는 그대로 남습니다.');
   P('[프롬프트 미리보기]를 누르면 실제로 AI에게 갈 문장을 확인할 수 있습니다.');
-  P('마법사를 쓰지 않고 [활동 직접 추가]로 손수 만들 수도 있습니다.');
-  P('예시 개수를 1~3개로 골라 함께 만들 수 있고, 만들어진 예시는 예시 시트에 그대로 저장됩니다.');
 
   H('3. 예시 채우기 — 품질을 가장 크게 좌우합니다');
   P('「활동명 ▸예시」 시트에 모범 예시를 채웁니다. 예시가 한 개라도 있으면 결과의 톤과 구조가 눈에 띄게 안정됩니다.');
@@ -2463,15 +2517,7 @@ function createActivity_(def) {
     if (a.name === name) throw new Error('같은 활동명이 이미 있습니다: ' + name + ' (최종취합에서 구분되지 않습니다)');
   });
 
-  var cols = parseColumns(def.columns);
-  if (!cols.length) throw new Error('입력 항목을 1개 이상 지정하세요.');
-  var seen = {};
-  cols.forEach(function (c) {
-    if (RESERVED_NAMES.indexOf(c) >= 0) throw new Error('입력 항목에 "' + c + '"은(는) 쓸 수 없습니다. 시스템이 쓰는 이름입니다.');
-    if (seen[c]) throw new Error('입력 항목이 중복됩니다: ' + c);
-    seen[c] = 1;
-  });
-  if (cols.length > 12) throw new Error('입력 항목은 12개 이하로 해 주세요.');
+  var cols = validateColumns_(def.columns);
   var recs = getRecordTypes_();
   var rec = findByKey(recs, def.recordKey) || recs[0];
   var chars = Number(def.chars || 0) || rec.chars;
@@ -2491,7 +2537,11 @@ function createActivity_(def) {
 }
 
 function buildActivityInputSheet_(key, name, cols, rec) {
-  var s = ss_().insertSheet(sheetNameIn_(key));
+  return layoutInputSheet_(ss_().insertSheet(sheetNameIn_(key)), name, cols, rec);
+}
+
+/** 입력 시트의 머리말·헤더·폭·서식 (활동 만들 때와 입력 항목 바꿀 때 함께 씀) */
+function layoutInputSheet_(s, name, cols, rec) {
   var head = ['반', '번호', '이름', '성취수준']
     .concat(cols)
     .concat(['생성', '모델', 'AI 결과', '최종본', '바이트', '검증']);
@@ -2526,6 +2576,120 @@ function buildActivityInputSheet_(key, name, cols, rec) {
   s.getRange(APP.DATA_ROW, 1, 500, 4).setBackground(APP.COLORS.lock);
   try { applyModelDropdown_(s, 500); } catch (e) {}   // 비워 두면 [⚙️ 설정]의 활동용 모델
   return s;
+}
+
+/**
+ * 이미 만든 활동의 [입력 항목]·이름·개요 바꾸기.
+ * 학생이 채워 둔 자료는 항목 이름으로 따라간다. 이름이 바뀐 항목은 새 항목으로 보고 비운다.
+ * @param {string} key
+ * @param {{name?:string, columns:(string|string[]), desc?:string}} p
+ * @return {{kept:string[], added:string[], removed:string[], rows:number}}
+ */
+function updateActivity_(key, p) {
+  var act = getActivity_(key);
+  if (!act) throw new Error('활동을 찾을 수 없습니다: ' + key);
+  var recs = getRecordTypes_();
+  var rec = findByKey(recs, act.recordKey) || recs[0];
+  var oldCols = parseColumns(act.columns);
+  var cols = validateColumns_(p.columns);
+  var name = String(p.name || act.name).trim() || act.name;
+  if (name !== act.name) {
+    if (RESERVED_NAMES.indexOf(name) >= 0) throw new Error('"' + name + '"은(는) 시스템이 쓰는 이름이라 활동명으로 쓸 수 없습니다.');
+    getActivities_().forEach(function (a) {
+      if (a.key !== key && a.name === name) throw new Error('같은 활동명이 이미 있습니다: ' + name);
+    });
+  }
+  var desc = p.desc === undefined ? act.desc : String(p.desc);
+
+  var moved = { kept: [], added: [], removed: [] };
+  cols.forEach(function (c) { (oldCols.indexOf(c) >= 0 ? moved.kept : moved.added).push(c); });
+  oldCols.forEach(function (c) { if (cols.indexOf(c) < 0) moved.removed.push(c); });
+
+  // 1) 입력 시트 — 학생별 자료를 항목 이름으로 옮겨 담는다
+  var rows = 0;
+  var inS = sh_(act.inSheet);
+  if (inS) {
+    var head = APP.HEAD_ROW, first = APP.DATA_ROW;
+    var lastRow = inS.getLastRow(), lastCol = inS.getLastColumn();
+    var oldHead = inS.getRange(head, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
+    var ix = function (n) { return oldHead.indexOf(n); };
+    var keep = ['생성', '모델', 'AI 결과', '최종본', '검증'];
+    var data = lastRow >= first ? inS.getRange(first, 1, lastRow - first + 1, lastCol).getValues() : [];
+    var out = data.map(function (r) {
+      var row = [r[0], r[1], r[2], r[3]];
+      cols.forEach(function (c) { var i = ix(c); row.push(i >= 0 ? r[i] : ''); });
+      keep.forEach(function (h) { var i = ix(h); row.push(i >= 0 ? r[i] : (h === '생성' ? false : '')); });
+      return row;
+    }).filter(function (r) { return String(r[0]).trim() !== '' || String(r[2]).trim() !== ''; });
+    rows = out.length;
+
+    inS.clear();
+    layoutInputSheet_(inS, name, cols, rec);
+    if (out.length) {
+      var n = 4 + cols.length + 6;
+      ensureRows_(inS, first + out.length - 1);
+      inS.getRange(first, 1, out.length, 1).setNumberFormat('@');
+      // [바이트]는 수식이라 비워 두고 applyRowFormat_ 이 다시 넣는다
+      var write = out.map(function (r) {
+        return r.slice(0, 4 + cols.length + 4).concat(['', r[4 + cols.length + 4]]);
+      });
+      inS.getRange(first, 1, out.length, n).setValues(write);
+      applyRowFormat_(inS, out.length);
+    }
+  }
+
+  // 2) 예시 시트 — 같은 방식으로 옮긴다
+  var exS = sh_(act.exSheet);
+  if (exS) {
+    var exHead = exS.getRange(APP.HEAD_ROW, 1, 1, exS.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
+    var exRows = [];
+    var exLast = exS.getLastRow();
+    if (exLast >= APP.DATA_ROW) {
+      exS.getRange(APP.DATA_ROW, 1, exLast - APP.DATA_ROW + 1, exHead.length).getValues().forEach(function (r) {
+        var values = cols.map(function (c) { var i = exHead.indexOf(c); return i >= 0 ? String(r[i] || '') : ''; });
+        var ri = exHead.indexOf('결과');
+        var result = ri >= 0 ? String(r[ri] || '').trim() : '';
+        if (result || values.some(String)) exRows.push({ values: values, result: result });
+      });
+    }
+    exS.clear();
+    exampleLayout_(exS, name, cols);
+    writeExampleRows_(exS, cols, exRows, APP.DATA_ROW, Math.max(EXAMPLE_ROWS_DEFAULT, exRows.length));
+  }
+
+  // 3) 활동목록 줄
+  var list = shRequire_(APP.SH.ACTIVITY);
+  var lh = list.getRange(2, 1, 1, list.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
+  var set = function (colName, v) {
+    var c = lh.indexOf(colName);
+    if (c >= 0) list.getRange(act.__row, c + 1).setValue(v);
+  };
+  set('활동명', name);
+  set('입력 항목', cols.join('|'));
+  set('활동 개요', desc);
+
+  // 4) 최종취합 시트의 활동 이름 열도 갱신
+  try { if (compileSheets_().length) buildCompileCore_(); } catch (e) {}
+  return { kept: moved.kept, added: moved.added, removed: moved.removed, rows: rows,
+           inSheet: act.inSheet, exSheet: act.exSheet, name: name };
+}
+
+/** 입력 항목 검사 — 만들 때와 바꿀 때 같은 규칙 */
+function validateColumns_(columns) {
+  var cols = Array.isArray(columns) ? columns.map(function (c) { return String(c).trim(); }).filter(String) : parseColumns(columns);
+  if (!cols.length) throw new Error('입력 항목을 1개 이상 적어 주세요.');
+  if (cols.length > 12) throw new Error('입력 항목은 12개 이하로 해 주세요.');
+  var seen = {};
+  cols.forEach(function (c) {
+    if (RESERVED_NAMES.indexOf(c) >= 0) throw new Error('입력 항목에 "' + c + '"은(는) 쓸 수 없습니다. 시스템이 쓰는 이름입니다.');
+    if (seen[c]) throw new Error('입력 항목이 중복됩니다: ' + c);
+    seen[c] = 1;
+  });
+  return cols;
+}
+
+function ensureRows_(sheet, need) {
+  if (sheet.getMaxRows() < need) sheet.insertRowsAfter(sheet.getMaxRows(), need - sheet.getMaxRows() + 5);
 }
 
 function buildActivityExampleSheet_(key, name, cols, examples) {
@@ -2993,15 +3157,23 @@ function wizardContext() {
     defaultSubject: String(cfg_('기본 교과영역', '공통')),
     models: modelChoices_(),
     defaultModel: normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL,
-    hasKey: !!(getKey_('openai') || getKey_('gemini') || getKey_('anthropic'))
+    hasKey: !!(getKey_('openai') || getKey_('gemini') || getKey_('anthropic')),
+    columnSets: PRESET_COLUMN_SETS,
+    activities: getActivities_().map(function (a) {
+      return { key: a.key, name: a.name, columns: parseColumns(a.columns), desc: a.desc,
+               recordKey: a.recordKey, subjectKey: a.subjectKey, inSheet: a.inSheet };
+    })
   };
 }
 
 /**
  * 말로 쓴 설명 → 활동 정의(JSON) 제안
- * @param {Object} p {text, recordKey, subjectKey, model, previous}
+ * 선생님이 [입력 항목]이나 [활동 이름]을 직접 적었으면 그것을 그대로 쓰고, AI 는 나머지만 채운다.
+ * @param {Object} p {text, recordKey, subjectKey, model, count, columns, name, previous}
  */
 function wizardSuggest(p) {
+  var fixedCols = p.columns ? validateColumns_(p.columns) : null;
+  var fixedName = String(p.name || '').trim();
   var rec = findByKey(getRecordTypes_(), p.recordKey) || getRecordTypes_()[0];
   var sub = findByKey(getSubjects_(), p.subjectKey) || findByKey(getSubjects_(), '공통');
   var model = normModel(p.model) || normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
@@ -3018,10 +3190,14 @@ function wizardSuggest(p) {
     '- 반드시 아래 JSON 하나만 출력한다. 설명, 머리말, 코드펜스를 붙이지 않는다.',
     '- name: 시트에 표시할 짧은 활동 이름(12자 이내).',
     '- key: 시트 이름에 쓸 짧은 식별자(공백 없이 8자 이내, 한글 가능).',
-    '- columns: 교사가 학생 한 명당 채울 입력 항목 이름 배열. 3~6개.',
-    '    · 교사가 실제로 타이핑할 수 있을 만큼 짧고 구체적인 항목으로 만든다.',
-    '    · 결과(특기사항 문장) 자체를 입력 항목으로 넣지 않는다.',
-    '    · 활동의 과정이 드러나도록 구성한다(무엇을, 왜, 어떻게, 무엇을 알게 되었는지, 한계 등).',
+    (fixedCols
+      ? '- columns: 교사가 직접 정했다. 아래 항목을 순서·글자까지 그대로 출력한다. 바꾸거나 더하거나 빼지 않는다.\n    ' +
+        JSON.stringify(fixedCols)
+      : '- columns: 교사가 학생 한 명당 채울 입력 항목 이름 배열. 3~6개.\n' +
+        '    · 교사가 실제로 타이핑할 수 있을 만큼 짧고 구체적인 항목으로 만든다.\n' +
+        '    · 결과(특기사항 문장) 자체를 입력 항목으로 넣지 않는다.\n' +
+        '    · 활동의 과정이 드러나도록 구성한다(무엇을, 왜, 어떻게, 무엇을 알게 되었는지, 한계 등).'),
+    (fixedName ? '- name: "' + fixedName + '" 을(를) 그대로 쓴다.' : ''),
     '- desc: 이 활동이 무엇인지 교사 시점에서 1~2문장으로 요약. AI가 맥락을 잡는 데 쓰인다.',
     '- examples: 예시 ' + want + '개. values는 columns와 같은 순서·같은 개수의 문자열 배열,',
     '    result는 그 자료로 쓴 특기사항 예문.',
@@ -3053,8 +3229,11 @@ function wizardSuggest(p) {
 
   var raw = callWithBackup_(system, user, model).text;
   var def = parseJsonLoose_(raw);
-  if (!def || !def.columns || !def.columns.length) {
-    throw new Error('AI 응답을 이해하지 못했습니다. 설명을 조금 더 구체적으로 적어 주세요.');
+  if (!def) def = {};
+  if (fixedCols) def.columns = fixedCols;            // 선생님이 적은 항목이 우선
+  if (fixedName) def.name = fixedName;
+  if (!def.columns || !def.columns.length) {
+    throw new Error('AI 응답을 이해하지 못했습니다. 설명을 조금 더 구체적으로 적거나, [입력 항목]을 직접 적어 주세요.');
   }
   def.key = safeKey_(def.key || def.name);
   def.chars = rec.chars;
@@ -3089,6 +3268,10 @@ function parseJsonLoose_(raw) {
 /** 만들기 전에 실제 프롬프트를 확인 */
 function wizardPreview(def) {
   var recs = getRecordTypes_(), subs = getSubjects_();
+  if ((!def.examples || !def.examples.length) && def.key) {      // 이미 있는 활동이면 예시 시트의 예시를 함께 보여 준다
+    var cur = getActivity_(def.key);
+    if (cur) def.examples = readExampleRows_(cur).map(function (r) { return { values: r.values, result: r.result }; });
+  }
   var rec = findByKey(recs, def.recordKey) || recs[0];
   var sub = findByKey(subs, def.subjectKey) || findByKey(subs, '공통');
   var cols = Array.isArray(def.columns) ? def.columns : parseColumns(def.columns);
@@ -3112,6 +3295,17 @@ function wizardPreview(def) {
     record: rec, subject: sub, common: getCommon_(),
     examples: examples, years: Number(cfg_('교사 경력(년)', 15))
   });
+}
+
+/**
+ * 이미 만든 활동의 입력 항목·이름·개요 바꾸기 (AI 없이)
+ * @param {{key:string, name?:string, columns:(string|string[]), desc?:string}} p
+ */
+function wizardApply(p) {
+  var r = updateActivity_(p.key, { name: p.name, columns: p.columns, desc: p.desc });
+  var s = sh_(r.inSheet);
+  if (s) ss_().setActiveSheet(s);
+  return r;
 }
 
 /** 확정 → 시트 생성 */

@@ -25,15 +25,23 @@ function wizardContext() {
     defaultSubject: String(cfg_('기본 교과영역', '공통')),
     models: modelChoices_(),
     defaultModel: normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL,
-    hasKey: !!(getKey_('openai') || getKey_('gemini') || getKey_('anthropic'))
+    hasKey: !!(getKey_('openai') || getKey_('gemini') || getKey_('anthropic')),
+    columnSets: PRESET_COLUMN_SETS,
+    activities: getActivities_().map(function (a) {
+      return { key: a.key, name: a.name, columns: parseColumns(a.columns), desc: a.desc,
+               recordKey: a.recordKey, subjectKey: a.subjectKey, inSheet: a.inSheet };
+    })
   };
 }
 
 /**
  * 말로 쓴 설명 → 활동 정의(JSON) 제안
- * @param {Object} p {text, recordKey, subjectKey, model, previous}
+ * 선생님이 [입력 항목]이나 [활동 이름]을 직접 적었으면 그것을 그대로 쓰고, AI 는 나머지만 채운다.
+ * @param {Object} p {text, recordKey, subjectKey, model, count, columns, name, previous}
  */
 function wizardSuggest(p) {
+  var fixedCols = p.columns ? validateColumns_(p.columns) : null;
+  var fixedName = String(p.name || '').trim();
   var rec = findByKey(getRecordTypes_(), p.recordKey) || getRecordTypes_()[0];
   var sub = findByKey(getSubjects_(), p.subjectKey) || findByKey(getSubjects_(), '공통');
   var model = normModel(p.model) || normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
@@ -50,10 +58,14 @@ function wizardSuggest(p) {
     '- 반드시 아래 JSON 하나만 출력한다. 설명, 머리말, 코드펜스를 붙이지 않는다.',
     '- name: 시트에 표시할 짧은 활동 이름(12자 이내).',
     '- key: 시트 이름에 쓸 짧은 식별자(공백 없이 8자 이내, 한글 가능).',
-    '- columns: 교사가 학생 한 명당 채울 입력 항목 이름 배열. 3~6개.',
-    '    · 교사가 실제로 타이핑할 수 있을 만큼 짧고 구체적인 항목으로 만든다.',
-    '    · 결과(특기사항 문장) 자체를 입력 항목으로 넣지 않는다.',
-    '    · 활동의 과정이 드러나도록 구성한다(무엇을, 왜, 어떻게, 무엇을 알게 되었는지, 한계 등).',
+    (fixedCols
+      ? '- columns: 교사가 직접 정했다. 아래 항목을 순서·글자까지 그대로 출력한다. 바꾸거나 더하거나 빼지 않는다.\n    ' +
+        JSON.stringify(fixedCols)
+      : '- columns: 교사가 학생 한 명당 채울 입력 항목 이름 배열. 3~6개.\n' +
+        '    · 교사가 실제로 타이핑할 수 있을 만큼 짧고 구체적인 항목으로 만든다.\n' +
+        '    · 결과(특기사항 문장) 자체를 입력 항목으로 넣지 않는다.\n' +
+        '    · 활동의 과정이 드러나도록 구성한다(무엇을, 왜, 어떻게, 무엇을 알게 되었는지, 한계 등).'),
+    (fixedName ? '- name: "' + fixedName + '" 을(를) 그대로 쓴다.' : ''),
     '- desc: 이 활동이 무엇인지 교사 시점에서 1~2문장으로 요약. AI가 맥락을 잡는 데 쓰인다.',
     '- examples: 예시 ' + want + '개. values는 columns와 같은 순서·같은 개수의 문자열 배열,',
     '    result는 그 자료로 쓴 특기사항 예문.',
@@ -85,8 +97,11 @@ function wizardSuggest(p) {
 
   var raw = callWithBackup_(system, user, model).text;
   var def = parseJsonLoose_(raw);
-  if (!def || !def.columns || !def.columns.length) {
-    throw new Error('AI 응답을 이해하지 못했습니다. 설명을 조금 더 구체적으로 적어 주세요.');
+  if (!def) def = {};
+  if (fixedCols) def.columns = fixedCols;            // 선생님이 적은 항목이 우선
+  if (fixedName) def.name = fixedName;
+  if (!def.columns || !def.columns.length) {
+    throw new Error('AI 응답을 이해하지 못했습니다. 설명을 조금 더 구체적으로 적거나, [입력 항목]을 직접 적어 주세요.');
   }
   def.key = safeKey_(def.key || def.name);
   def.chars = rec.chars;
@@ -121,6 +136,10 @@ function parseJsonLoose_(raw) {
 /** 만들기 전에 실제 프롬프트를 확인 */
 function wizardPreview(def) {
   var recs = getRecordTypes_(), subs = getSubjects_();
+  if ((!def.examples || !def.examples.length) && def.key) {      // 이미 있는 활동이면 예시 시트의 예시를 함께 보여 준다
+    var cur = getActivity_(def.key);
+    if (cur) def.examples = readExampleRows_(cur).map(function (r) { return { values: r.values, result: r.result }; });
+  }
   var rec = findByKey(recs, def.recordKey) || recs[0];
   var sub = findByKey(subs, def.subjectKey) || findByKey(subs, '공통');
   var cols = Array.isArray(def.columns) ? def.columns : parseColumns(def.columns);
@@ -144,6 +163,17 @@ function wizardPreview(def) {
     record: rec, subject: sub, common: getCommon_(),
     examples: examples, years: Number(cfg_('교사 경력(년)', 15))
   });
+}
+
+/**
+ * 이미 만든 활동의 입력 항목·이름·개요 바꾸기 (AI 없이)
+ * @param {{key:string, name?:string, columns:(string|string[]), desc?:string}} p
+ */
+function wizardApply(p) {
+  var r = updateActivity_(p.key, { name: p.name, columns: p.columns, desc: p.desc });
+  var s = sh_(r.inSheet);
+  if (s) ss_().setActiveSheet(s);
+  return r;
 }
 
 /** 확정 → 시트 생성 */

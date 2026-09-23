@@ -35,15 +35,7 @@ function createActivity_(def) {
     if (a.name === name) throw new Error('같은 활동명이 이미 있습니다: ' + name + ' (최종취합에서 구분되지 않습니다)');
   });
 
-  var cols = parseColumns(def.columns);
-  if (!cols.length) throw new Error('입력 항목을 1개 이상 지정하세요.');
-  var seen = {};
-  cols.forEach(function (c) {
-    if (RESERVED_NAMES.indexOf(c) >= 0) throw new Error('입력 항목에 "' + c + '"은(는) 쓸 수 없습니다. 시스템이 쓰는 이름입니다.');
-    if (seen[c]) throw new Error('입력 항목이 중복됩니다: ' + c);
-    seen[c] = 1;
-  });
-  if (cols.length > 12) throw new Error('입력 항목은 12개 이하로 해 주세요.');
+  var cols = validateColumns_(def.columns);
   var recs = getRecordTypes_();
   var rec = findByKey(recs, def.recordKey) || recs[0];
   var chars = Number(def.chars || 0) || rec.chars;
@@ -63,7 +55,11 @@ function createActivity_(def) {
 }
 
 function buildActivityInputSheet_(key, name, cols, rec) {
-  var s = ss_().insertSheet(sheetNameIn_(key));
+  return layoutInputSheet_(ss_().insertSheet(sheetNameIn_(key)), name, cols, rec);
+}
+
+/** 입력 시트의 머리말·헤더·폭·서식 (활동 만들 때와 입력 항목 바꿀 때 함께 씀) */
+function layoutInputSheet_(s, name, cols, rec) {
   var head = ['반', '번호', '이름', '성취수준']
     .concat(cols)
     .concat(['생성', '모델', 'AI 결과', '최종본', '바이트', '검증']);
@@ -98,6 +94,120 @@ function buildActivityInputSheet_(key, name, cols, rec) {
   s.getRange(APP.DATA_ROW, 1, 500, 4).setBackground(APP.COLORS.lock);
   try { applyModelDropdown_(s, 500); } catch (e) {}   // 비워 두면 [⚙️ 설정]의 활동용 모델
   return s;
+}
+
+/**
+ * 이미 만든 활동의 [입력 항목]·이름·개요 바꾸기.
+ * 학생이 채워 둔 자료는 항목 이름으로 따라간다. 이름이 바뀐 항목은 새 항목으로 보고 비운다.
+ * @param {string} key
+ * @param {{name?:string, columns:(string|string[]), desc?:string}} p
+ * @return {{kept:string[], added:string[], removed:string[], rows:number}}
+ */
+function updateActivity_(key, p) {
+  var act = getActivity_(key);
+  if (!act) throw new Error('활동을 찾을 수 없습니다: ' + key);
+  var recs = getRecordTypes_();
+  var rec = findByKey(recs, act.recordKey) || recs[0];
+  var oldCols = parseColumns(act.columns);
+  var cols = validateColumns_(p.columns);
+  var name = String(p.name || act.name).trim() || act.name;
+  if (name !== act.name) {
+    if (RESERVED_NAMES.indexOf(name) >= 0) throw new Error('"' + name + '"은(는) 시스템이 쓰는 이름이라 활동명으로 쓸 수 없습니다.');
+    getActivities_().forEach(function (a) {
+      if (a.key !== key && a.name === name) throw new Error('같은 활동명이 이미 있습니다: ' + name);
+    });
+  }
+  var desc = p.desc === undefined ? act.desc : String(p.desc);
+
+  var moved = { kept: [], added: [], removed: [] };
+  cols.forEach(function (c) { (oldCols.indexOf(c) >= 0 ? moved.kept : moved.added).push(c); });
+  oldCols.forEach(function (c) { if (cols.indexOf(c) < 0) moved.removed.push(c); });
+
+  // 1) 입력 시트 — 학생별 자료를 항목 이름으로 옮겨 담는다
+  var rows = 0;
+  var inS = sh_(act.inSheet);
+  if (inS) {
+    var head = APP.HEAD_ROW, first = APP.DATA_ROW;
+    var lastRow = inS.getLastRow(), lastCol = inS.getLastColumn();
+    var oldHead = inS.getRange(head, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
+    var ix = function (n) { return oldHead.indexOf(n); };
+    var keep = ['생성', '모델', 'AI 결과', '최종본', '검증'];
+    var data = lastRow >= first ? inS.getRange(first, 1, lastRow - first + 1, lastCol).getValues() : [];
+    var out = data.map(function (r) {
+      var row = [r[0], r[1], r[2], r[3]];
+      cols.forEach(function (c) { var i = ix(c); row.push(i >= 0 ? r[i] : ''); });
+      keep.forEach(function (h) { var i = ix(h); row.push(i >= 0 ? r[i] : (h === '생성' ? false : '')); });
+      return row;
+    }).filter(function (r) { return String(r[0]).trim() !== '' || String(r[2]).trim() !== ''; });
+    rows = out.length;
+
+    inS.clear();
+    layoutInputSheet_(inS, name, cols, rec);
+    if (out.length) {
+      var n = 4 + cols.length + 6;
+      ensureRows_(inS, first + out.length - 1);
+      inS.getRange(first, 1, out.length, 1).setNumberFormat('@');
+      // [바이트]는 수식이라 비워 두고 applyRowFormat_ 이 다시 넣는다
+      var write = out.map(function (r) {
+        return r.slice(0, 4 + cols.length + 4).concat(['', r[4 + cols.length + 4]]);
+      });
+      inS.getRange(first, 1, out.length, n).setValues(write);
+      applyRowFormat_(inS, out.length);
+    }
+  }
+
+  // 2) 예시 시트 — 같은 방식으로 옮긴다
+  var exS = sh_(act.exSheet);
+  if (exS) {
+    var exHead = exS.getRange(APP.HEAD_ROW, 1, 1, exS.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
+    var exRows = [];
+    var exLast = exS.getLastRow();
+    if (exLast >= APP.DATA_ROW) {
+      exS.getRange(APP.DATA_ROW, 1, exLast - APP.DATA_ROW + 1, exHead.length).getValues().forEach(function (r) {
+        var values = cols.map(function (c) { var i = exHead.indexOf(c); return i >= 0 ? String(r[i] || '') : ''; });
+        var ri = exHead.indexOf('결과');
+        var result = ri >= 0 ? String(r[ri] || '').trim() : '';
+        if (result || values.some(String)) exRows.push({ values: values, result: result });
+      });
+    }
+    exS.clear();
+    exampleLayout_(exS, name, cols);
+    writeExampleRows_(exS, cols, exRows, APP.DATA_ROW, Math.max(EXAMPLE_ROWS_DEFAULT, exRows.length));
+  }
+
+  // 3) 활동목록 줄
+  var list = shRequire_(APP.SH.ACTIVITY);
+  var lh = list.getRange(2, 1, 1, list.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
+  var set = function (colName, v) {
+    var c = lh.indexOf(colName);
+    if (c >= 0) list.getRange(act.__row, c + 1).setValue(v);
+  };
+  set('활동명', name);
+  set('입력 항목', cols.join('|'));
+  set('활동 개요', desc);
+
+  // 4) 최종취합 시트의 활동 이름 열도 갱신
+  try { if (compileSheets_().length) buildCompileCore_(); } catch (e) {}
+  return { kept: moved.kept, added: moved.added, removed: moved.removed, rows: rows,
+           inSheet: act.inSheet, exSheet: act.exSheet, name: name };
+}
+
+/** 입력 항목 검사 — 만들 때와 바꿀 때 같은 규칙 */
+function validateColumns_(columns) {
+  var cols = Array.isArray(columns) ? columns.map(function (c) { return String(c).trim(); }).filter(String) : parseColumns(columns);
+  if (!cols.length) throw new Error('입력 항목을 1개 이상 적어 주세요.');
+  if (cols.length > 12) throw new Error('입력 항목은 12개 이하로 해 주세요.');
+  var seen = {};
+  cols.forEach(function (c) {
+    if (RESERVED_NAMES.indexOf(c) >= 0) throw new Error('입력 항목에 "' + c + '"은(는) 쓸 수 없습니다. 시스템이 쓰는 이름입니다.');
+    if (seen[c]) throw new Error('입력 항목이 중복됩니다: ' + c);
+    seen[c] = 1;
+  });
+  return cols;
+}
+
+function ensureRows_(sheet, need) {
+  if (sheet.getMaxRows() < need) sheet.insertRowsAfter(sheet.getMaxRows(), need - sheet.getMaxRows() + 5);
 }
 
 function buildActivityExampleSheet_(key, name, cols, examples) {

@@ -158,11 +158,25 @@ function onboardSaveRoster(text, mode) {
 }
 
 /* -------------------------------------------------------------- 4단계 */
+/**
+ * @param {{text:string, recordKey:string, subjectKey:string, model:string,
+ *          columns?:(string|string[]), name?:string, direct?:boolean}} p
+ *   direct: AI 없이 적어 준 항목 그대로 만든다
+ */
 function onboardCreateActivity(p) {
-  var def = wizardSuggest({
-    text: p.text, recordKey: p.recordKey, subjectKey: p.subjectKey,
-    model: p.model, count: 2
-  });
+  var cols = p.columns ? validateColumns_(p.columns) : null;
+  var def;
+  if (p.direct) {
+    if (!cols) throw new Error('입력 항목을 적어 주세요.');
+    var name = String(p.name || '').trim() || String(p.text || '').trim().slice(0, 12) || '활동';
+    def = { name: name, key: name, columns: cols, desc: String(p.text || '').trim(),
+            recordKey: p.recordKey, subjectKey: p.subjectKey, examples: [] };
+  } else {
+    def = wizardSuggest({
+      text: p.text, recordKey: p.recordKey, subjectKey: p.subjectKey,
+      model: p.model, count: 2, columns: cols, name: p.name
+    });
+  }
   var made = wizardCreate(def);
   return { made: made, def: def, status: onboardStatus() };
 }
