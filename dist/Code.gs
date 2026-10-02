@@ -1,5 +1,5 @@
 /******************************************************************************
- * 세특 작성 도우미 v3.3.0 — 설치용 합본
+ * 세특 작성 도우미 v3.4.0 — 설치용 합본
  *
  * 이 파일 하나에 모든 스크립트가 들어 있습니다.
  * Apps Script 편집기에서 Code.gs 의 내용을 전부 지우고 이 파일을 통째로 붙여넣으세요.
@@ -10,7 +10,7 @@
  * 고칠 때는 apps-script/ 의 해당 파일을 고치고 node tools/build.js 를 다시 돌리세요.
  * 이 파일을 직접 고치면 다음 빌드 때 덮어써집니다.
  *
- * 빌드: 2026-09-23  ·  원본 17개 파일
+ * 빌드: 2026-10-02  ·  원본 17개 파일
  *****************************************************************************/
 
 /* ==========================================================================
@@ -27,7 +27,7 @@
  */
 
 var APP = {
-  VERSION: 'v3.3.0',
+  VERSION: 'v3.4.0',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -715,6 +715,26 @@ function providerLabel(p) {
 }
 
 /**
+ * 지금 쓸 수 있는 회사인지. 구독(=AI 수식)은 키가 필요 없어 늘 쓸 수 있다.
+ * @param {string} provider  'gemini' | 'openai' | 'anthropic' | 'subscription' | ''
+ * @param {Object<string,boolean>} has  회사별 키 보관 여부
+ */
+function providerUsable(provider, has) {
+  if (provider === 'subscription') return true;
+  return !!(provider && has && has[provider]);
+}
+
+/**
+ * 키를 넣은 회사의 모델만 남긴다 (순서 유지).
+ * @param {string[]} models
+ * @param {Object<string,boolean>} has
+ * @param {function(string):string} provOf  모델 → 회사
+ */
+function usableModels(models, has, provOf) {
+  return (models || []).filter(function (m) { return providerUsable(provOf(m), has); });
+}
+
+/**
  * API 오류를 선생님이 알아들을 말로 바꾼다.
  * @return {{kind:string, hint:string, retry:boolean}}
  *   kind: model | key | free | billing | rate | access | region | request | server | other
@@ -911,7 +931,8 @@ function estimateTokens(text) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     normModel: normModel, guessProvider: guessProvider, companyToProvider: companyToProvider,
-    providerLabel: providerLabel, explainApiError: explainApiError, isTextModel: isTextModel,
+    providerLabel: providerLabel, providerUsable: providerUsable, usableModels: usableModels,
+    explainApiError: explainApiError, isTextModel: isTextModel,
     sortModelIds: sortModelIds, modelStatusText: modelStatusText,
     thinkingFor: thinkingFor, BATCH_SCHEMA: BATCH_SCHEMA, buildBatchUser: buildBatchUser,
     parseBatchResult: parseBatchResult, estimateTokens: estimateTokens
@@ -1894,6 +1915,8 @@ function onboardSaveKey(p) {
     try { refreshModelDropdowns_(); } catch (e) {}
     return { ok: true, model: model, kept: keep, status: onboardStatus(), message: msg };
   }
+  // 시험은 실패해도 새 키는 저장됐으므로, 그 회사 모델이 드롭다운에 나오게 한다
+  if (key) { try { refreshModelDropdowns_(); } catch (e) {} }
   return { ok: false, model: model, kind: res.kind || '', status: onboardStatus(), message: res.message };
 }
 
@@ -1970,7 +1993,7 @@ function onboardTestGenerate(activityKey) {
   var rec = findByKey(getRecordTypes_(), act.recordKey);
   var user = buildStudentBlock(cols, rows[0].values, { grade: (rec && rec.useGrade) ? 3 : '' });
   var model = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
-  if (providerOf_(model) === 'subscription') {
+  if (providerOf_(model) === 'subscription' || !modelUsable_(model)) {
     var withKey = PROVIDERS.filter(function (x) { return getKey_(x); })[0] || 'gemini';
     model = PROVIDER_DEFAULT_MODEL[withKey];
   }
@@ -2041,7 +2064,7 @@ function buildStart() {
 
   H('무엇이 필요한가요');
   P('· AI 키 하나.  Gemini 키가 가장 부담이 적습니다(무료 등급 있음). aistudio.google.com 에서 발급.');
-  P('· 구글 워크스페이스 Gemini나 Google One AI Premium 구독이 있다면 키 없이도 쓸 수 있습니다.');
+  P('· 학교 워크스페이스의 Gemini(교육용)나 개인 Google AI Pro·Ultra 구독이 있다면 키 없이도 쓸 수 있습니다(AI Plus 요금제는 안 됨).');
   P('   확인법: 빈 셀에  =AI("안녕")  을 넣어 답이 나오면 됩니다.');
   P('· 학생 명단(반·번호·이름, 동아리면 학년까지). 엑셀 양식을 내려받아 채워 올리거나, 복사해 붙여넣으면 됩니다.');
   P('');
@@ -3433,7 +3456,10 @@ function companyMap_() {
   return map;
 }
 
-/** 드롭다운 선택지: 구독 + 표의 모델 + 설정에 적힌 모델 */
+/**
+ * 드롭다운 선택지: 구독 + 표의 모델 + 설정에 적힌 모델.
+ * 키를 넣은 회사의 모델만 보여 준다 — 키가 없는 모델을 골랐다가 생성 때 실패하지 않도록.
+ */
 function modelChoices_() {
   var out = [SUBSCRIPTION_MODEL], seen = {};
   seen[SUBSCRIPTION_MODEL] = true;
@@ -3441,13 +3467,14 @@ function modelChoices_() {
   readModelTable_().forEach(function (r) { add(r.model); });
   add(cfg_('활동용 모델', DEFAULT_MODEL));
   add(cfg_('합본용 모델', DEFAULT_MODEL));
-  return out;
+  return usableModels(out, keyStatus_(), providerOf_);
 }
 
 function modelValidation_() {
   return SpreadsheetApp.newDataValidation()
     .requireValueInList(modelChoices_(), true)
     .setAllowInvalid(true)          // 목록에 없는 이름도 직접 적을 수 있게
+    .setHelpText('API 키를 넣은 회사의 모델만 목록에 나옵니다. 다른 회사 모델은 메뉴 ② [AI 연결 · 모델 설정]에서 키를 먼저 넣으세요.')
     .build();
 }
 
@@ -3506,6 +3533,14 @@ function setKey_(p, v) {
   if (v) props_().setProperty('KEY_' + p, v);
   else props_().deleteProperty('KEY_' + p);
 }
+/** 회사별 키 보관 여부 {gemini:true, openai:false, anthropic:false} */
+function keyStatus_() {
+  var has = {};
+  PROVIDERS.forEach(function (p) { has[p] = !!getKey_(p); });
+  return has;
+}
+/** 이 모델을 지금 쓸 수 있는지(그 회사 키가 있는지). 구독은 늘 true */
+function modelUsable_(model) { return providerUsable(providerOf_(model), keyStatus_()); }
 
 /* -------------------------------------------------------------- 설정 창 */
 function openApiDialog() {
@@ -3515,10 +3550,8 @@ function openApiDialog() {
 
 /** 설정 창이 처음 열릴 때 필요한 것 전부 */
 function getAiSettings() {
-  var has = {};
-  PROVIDERS.forEach(function (p) { has[p] = !!getKey_(p); });
   return {
-    has: has,
+    has: keyStatus_(),
     rows: readModelTable_().map(function (r) {
       return { model: r.model, company: r.company, level: r.level, memo: r.memo, status: r.status };
     }),
@@ -3535,6 +3568,7 @@ function getAiSettings() {
 }
 
 function saveKeys(obj) {
+  var before = JSON.stringify(keyStatus_());
   PROVIDERS.forEach(function (p) {
     if (obj[p] === undefined) return;
     var v = String(obj[p] || '').trim();
@@ -3542,8 +3576,9 @@ function saveKeys(obj) {
     if (v === '__DELETE__') v = '';
     setKey_(p, v);
   });
-  var has = {};
-  PROVIDERS.forEach(function (p) { has[p] = !!getKey_(p); });
+  var has = keyStatus_();
+  // 키가 생기거나 없어지면 시트의 [모델] 드롭다운에 나올 모델도 달라진다
+  if (JSON.stringify(has) !== before) { try { refreshModelDropdowns_(); } catch (e) {} }
   var who = '';
   try { who = Session.getActiveUser().getEmail(); } catch (e) {}
   return { has: has, message: '저장했습니다. 키는 ' + (who || '내') + ' 계정에만 보관됩니다.' };

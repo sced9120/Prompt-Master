@@ -83,6 +83,14 @@ t('정렬: -latest → 버전 큰 순', () => {
   eq(M.sortModelIds(['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.5-flash-lite']).join(','),
      'gemini-flash-latest,gemini-3.8-flash,gemini-3.5-flash-lite,gemini-2.5-flash');
 });
+t('키 있는 회사의 모델만 남기기 — 구독은 늘 남음, 순서 유지', () => {
+  const has = { gemini: false, openai: true, anthropic: false };
+  const prov = m => (m === 'Gemini(구독)' ? 'subscription' : M.guessProvider(m));
+  eq(M.usableModels(['Gemini(구독)', 'gemini-flash-latest', 'gpt-5.6-luna', 'claude-haiku-4-5', 'mistral-large', 'o4-mini'], has, prov).join(','),
+     'Gemini(구독),gpt-5.6-luna,o4-mini');
+  eq(M.providerUsable('', { gemini: true }), false, '회사를 모르면 못 씀');
+  eq(M.providerUsable('subscription', {}), true, '구독은 키 없이');
+});
 t('상태 한 줄', () => {
   eq(M.modelStatusText({ ok: true, sec: '1.8' }, '9/21 14:05'), '✓ 연결됨 · 1.8초 · 9/21 14:05');
   ok(/^✗ 모델명/.test(M.modelStatusText({ ok: false, short: '모델명을 찾을 수 없습니다', message: 'x' }, '')), '실패 표기');
@@ -126,9 +134,22 @@ t('모델 목록 표가 기본 8개로 채워짐', () => {
   eq(rows[0].model, 'gemini-flash-latest', '첫 줄');
   ok(rows.every(r => r.level && r.memo), '수준·설명 빈칸 있음');
 });
-t('드롭다운 선택지 = 구독 + 표의 모델', () => {
+t('키가 하나도 없으면 드롭다운에는 구독만', () => {
+  eq(A.modelChoices_().join(','), 'Gemini(구독)');
+});
+t('Gemini 키만 있으면 구독 + Gemini 모델만', () => {
+  A.setKey_('gemini', 'AIza-x');
   const c = A.modelChoices_();
-  eq(c[0], 'Gemini(구독)'); ok(c.indexOf('claude-haiku-4-5') > 0, '표의 모델 누락');
+  eq(c[0], 'Gemini(구독)');
+  ok(c.indexOf('gemini-flash-latest') > 0, 'Gemini 모델 누락: ' + c.join(','));
+  ok(c.every(m => m === 'Gemini(구독)' || /^gemini/.test(m)), '다른 회사 모델이 섞임: ' + c.join(','));
+});
+t('키를 더 넣으면 그 회사 모델도 나옴', () => {
+  A.setKey_('anthropic', 'sk-ant');
+  const c = A.modelChoices_();
+  ok(c.indexOf('claude-haiku-4-5') > 0, 'Claude 모델 누락');
+  ok(!c.some(m => /^gpt/.test(m)), 'OpenAI 키가 없는데 gpt 모델이 나옴');
+  A.setKey_('gemini', ''); A.setKey_('anthropic', '');
 });
 t('모델 표가 다른 설정 읽기를 방해하지 않음', () => {
   eq(Number(A.cfg_('1회 최대 생성 건수', 0)), 25);
@@ -516,6 +537,45 @@ t('설정 창 저장: 예비·생각 줄이기·묶음 수', () => {
   eq(C.cfg_('예비 모델', ''), 'gpt-5.6-luna'); eq(C.cfgBool_('생각 줄이기', true), false); eq(Number(C.cfg_('한 번에 묶을 학생 수', 0)), 3);
   const g = C.getAiSettings();
   eq(g.backup, 'gpt-5.6-luna'); eq(g.thinkingLow, false); eq(g.batch, 3);
+});
+
+console.log('\n[키를 넣은 회사의 모델만 고르기]');
+t('키를 넣거나 지우면 시트의 모델 드롭다운을 새로 입힘', () => {
+  const C = boot(); C.installCore_();
+  let n = 0;
+  C.refreshModelDropdowns_ = () => { n++; return 0; };
+  C.saveKeys({ gemini: 'AIza-x', openai: '__KEEP__', anthropic: '__KEEP__' });
+  eq(n, 1, '키를 넣었을 때');
+  C.saveKeys({ gemini: '__KEEP__', openai: '__KEEP__', anthropic: '__KEEP__' });
+  eq(n, 1, '바뀐 것이 없으면 다시 입히지 않음');
+  C.saveKeys({ gemini: '__DELETE__', openai: '__KEEP__', anthropic: '__KEEP__' });
+  eq(n, 2, '키를 지웠을 때');
+});
+t('[회사]를 직접 고른 이름도 그 회사 키가 있어야 나옴', () => {
+  const C = boot(); C.installCore_();
+  C.saveModelSettings({ rows: [{ model: 'gemini-flash-latest' }, { model: 'my-proxy', company: 'OpenAI' }],
+                        activity: 'gemini-flash-latest', compile: 'gemini-flash-latest' });
+  ok(C.modelChoices_().indexOf('my-proxy') < 0, 'OpenAI 키 없이 나옴');
+  C.setKey_('openai', 'sk');
+  ok(C.modelChoices_().indexOf('my-proxy') > 0, 'OpenAI 키가 있는데 안 나옴');
+});
+t('마법사 모델 목록도 키 있는 모델만', () => {
+  const C = boot(); C.installCore_();
+  C.setKey_('openai', 'sk');
+  const ms = C.wizardContext().models;
+  ok(ms.indexOf('gpt-5.6-luna') > 0, 'gpt 누락: ' + ms.join(','));
+  ok(!ms.some(m => /^(gemini|claude)/.test(m)), '키 없는 회사 모델이 섞임: ' + ms.join(','));
+});
+t('시작하기 시험 생성: 활동용 모델 키가 없으면 키 있는 회사의 기본 모델로', () => {
+  const C = boot(); C.installCore_();
+  C.onboardSaveRoster('1\t1\t김하늘');
+  const made = C.createActivity_({ key: '탐구', name: '데이터 탐구', recordKey: '동아리', subjectKey: '공통',
+    columns: '탐구 주제', desc: '', examples: [{ values: ['기후'], result: '기후 자료를 분석함.' }] });
+  C.setKey_('openai', 'sk');                          // 활동용은 기본값(gemini-flash-latest) 그대로
+  const urls = [];
+  C.__fetch.handler = (url) => { urls.push(url); return oaOk('시험 문장.'); };
+  const r = C.onboardTestGenerate(made.key || '탐구');
+  eq(r.model, C.PROVIDER_DEFAULT_MODEL.openai); ok(/api\.openai\.com/.test(urls[0] || ''), urls[0]);
 });
 
 console.log('\n[시트에서 모델을 직접 고치면]');

@@ -106,7 +106,10 @@ function companyMap_() {
   return map;
 }
 
-/** 드롭다운 선택지: 구독 + 표의 모델 + 설정에 적힌 모델 */
+/**
+ * 드롭다운 선택지: 구독 + 표의 모델 + 설정에 적힌 모델.
+ * 키를 넣은 회사의 모델만 보여 준다 — 키가 없는 모델을 골랐다가 생성 때 실패하지 않도록.
+ */
 function modelChoices_() {
   var out = [SUBSCRIPTION_MODEL], seen = {};
   seen[SUBSCRIPTION_MODEL] = true;
@@ -114,13 +117,14 @@ function modelChoices_() {
   readModelTable_().forEach(function (r) { add(r.model); });
   add(cfg_('활동용 모델', DEFAULT_MODEL));
   add(cfg_('합본용 모델', DEFAULT_MODEL));
-  return out;
+  return usableModels(out, keyStatus_(), providerOf_);
 }
 
 function modelValidation_() {
   return SpreadsheetApp.newDataValidation()
     .requireValueInList(modelChoices_(), true)
     .setAllowInvalid(true)          // 목록에 없는 이름도 직접 적을 수 있게
+    .setHelpText('API 키를 넣은 회사의 모델만 목록에 나옵니다. 다른 회사 모델은 메뉴 ② [AI 연결 · 모델 설정]에서 키를 먼저 넣으세요.')
     .build();
 }
 
@@ -179,6 +183,14 @@ function setKey_(p, v) {
   if (v) props_().setProperty('KEY_' + p, v);
   else props_().deleteProperty('KEY_' + p);
 }
+/** 회사별 키 보관 여부 {gemini:true, openai:false, anthropic:false} */
+function keyStatus_() {
+  var has = {};
+  PROVIDERS.forEach(function (p) { has[p] = !!getKey_(p); });
+  return has;
+}
+/** 이 모델을 지금 쓸 수 있는지(그 회사 키가 있는지). 구독은 늘 true */
+function modelUsable_(model) { return providerUsable(providerOf_(model), keyStatus_()); }
 
 /* -------------------------------------------------------------- 설정 창 */
 function openApiDialog() {
@@ -188,10 +200,8 @@ function openApiDialog() {
 
 /** 설정 창이 처음 열릴 때 필요한 것 전부 */
 function getAiSettings() {
-  var has = {};
-  PROVIDERS.forEach(function (p) { has[p] = !!getKey_(p); });
   return {
-    has: has,
+    has: keyStatus_(),
     rows: readModelTable_().map(function (r) {
       return { model: r.model, company: r.company, level: r.level, memo: r.memo, status: r.status };
     }),
@@ -208,6 +218,7 @@ function getAiSettings() {
 }
 
 function saveKeys(obj) {
+  var before = JSON.stringify(keyStatus_());
   PROVIDERS.forEach(function (p) {
     if (obj[p] === undefined) return;
     var v = String(obj[p] || '').trim();
@@ -215,8 +226,9 @@ function saveKeys(obj) {
     if (v === '__DELETE__') v = '';
     setKey_(p, v);
   });
-  var has = {};
-  PROVIDERS.forEach(function (p) { has[p] = !!getKey_(p); });
+  var has = keyStatus_();
+  // 키가 생기거나 없어지면 시트의 [모델] 드롭다운에 나올 모델도 달라진다
+  if (JSON.stringify(has) !== before) { try { refreshModelDropdowns_(); } catch (e) {} }
   var who = '';
   try { who = Session.getActiveUser().getEmail(); } catch (e) {}
   return { has: has, message: '저장했습니다. 키는 ' + (who || '내') + ' 계정에만 보관됩니다.' };

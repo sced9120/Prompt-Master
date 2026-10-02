@@ -120,6 +120,8 @@ function onboardSaveKey(p) {
     try { refreshModelDropdowns_(); } catch (e) {}
     return { ok: true, model: model, kept: keep, status: onboardStatus(), message: msg };
   }
+  // 시험은 실패해도 새 키는 저장됐으므로, 그 회사 모델이 드롭다운에 나오게 한다
+  if (key) { try { refreshModelDropdowns_(); } catch (e) {} }
   return { ok: false, model: model, kind: res.kind || '', status: onboardStatus(), message: res.message };
 }
 
@@ -196,7 +198,7 @@ function onboardTestGenerate(activityKey) {
   var rec = findByKey(getRecordTypes_(), act.recordKey);
   var user = buildStudentBlock(cols, rows[0].values, { grade: (rec && rec.useGrade) ? 3 : '' });
   var model = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
-  if (providerOf_(model) === 'subscription') {
+  if (providerOf_(model) === 'subscription' || !modelUsable_(model)) {
     var withKey = PROVIDERS.filter(function (x) { return getKey_(x); })[0] || 'gemini';
     model = PROVIDER_DEFAULT_MODEL[withKey];
   }
@@ -267,7 +269,7 @@ function buildStart() {
 
   H('무엇이 필요한가요');
   P('· AI 키 하나.  Gemini 키가 가장 부담이 적습니다(무료 등급 있음). aistudio.google.com 에서 발급.');
-  P('· 구글 워크스페이스 Gemini나 Google One AI Premium 구독이 있다면 키 없이도 쓸 수 있습니다.');
+  P('· 학교 워크스페이스의 Gemini(교육용)나 개인 Google AI Pro·Ultra 구독이 있다면 키 없이도 쓸 수 있습니다(AI Plus 요금제는 안 됨).');
   P('   확인법: 빈 셀에  =AI("안녕")  을 넣어 답이 나오면 됩니다.');
   P('· 학생 명단(반·번호·이름, 동아리면 학년까지). 엑셀 양식을 내려받아 채워 올리거나, 복사해 붙여넣으면 됩니다.');
   P('');

@@ -41,6 +41,26 @@ function providerLabel(p) {
 }
 
 /**
+ * 지금 쓸 수 있는 회사인지. 구독(=AI 수식)은 키가 필요 없어 늘 쓸 수 있다.
+ * @param {string} provider  'gemini' | 'openai' | 'anthropic' | 'subscription' | ''
+ * @param {Object<string,boolean>} has  회사별 키 보관 여부
+ */
+function providerUsable(provider, has) {
+  if (provider === 'subscription') return true;
+  return !!(provider && has && has[provider]);
+}
+
+/**
+ * 키를 넣은 회사의 모델만 남긴다 (순서 유지).
+ * @param {string[]} models
+ * @param {Object<string,boolean>} has
+ * @param {function(string):string} provOf  모델 → 회사
+ */
+function usableModels(models, has, provOf) {
+  return (models || []).filter(function (m) { return providerUsable(provOf(m), has); });
+}
+
+/**
  * API 오류를 선생님이 알아들을 말로 바꾼다.
  * @return {{kind:string, hint:string, retry:boolean}}
  *   kind: model | key | free | billing | rate | access | region | request | server | other
@@ -237,7 +257,8 @@ function estimateTokens(text) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     normModel: normModel, guessProvider: guessProvider, companyToProvider: companyToProvider,
-    providerLabel: providerLabel, explainApiError: explainApiError, isTextModel: isTextModel,
+    providerLabel: providerLabel, providerUsable: providerUsable, usableModels: usableModels,
+    explainApiError: explainApiError, isTextModel: isTextModel,
     sortModelIds: sortModelIds, modelStatusText: modelStatusText,
     thinkingFor: thinkingFor, BATCH_SCHEMA: BATCH_SCHEMA, buildBatchUser: buildBatchUser,
     parseBatchResult: parseBatchResult, estimateTokens: estimateTokens

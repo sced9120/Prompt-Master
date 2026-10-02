@@ -196,7 +196,7 @@ function makeGlobals() {
       getActiveSpreadsheet: () => ss,
       getUi: () => ui,
       flush() {},
-      newDataValidation: () => builder(['requireValueInList', 'setAllowInvalid'], st => ({ list: st.requireValueInList })),
+      newDataValidation: () => builder(['requireValueInList', 'setAllowInvalid', 'setHelpText'], st => ({ list: st.requireValueInList })),
       newRichTextValue: () => builder(['setText', 'setTextStyle'], st => ({ text: st.setText[0] })),
       newTextStyle: () => builder(['setBold', 'setFontSize', 'setForegroundColor'], st => st),
       newConditionalFormatRule: () => builder(['whenNumberGreaterThan', 'setBackground', 'setRanges'], st => st)
