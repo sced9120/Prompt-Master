@@ -330,6 +330,6 @@ npm run build # apps-script/ 17개 파일 → dist/Code.gs 한 개로 합치기
 
 ## 라이선스
 
-MIT. [LICENSE](LICENSE) 참고. 자유롭게 쓰고 고치고 학교에 배포하셔도 됩니다.
+MIT. [LICENSE](LICENSE) 참고. 자유롭게 쓰고 학교에 배포하셔도 됩니다.
 
 원작 v1·v2: 김해분성고 정현서
