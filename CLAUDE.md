@@ -28,6 +28,9 @@ npm run kit       # dist → web/deploy-kit.html 재생성 (배포 키트)
 
 - 프롬프트 7슬롯 조립 엔진: 역할, 과제, 서술규칙, 기재금지, 관점·역량, 분량, 활동고유. NEIS 바이트: 한글 3, ASCII 1, 줄바꿈 2.
 - 제공자: OpenAI / Gemini / Anthropic / Gemini(구독, `=AI()` 수식). 기본 모델 `gemini-flash-latest`. 모델명은 ⚙️ 설정 시트의 모델 표에서 사용자가 편집.
+- 모델 목록(드롭다운·설정 창·마법사)은 **키를 넣은 회사 + 구독을 켰을 때의 Gemini(구독)** 만. `keyStatus_()` 가 `{gemini, openai, anthropic, subscription}` 을 돌려주고 `usableModels` 로 거른다.
+  구독 사용 여부는 UserProperties `SUB_GEMINI` ('1'/'0', 없으면 설정에 Gemini(구독)이 골라져 있을 때 켠 것으로 이어받음).
+- `=AI()` 결과는 사용자가 셀에서 [생성 및 삽입]을 눌러야 나온다(스크립트로 불가). 학교 계정은 Google AI Pro for Education 이 있어야 함.
 - 비용 절감: 여러 학생 묶음 생성(기본 5명), 생각 줄이기, 규칙을 앞에 둬 implicit caching, Claude `cache_control`. (Claude Skills는 시트→API 호출에 적용 불가)
 - 명단 모드: 'class'(반·번호) / 'grade'(학년·반·번호). 헤더 이름 기반 파싱, 5자리 학번 분해.
 - 활동 입력 항목은 직접 입력·프리셋·AI 제안 3경로, 이후 `updateActivity_`로 수정(이름 같은 열은 데이터 이월).
@@ -52,6 +55,7 @@ npm run kit       # dist → web/deploy-kit.html 재생성 (배포 키트)
 2. `모델 연결 테스트` (Gemini/OpenAI/Anthropic 각각), 묶음 생성이 실제로 JSON 파싱되는지
 3. 명단 xlsx 양식 다운로드·업로드(SheetJS CDN이 학교망에서 막힐 수 있음 → CSV/붙여넣기 대체 있음)
 4. 사본 복사 후 온보딩 팝업이 자동으로 뜨는지(권한 승인 흐름 포함)
+5. 스크립트가 넣은 긴 `=AI("…")` 수식(규칙 수천 자 + 줄바꿈)이 실제 구독 계정에서 [생성 및 삽입]으로 생성되는지
 
 ## 알려진 한계
 

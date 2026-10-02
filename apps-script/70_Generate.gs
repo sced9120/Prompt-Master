@@ -137,7 +137,7 @@ function runGeneration_(act, sheet, rows) {
     }
 
     var msg = '완료 ' + okN + '건';
-    if (subN) msg += ' / 구독수식 ' + subN + '건(셀에서 [생성] 버튼을 눌러 주세요)';
+    if (subN) msg += ' / 구독수식 ' + subN + '건(AI 결과 칸을 선택하고 [생성 및 삽입]을 눌러 주세요)';
     if (skipN) msg += ' / 자료 없음 ' + skipN + '건';
     if (errN) msg += ' / 실패 ' + errN + '건';
     if (backupN) msg += ' / 예비 모델 ' + backupN + '건';

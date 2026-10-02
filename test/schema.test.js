@@ -228,8 +228,14 @@ t('옛 모델 이름이 코드에 박혀 있지 않음 (프리셋의 이전값 �
 });
 t('모델 설정 창이 부르는 서버 함수가 모두 있음', () => {
   const defined = new Set([...all.matchAll(/function\s+([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]));
-  ['getAiSettings', 'saveKeys', 'testModel', 'saveModelSettings', 'listAvailableModels', 'testAllModels', 'onboardSaveKey']
+  ['getAiSettings', 'saveKeys', 'testModel', 'saveModelSettings', 'listAvailableModels', 'testAllModels', 'onboardSaveKey',
+   'saveSubscription', 'onboardUseSubscription', 'onboardTestSubscription', 'onboardReadSubTest']
     .forEach(n => ok(defined.has(n), '없는 함수: ' + n));
+});
+t('설정 창·시작하기 창이 부르는 구독 함수 이름이 서버와 같음', () => {
+  const html = ['UI_ApiKey.html', 'UI_Onboard.html'].map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+  ['saveSubscription', 'onboardUseSubscription', 'onboardTestSubscription', 'onboardReadSubTest']
+    .forEach(n => ok(new RegExp('\\.' + n + '\\(').test(html), 'HTML 에서 부르지 않음: ' + n));
 });
 t('모델 표 헤더와 필드 수가 같음', () => {
   const h = all.match(/var MODEL_HEAD = \[([^\]]+)\]/), f = all.match(/var MODEL_FIELDS = \[([^\]]+)\]/);

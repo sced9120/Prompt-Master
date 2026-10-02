@@ -52,6 +52,7 @@ function onboardStatus() {
   ['gemini', 'openai', 'anthropic'].forEach(function (p) {
     if (getKey_(p)) { st.hasKey = true; st.keyNames.push(p); }
   });
+  try { st.subscription = subOn_(); } catch (e) { st.subscription = false; }
   if (st.installed) {
     try { st.rosterCount = getRoster_().length; st.rosterMode = rosterMode_(); } catch (e) {}
     try {
@@ -123,6 +124,27 @@ function onboardSaveKey(p) {
   // 시험은 실패해도 새 키는 저장됐으므로, 그 회사 모델이 드롭다운에 나오게 한다
   if (key) { try { refreshModelDropdowns_(); } catch (e) {} }
   return { ok: false, model: model, kind: res.kind || '', status: onboardStatus(), message: res.message };
+}
+
+/**
+ * 2단계를 키 대신 "Gemini 구독(학교 계정·Google AI Pro)"으로 마친다.
+ * 이미 키로 잘 쓰고 있는 모델이 있으면 그대로 두고, 아니면 활동용·합본용을 Gemini(구독)으로 맞춘다.
+ */
+function onboardUseSubscription() {
+  setSub_(true);
+  var changed = [];
+  ['활동용 모델', '합본용 모델'].forEach(function (k) {
+    var cur = normModel(cfg_(k, DEFAULT_MODEL));
+    if (cur === SUBSCRIPTION_MODEL) return;
+    if (providerOf_(cur) !== 'subscription' && modelUsable_(cur)) return;   // 키로 쓰는 모델은 둔다
+    setCfg_(k, SUBSCRIPTION_MODEL);
+    changed.push(k);
+  });
+  try { refreshModelDropdowns_(); } catch (e) {}
+  var msg = 'Gemini 구독을 켰습니다. ';
+  msg += changed.length ? changed.join('·') + '을 Gemini(구독)으로 맞췄습니다.'
+                        : '지금 쓰는 모델은 키로 그대로 쓰고, Gemini(구독)도 목록에서 고를 수 있게 했습니다.';
+  return { ok: true, status: onboardStatus(), message: msg };
 }
 
 /** 설정 시트의 값 하나를 바꾼다 */
@@ -199,7 +221,8 @@ function onboardTestGenerate(activityKey) {
   var user = buildStudentBlock(cols, rows[0].values, { grade: (rec && rec.useGrade) ? 3 : '' });
   var model = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
   if (providerOf_(model) === 'subscription' || !modelUsable_(model)) {
-    var withKey = PROVIDERS.filter(function (x) { return getKey_(x); })[0] || 'gemini';
+    var withKey = PROVIDERS.filter(function (x) { return getKey_(x); })[0];
+    if (!withKey) throw new Error('API 키가 없어 스크립트로 바로 시험할 수 없습니다. 구독만 쓰신다면 [구독으로 시험하기]를 누르세요.');
     model = PROVIDER_DEFAULT_MODEL[withKey];
   }
 
@@ -210,6 +233,47 @@ function onboardTestGenerate(activityKey) {
     text: txt, bytes: v.bytes, limit: limit, model: model,
     issues: v.issues.map(function (i) { return (i.level === 'block' ? '[수정] ' : '[확인] ') + i.label; })
   };
+}
+
+/**
+ * 구독만 쓰는 경우의 시험 생성.
+ * =AI 수식은 선생님이 셀에서 [생성 및 삽입]을 눌러야 결과가 나오므로(구글 정책), 스크립트가 끝까지 할 수 없다.
+ * [🚀 시작하기] 시트 아래쪽에 시험 셀을 만들어 그 셀로 데려가고, 결과는 onboardReadSubTest 로 읽는다.
+ */
+function onboardTestSubscription(activityKey) {
+  var act = getActivity_(activityKey);
+  if (!act) throw new Error('활동을 찾을 수 없습니다.');
+  var rows = readExampleRows_(act);
+  if (!rows.length) throw new Error('예시 시트가 비어 있어 시험할 자료가 없습니다. 예시를 한 줄 채워 주세요.');
+  var rec = findByKey(getRecordTypes_(), act.recordKey);
+  var user = buildStudentBlock(parseColumns(act.columns), rows[0].values, { grade: (rec && rec.useGrade) ? 3 : '' });
+
+  var s = sh_(APP.SH.START) || buildStart();
+  var r = s.getLastRow() + 2;
+  if (r + 1 > s.getMaxRows()) s.insertRowsAfter(s.getMaxRows(), r + 1 - s.getMaxRows());
+  s.getRange(r, 1).setValue('🧪 구독 시험 — 바로 아래 셀을 누르면 뜨는 [생성 및 삽입](Generate and insert)을 누르세요. ' +
+                            '답이 들어오면 시작하기 창에서 [결과 확인]을 누릅니다. 확인이 끝나면 이 두 줄은 지워도 됩니다.')
+    .setFontWeight('bold').setBackground(APP.COLORS.input);
+  var cell = s.getRange(r + 1, 1);
+  cell.setFormula(subscriptionFormula_(promptFor_(act), user));
+  cell.activate();
+  return { a1: cell.getA1Notation(), limit: charsFor_(act) * 3 };
+}
+
+/** 구독 시험 셀의 결과를 읽어 검사한다. 아직 [생성 및 삽입] 전이면 ok:false */
+function onboardReadSubTest(p) {
+  var s = sh_(APP.SH.START);
+  var cell = s && p && p.a1 ? s.getRange(p.a1) : null;
+  var v = cell ? String(cell.getDisplayValue() || '').trim() : '';
+  if (!v || /^#/.test(v) || /^(loading|로드 중)/i.test(v)) {
+    return { ok: false, message: '아직 결과가 없습니다. 시험 셀을 선택하고 [생성 및 삽입]을 누른 뒤, 답이 들어오면 다시 눌러 주세요.' +
+             (/^#/.test(v) ? ' (지금 셀에 ' + v.slice(0, 20) + ' 이(가) 보입니다 — 이 계정에서는 =AI 함수를 쓸 수 없는 것일 수 있습니다)' : '') };
+  }
+  var txt = cleanResult_(v);
+  var limit = Number(p.limit) || 1500;
+  var res = validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES);
+  return { ok: true, text: txt, bytes: res.bytes, limit: limit,
+           issues: res.issues.map(function (i) { return (i.level === 'block' ? '[수정] ' : '[확인] ') + i.label; }) };
 }
 
 /* -------------------------------------------------------------- 마무리 */
@@ -269,8 +333,9 @@ function buildStart() {
 
   H('무엇이 필요한가요');
   P('· AI 키 하나.  Gemini 키가 가장 부담이 적습니다(무료 등급 있음). aistudio.google.com 에서 발급.');
-  P('· 학교 워크스페이스의 Gemini(교육용)나 개인 Google AI Pro·Ultra 구독이 있다면 키 없이도 쓸 수 있습니다(AI Plus 요금제는 안 됨).');
-  P('   확인법: 빈 셀에  =AI("안녕")  을 넣어 답이 나오면 됩니다.');
+  P('· 학교 계정에 Google AI Pro for Education 이 있거나, 개인 Google AI Pro·Ultra 를 구독 중이면 키 없이도 쓸 수 있습니다.');
+  P('   시작하기 2단계에서 [Gemini 구독으로] 를 고르면 키 넣는 단계를 건너뜁니다. (AI Plus 요금제, 무료 학교 계정은 아직 안 됨)');
+  P('   확인법: 빈 셀에  =AI("안녕")  을 넣고 셀을 눌러 [생성 및 삽입] → 답이 나오면 됩니다.');
   P('· 학생 명단(반·번호·이름, 동아리면 학년까지). 엑셀 양식을 내려받아 채워 올리거나, 복사해 붙여넣으면 됩니다.');
   P('');
 

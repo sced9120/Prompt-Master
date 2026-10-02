@@ -55,7 +55,7 @@
 | Gemini API | 무료 등급 있음, 초과분 종량제 | 분당 호출 제한이 있어 여러 명 동시 생성 시 일부 실패 |
 | OpenAI API | 종량제 | 모델에 따라 차이가 큼 |
 | Anthropic API | 종량제 | |
-| Gemini(구독) | 구독료에 포함 | 워크스페이스 Gemini(교육용 포함) / Google AI Pro·Ultra(옛 Google One AI Premium). 셀 수식으로 동작 |
+| Gemini(구독) | 구독료에 포함 | 워크스페이스 Gemini / 학교 Google AI Pro for Education / 개인 Google AI Pro·Ultra(옛 Google One AI Premium). 셀 수식으로 동작 |
 
 **체크박스를 켜 둔 채 두지 마세요.** 자동 생성 트리거를 켠 상태에서 체크가 남아 있으면 시트를 건드릴 때마다 재호출될 수 있습니다. 결과를 `최종본`에 옮긴 뒤 체크를 해제하는 것이 습관이 되어야 합니다.
 

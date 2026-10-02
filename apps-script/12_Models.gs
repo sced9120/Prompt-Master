@@ -41,17 +41,16 @@ function providerLabel(p) {
 }
 
 /**
- * 지금 쓸 수 있는 회사인지. 구독(=AI 수식)은 키가 필요 없어 늘 쓸 수 있다.
+ * 지금 쓸 수 있는 회사인지. 회사 모델은 키가 있어야, 구독(=AI 수식)은 구독을 켜 두어야 쓸 수 있다.
  * @param {string} provider  'gemini' | 'openai' | 'anthropic' | 'subscription' | ''
- * @param {Object<string,boolean>} has  회사별 키 보관 여부
+ * @param {Object<string,boolean>} has  회사별 키 보관 여부 + subscription(구독 사용 여부)
  */
 function providerUsable(provider, has) {
-  if (provider === 'subscription') return true;
   return !!(provider && has && has[provider]);
 }
 
 /**
- * 키를 넣은 회사의 모델만 남긴다 (순서 유지).
+ * 키를 넣은 회사의 모델(과 켜 둔 구독)만 남긴다 (순서 유지).
  * @param {string[]} models
  * @param {Object<string,boolean>} has
  * @param {function(string):string} provOf  모델 → 회사

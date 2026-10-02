@@ -93,6 +93,8 @@ function makeRange(sheet, sheetProxy, r1, c1, nr, nc, vals, forms, merges, froze
     getA1Notation: () => colToA(c1) + r1 + ((nr > 1 || nc > 1) ? ':' + colToA(c1 + nc - 1) + (r1 + nr - 1) : ''),
     getValues() { const out = []; for (let i = 0; i < nr; i++) { const row = []; for (let j = 0; j < nc; j++) { const v = vals.get(key(r1 + i, c1 + j)); row.push(v === undefined ? '' : v); } out.push(row); } return out; },
     getValue() { const v = vals.get(key(r1, c1)); return v === undefined ? '' : v; },
+    getDisplayValue() { const v = vals.get(key(r1, c1)); return v === undefined ? '' : String(v); },
+    activate() { sheetProxy.getParent().setActiveSheet(sheetProxy); return proxy; },
     getFormulas() { const out = []; for (let i = 0; i < nr; i++) { const row = []; for (let j = 0; j < nc; j++) row.push(forms.get(key(r1 + i, c1 + j)) || ''); out.push(row); } return out; },
     setValues(arr) {
       if (!Array.isArray(arr) || arr.length !== nr || arr.some(r => !Array.isArray(r) || r.length !== nc))

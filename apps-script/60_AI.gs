@@ -108,7 +108,7 @@ function companyMap_() {
 
 /**
  * 드롭다운 선택지: 구독 + 표의 모델 + 설정에 적힌 모델.
- * 키를 넣은 회사의 모델만 보여 준다 — 키가 없는 모델을 골랐다가 생성 때 실패하지 않도록.
+ * 키를 넣은 회사의 모델과, 구독을 켰을 때만 Gemini(구독)을 보여 준다 — 못 쓰는 모델을 골랐다가 생성 때 실패하지 않도록.
  */
 function modelChoices_() {
   var out = [SUBSCRIPTION_MODEL], seen = {};
@@ -120,11 +120,14 @@ function modelChoices_() {
   return usableModels(out, keyStatus_(), providerOf_);
 }
 
+/** 모델 칸의 드롭다운. 쓸 수 있는 모델이 하나도 없으면 null (드롭다운을 걷어 낸다) */
 function modelValidation_() {
+  var list = modelChoices_();
+  if (!list.length) return null;    // 빈 목록은 구글이 받지 않는다
   return SpreadsheetApp.newDataValidation()
-    .requireValueInList(modelChoices_(), true)
+    .requireValueInList(list, true)
     .setAllowInvalid(true)          // 목록에 없는 이름도 직접 적을 수 있게
-    .setHelpText('API 키를 넣은 회사의 모델만 목록에 나옵니다. 다른 회사 모델은 메뉴 ② [AI 연결 · 모델 설정]에서 키를 먼저 넣으세요.')
+    .setHelpText('API 키를 넣은 회사의 모델(구독을 켰으면 Gemini(구독)도)만 목록에 나옵니다. 메뉴 ② [AI 연결 · 모델 설정]에서 키를 넣거나 구독을 켜세요.')
     .build();
 }
 
@@ -183,14 +186,43 @@ function setKey_(p, v) {
   if (v) props_().setProperty('KEY_' + p, v);
   else props_().deleteProperty('KEY_' + p);
 }
-/** 회사별 키 보관 여부 {gemini:true, openai:false, anthropic:false} */
+/** 회사별 키 보관 여부 + 구독 사용 여부 {gemini:true, openai:false, anthropic:false, subscription:false} */
 function keyStatus_() {
   var has = {};
   PROVIDERS.forEach(function (p) { has[p] = !!getKey_(p); });
+  has.subscription = subOn_();
   return has;
 }
-/** 이 모델을 지금 쓸 수 있는지(그 회사 키가 있는지). 구독은 늘 true */
+/** 이 모델을 지금 쓸 수 있는지(그 회사 키가 있는지, 구독이면 구독을 켰는지) */
 function modelUsable_(model) { return providerUsable(providerOf_(model), keyStatus_()); }
+
+/**
+ * Gemini 구독(=AI 수식)을 쓰는지. 키처럼 내 계정(UserProperties)에 둔다 — 구독은 계정마다 다르므로.
+ * 한 번도 정한 적이 없는데 설정에 Gemini(구독)이 골라져 있으면(v3.4 이전) 켠 것으로 본다.
+ */
+var SUB_PROP = 'SUB_GEMINI';
+function subOn_() {
+  var v = props_().getProperty(SUB_PROP);
+  if (v === null || v === undefined) {
+    var uses = false;
+    try {
+      uses = ['활동용 모델', '합본용 모델'].some(function (k) { return normModel(cfg_(k, '')) === SUBSCRIPTION_MODEL; });
+    } catch (e) {}
+    if (uses) setSub_(true);
+    return uses;
+  }
+  return v === '1';
+}
+function setSub_(on) { props_().setProperty(SUB_PROP, on ? '1' : '0'); }
+
+/** 설정 창 [① 키 · 구독] 의 구독 스위치 */
+function saveSubscription(on) {
+  var before = subOn_();
+  setSub_(!!on);
+  if (before !== !!on) { try { refreshModelDropdowns_(); } catch (e) {} }
+  return { has: keyStatus_(),
+           message: on ? 'Gemini 구독을 켰습니다. 모델 목록에 Gemini(구독)이 나옵니다.' : 'Gemini 구독을 껐습니다.' };
+}
 
 /* -------------------------------------------------------------- 설정 창 */
 function openApiDialog() {

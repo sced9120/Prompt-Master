@@ -1,5 +1,5 @@
 /******************************************************************************
- * 세특 작성 도우미 v3.4.0 — 설치용 합본
+ * 세특 작성 도우미 v3.5.0 — 설치용 합본
  *
  * 이 파일 하나에 모든 스크립트가 들어 있습니다.
  * Apps Script 편집기에서 Code.gs 의 내용을 전부 지우고 이 파일을 통째로 붙여넣으세요.
@@ -27,7 +27,7 @@
  */
 
 var APP = {
-  VERSION: 'v3.4.0',
+  VERSION: 'v3.5.0',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -715,17 +715,16 @@ function providerLabel(p) {
 }
 
 /**
- * 지금 쓸 수 있는 회사인지. 구독(=AI 수식)은 키가 필요 없어 늘 쓸 수 있다.
+ * 지금 쓸 수 있는 회사인지. 회사 모델은 키가 있어야, 구독(=AI 수식)은 구독을 켜 두어야 쓸 수 있다.
  * @param {string} provider  'gemini' | 'openai' | 'anthropic' | 'subscription' | ''
- * @param {Object<string,boolean>} has  회사별 키 보관 여부
+ * @param {Object<string,boolean>} has  회사별 키 보관 여부 + subscription(구독 사용 여부)
  */
 function providerUsable(provider, has) {
-  if (provider === 'subscription') return true;
   return !!(provider && has && has[provider]);
 }
 
 /**
- * 키를 넣은 회사의 모델만 남긴다 (순서 유지).
+ * 키를 넣은 회사의 모델(과 켜 둔 구독)만 남긴다 (순서 유지).
  * @param {string[]} models
  * @param {Object<string,boolean>} has
  * @param {function(string):string} provOf  모델 → 회사
@@ -1847,6 +1846,7 @@ function onboardStatus() {
   ['gemini', 'openai', 'anthropic'].forEach(function (p) {
     if (getKey_(p)) { st.hasKey = true; st.keyNames.push(p); }
   });
+  try { st.subscription = subOn_(); } catch (e) { st.subscription = false; }
   if (st.installed) {
     try { st.rosterCount = getRoster_().length; st.rosterMode = rosterMode_(); } catch (e) {}
     try {
@@ -1918,6 +1918,27 @@ function onboardSaveKey(p) {
   // 시험은 실패해도 새 키는 저장됐으므로, 그 회사 모델이 드롭다운에 나오게 한다
   if (key) { try { refreshModelDropdowns_(); } catch (e) {} }
   return { ok: false, model: model, kind: res.kind || '', status: onboardStatus(), message: res.message };
+}
+
+/**
+ * 2단계를 키 대신 "Gemini 구독(학교 계정·Google AI Pro)"으로 마친다.
+ * 이미 키로 잘 쓰고 있는 모델이 있으면 그대로 두고, 아니면 활동용·합본용을 Gemini(구독)으로 맞춘다.
+ */
+function onboardUseSubscription() {
+  setSub_(true);
+  var changed = [];
+  ['활동용 모델', '합본용 모델'].forEach(function (k) {
+    var cur = normModel(cfg_(k, DEFAULT_MODEL));
+    if (cur === SUBSCRIPTION_MODEL) return;
+    if (providerOf_(cur) !== 'subscription' && modelUsable_(cur)) return;   // 키로 쓰는 모델은 둔다
+    setCfg_(k, SUBSCRIPTION_MODEL);
+    changed.push(k);
+  });
+  try { refreshModelDropdowns_(); } catch (e) {}
+  var msg = 'Gemini 구독을 켰습니다. ';
+  msg += changed.length ? changed.join('·') + '을 Gemini(구독)으로 맞췄습니다.'
+                        : '지금 쓰는 모델은 키로 그대로 쓰고, Gemini(구독)도 목록에서 고를 수 있게 했습니다.';
+  return { ok: true, status: onboardStatus(), message: msg };
 }
 
 /** 설정 시트의 값 하나를 바꾼다 */
@@ -1994,7 +2015,8 @@ function onboardTestGenerate(activityKey) {
   var user = buildStudentBlock(cols, rows[0].values, { grade: (rec && rec.useGrade) ? 3 : '' });
   var model = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
   if (providerOf_(model) === 'subscription' || !modelUsable_(model)) {
-    var withKey = PROVIDERS.filter(function (x) { return getKey_(x); })[0] || 'gemini';
+    var withKey = PROVIDERS.filter(function (x) { return getKey_(x); })[0];
+    if (!withKey) throw new Error('API 키가 없어 스크립트로 바로 시험할 수 없습니다. 구독만 쓰신다면 [구독으로 시험하기]를 누르세요.');
     model = PROVIDER_DEFAULT_MODEL[withKey];
   }
 
@@ -2005,6 +2027,47 @@ function onboardTestGenerate(activityKey) {
     text: txt, bytes: v.bytes, limit: limit, model: model,
     issues: v.issues.map(function (i) { return (i.level === 'block' ? '[수정] ' : '[확인] ') + i.label; })
   };
+}
+
+/**
+ * 구독만 쓰는 경우의 시험 생성.
+ * =AI 수식은 선생님이 셀에서 [생성 및 삽입]을 눌러야 결과가 나오므로(구글 정책), 스크립트가 끝까지 할 수 없다.
+ * [🚀 시작하기] 시트 아래쪽에 시험 셀을 만들어 그 셀로 데려가고, 결과는 onboardReadSubTest 로 읽는다.
+ */
+function onboardTestSubscription(activityKey) {
+  var act = getActivity_(activityKey);
+  if (!act) throw new Error('활동을 찾을 수 없습니다.');
+  var rows = readExampleRows_(act);
+  if (!rows.length) throw new Error('예시 시트가 비어 있어 시험할 자료가 없습니다. 예시를 한 줄 채워 주세요.');
+  var rec = findByKey(getRecordTypes_(), act.recordKey);
+  var user = buildStudentBlock(parseColumns(act.columns), rows[0].values, { grade: (rec && rec.useGrade) ? 3 : '' });
+
+  var s = sh_(APP.SH.START) || buildStart();
+  var r = s.getLastRow() + 2;
+  if (r + 1 > s.getMaxRows()) s.insertRowsAfter(s.getMaxRows(), r + 1 - s.getMaxRows());
+  s.getRange(r, 1).setValue('🧪 구독 시험 — 바로 아래 셀을 누르면 뜨는 [생성 및 삽입](Generate and insert)을 누르세요. ' +
+                            '답이 들어오면 시작하기 창에서 [결과 확인]을 누릅니다. 확인이 끝나면 이 두 줄은 지워도 됩니다.')
+    .setFontWeight('bold').setBackground(APP.COLORS.input);
+  var cell = s.getRange(r + 1, 1);
+  cell.setFormula(subscriptionFormula_(promptFor_(act), user));
+  cell.activate();
+  return { a1: cell.getA1Notation(), limit: charsFor_(act) * 3 };
+}
+
+/** 구독 시험 셀의 결과를 읽어 검사한다. 아직 [생성 및 삽입] 전이면 ok:false */
+function onboardReadSubTest(p) {
+  var s = sh_(APP.SH.START);
+  var cell = s && p && p.a1 ? s.getRange(p.a1) : null;
+  var v = cell ? String(cell.getDisplayValue() || '').trim() : '';
+  if (!v || /^#/.test(v) || /^(loading|로드 중)/i.test(v)) {
+    return { ok: false, message: '아직 결과가 없습니다. 시험 셀을 선택하고 [생성 및 삽입]을 누른 뒤, 답이 들어오면 다시 눌러 주세요.' +
+             (/^#/.test(v) ? ' (지금 셀에 ' + v.slice(0, 20) + ' 이(가) 보입니다 — 이 계정에서는 =AI 함수를 쓸 수 없는 것일 수 있습니다)' : '') };
+  }
+  var txt = cleanResult_(v);
+  var limit = Number(p.limit) || 1500;
+  var res = validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES);
+  return { ok: true, text: txt, bytes: res.bytes, limit: limit,
+           issues: res.issues.map(function (i) { return (i.level === 'block' ? '[수정] ' : '[확인] ') + i.label; }) };
 }
 
 /* -------------------------------------------------------------- 마무리 */
@@ -2064,8 +2127,9 @@ function buildStart() {
 
   H('무엇이 필요한가요');
   P('· AI 키 하나.  Gemini 키가 가장 부담이 적습니다(무료 등급 있음). aistudio.google.com 에서 발급.');
-  P('· 학교 워크스페이스의 Gemini(교육용)나 개인 Google AI Pro·Ultra 구독이 있다면 키 없이도 쓸 수 있습니다(AI Plus 요금제는 안 됨).');
-  P('   확인법: 빈 셀에  =AI("안녕")  을 넣어 답이 나오면 됩니다.');
+  P('· 학교 계정에 Google AI Pro for Education 이 있거나, 개인 Google AI Pro·Ultra 를 구독 중이면 키 없이도 쓸 수 있습니다.');
+  P('   시작하기 2단계에서 [Gemini 구독으로] 를 고르면 키 넣는 단계를 건너뜁니다. (AI Plus 요금제, 무료 학교 계정은 아직 안 됨)');
+  P('   확인법: 빈 셀에  =AI("안녕")  을 넣고 셀을 눌러 [생성 및 삽입] → 답이 나오면 됩니다.');
   P('· 학생 명단(반·번호·이름, 동아리면 학년까지). 엑셀 양식을 내려받아 채워 올리거나, 복사해 붙여넣으면 됩니다.');
   P('');
 
@@ -2211,6 +2275,7 @@ function buildHelp() {
 
   H('9. AI 모델 — 직접 적고, 시험하고, 고르기');
   P('모델 목록은 [⚙️ 설정] 시트 아래 [🤖 모델 목록] 표에 있습니다. 여기 적힌 이름이 모든 [모델] 드롭다운의 선택지입니다.');
+  P('단, 드롭다운과 메뉴 ② 창에는 내가 API 키를 넣은 회사의 모델만, 그리고 구독을 켰을 때만 Gemini(구독)이 나옵니다.');
   P('메뉴 ② AI 연결 · 모델 설정 > [② 모델] 탭에서 이름을 적고 [시험]을 누르면 ✓/✗ 와 걸린 시간이 표에 남습니다.');
   P('메뉴 ② 아래 [모델 연결 테스트]는 목록 전체를 한 번에 확인합니다. 학기 초에 한 번 눌러 두세요.');
   P('');
@@ -2250,7 +2315,9 @@ function buildHelp() {
   P('Q. "모델명을 찾을 수 없습니다" → 모델이 종료됐거나 철자가 틀렸습니다. 위 9번의 공식 목록에서 새 이름으로 바꾸세요.');
   P('Q. 한 번에 많이 돌리면 중간에 멈춰요 → 실행 시간 제한(약 6분) 때문입니다. 남은 행은 체크가 그대로 있으니 한 번 더 누르세요.');
   P('Q. Gemini 무료 등급 → 분당 호출 제한이 있어 여러 명을 한꺼번에 돌리면 일부가 실패합니다. 나눠서 실행하세요.');
-  P('Q. Gemini(구독)인데 결과가 없어요 → 결과 셀에 뜬 [생성] 버튼을 눌러야 합니다.');
+  P('Q. Gemini(구독)인데 결과가 없어요 → 결과 셀을 선택하고 [생성 및 삽입]을 눌러야 합니다(한 번에 350칸까지 함께 선택 가능).');
+  P('Q. Gemini(구독)이 목록에 없어요 → 메뉴 ② [① 키 · 구독] 탭에서 [Gemini 구독으로 쓰기]를 켜세요.');
+  P('   학교 계정은 학교에 Google AI Pro for Education 이 있어야 합니다. 빈 셀에 =AI("안녕") 을 넣어 [생성 및 삽입]이 뜨는지 보세요.');
   P('Q. 결과가 갱신 안 돼요 → 셀을 클릭하고 수식 끝에 공백 한 칸을 넣고 엔터(캐시 갱신).');
   P('Q. 새 활동이 취합에 없어요 → 메뉴 ⑦ 최종취합 시트 생성/갱신 을 다시 누르세요.');
   P('Q. 예시 시트에 [바이트]·[검증] 칸이 없어요 → 부가 기능 > 예시 시트 구조 복구 (예시 내용은 보존됩니다).');
@@ -3458,7 +3525,7 @@ function companyMap_() {
 
 /**
  * 드롭다운 선택지: 구독 + 표의 모델 + 설정에 적힌 모델.
- * 키를 넣은 회사의 모델만 보여 준다 — 키가 없는 모델을 골랐다가 생성 때 실패하지 않도록.
+ * 키를 넣은 회사의 모델과, 구독을 켰을 때만 Gemini(구독)을 보여 준다 — 못 쓰는 모델을 골랐다가 생성 때 실패하지 않도록.
  */
 function modelChoices_() {
   var out = [SUBSCRIPTION_MODEL], seen = {};
@@ -3470,11 +3537,14 @@ function modelChoices_() {
   return usableModels(out, keyStatus_(), providerOf_);
 }
 
+/** 모델 칸의 드롭다운. 쓸 수 있는 모델이 하나도 없으면 null (드롭다운을 걷어 낸다) */
 function modelValidation_() {
+  var list = modelChoices_();
+  if (!list.length) return null;    // 빈 목록은 구글이 받지 않는다
   return SpreadsheetApp.newDataValidation()
-    .requireValueInList(modelChoices_(), true)
+    .requireValueInList(list, true)
     .setAllowInvalid(true)          // 목록에 없는 이름도 직접 적을 수 있게
-    .setHelpText('API 키를 넣은 회사의 모델만 목록에 나옵니다. 다른 회사 모델은 메뉴 ② [AI 연결 · 모델 설정]에서 키를 먼저 넣으세요.')
+    .setHelpText('API 키를 넣은 회사의 모델(구독을 켰으면 Gemini(구독)도)만 목록에 나옵니다. 메뉴 ② [AI 연결 · 모델 설정]에서 키를 넣거나 구독을 켜세요.')
     .build();
 }
 
@@ -3533,14 +3603,43 @@ function setKey_(p, v) {
   if (v) props_().setProperty('KEY_' + p, v);
   else props_().deleteProperty('KEY_' + p);
 }
-/** 회사별 키 보관 여부 {gemini:true, openai:false, anthropic:false} */
+/** 회사별 키 보관 여부 + 구독 사용 여부 {gemini:true, openai:false, anthropic:false, subscription:false} */
 function keyStatus_() {
   var has = {};
   PROVIDERS.forEach(function (p) { has[p] = !!getKey_(p); });
+  has.subscription = subOn_();
   return has;
 }
-/** 이 모델을 지금 쓸 수 있는지(그 회사 키가 있는지). 구독은 늘 true */
+/** 이 모델을 지금 쓸 수 있는지(그 회사 키가 있는지, 구독이면 구독을 켰는지) */
 function modelUsable_(model) { return providerUsable(providerOf_(model), keyStatus_()); }
+
+/**
+ * Gemini 구독(=AI 수식)을 쓰는지. 키처럼 내 계정(UserProperties)에 둔다 — 구독은 계정마다 다르므로.
+ * 한 번도 정한 적이 없는데 설정에 Gemini(구독)이 골라져 있으면(v3.4 이전) 켠 것으로 본다.
+ */
+var SUB_PROP = 'SUB_GEMINI';
+function subOn_() {
+  var v = props_().getProperty(SUB_PROP);
+  if (v === null || v === undefined) {
+    var uses = false;
+    try {
+      uses = ['활동용 모델', '합본용 모델'].some(function (k) { return normModel(cfg_(k, '')) === SUBSCRIPTION_MODEL; });
+    } catch (e) {}
+    if (uses) setSub_(true);
+    return uses;
+  }
+  return v === '1';
+}
+function setSub_(on) { props_().setProperty(SUB_PROP, on ? '1' : '0'); }
+
+/** 설정 창 [① 키 · 구독] 의 구독 스위치 */
+function saveSubscription(on) {
+  var before = subOn_();
+  setSub_(!!on);
+  if (before !== !!on) { try { refreshModelDropdowns_(); } catch (e) {} }
+  return { has: keyStatus_(),
+           message: on ? 'Gemini 구독을 켰습니다. 모델 목록에 Gemini(구독)이 나옵니다.' : 'Gemini 구독을 껐습니다.' };
+}
 
 /* -------------------------------------------------------------- 설정 창 */
 function openApiDialog() {
@@ -4125,7 +4224,7 @@ function runGeneration_(act, sheet, rows) {
     }
 
     var msg = '완료 ' + okN + '건';
-    if (subN) msg += ' / 구독수식 ' + subN + '건(셀에서 [생성] 버튼을 눌러 주세요)';
+    if (subN) msg += ' / 구독수식 ' + subN + '건(AI 결과 칸을 선택하고 [생성 및 삽입]을 눌러 주세요)';
     if (skipN) msg += ' / 자료 없음 ' + skipN + '건';
     if (errN) msg += ' / 실패 ' + errN + '건';
     if (backupN) msg += ' / 예비 모델 ' + backupN + '건';

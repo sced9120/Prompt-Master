@@ -50,6 +50,10 @@
   .radio { display:flex; flex-direction:column; align-items:center; font-size:10.5px; color:var(--muted); width:40px; line-height:1.2; }
   .radio input { margin:2px 0 0; }
   .radio.off { opacity:.4; cursor:not-allowed; }
+  .subbox { border-color:#c6d8c9; background:#f1f6f2; }
+  .subbox .msg { margin-top:4px; min-height:0; }
+  .hidden-note { font-size:11.5px; color:var(--muted); margin:2px 0 6px; }
+  .empty { border:1px dashed var(--line); border-radius:8px; padding:14px; text-align:center; color:var(--muted); font-size:12.5px; margin-bottom:6px; }
   .memo { width:100%; margin-top:5px; font-size:12px; color:#4b5563; padding:5px 9px; }
   .stat { font-size:11.5px; margin-top:5px; color:var(--muted); display:flex; gap:8px; align-items:center; }
   .stat .s-ok { color:var(--ok); font-weight:600; } .stat .s-bad { color:var(--warn); font-weight:600; }
@@ -94,16 +98,24 @@
 
 <div class="top">
   <h2>AI 연결 · 모델 설정</h2>
-  <div class="sub">키는 회사마다 하나씩, <b>여러 개를 함께</b> 넣어 둘 수 있습니다. 키는 내 구글 계정에만, 모델 목록은 이 파일의 [⚙️ 설정] 시트에 저장됩니다.</div>
+  <div class="sub">키는 회사마다 하나씩, <b>여러 개를 함께</b> 넣어 둘 수 있습니다. 키와 구독 설정은 내 구글 계정에만, 모델 목록은 이 파일의 [⚙️ 설정] 시트에 저장됩니다.</div>
 </div>
 <div class="tabs">
-  <button class="tab on" data-tab="keys">① API 키</button>
+  <button class="tab on" data-tab="keys">① 키 · 구독</button>
   <button class="tab" data-tab="models">② 모델</button>
   <button class="tab" data-tab="help">③ 도움말 · 최신 모델명</button>
 </div>
 
 <!-- ─────────────────────────────── ① API 키 -->
 <div class="pane on" id="p-keys">
+  <div class="box subbox" style="margin-top:0">
+    <label class="inline" style="margin:0"><input type="checkbox" id="subOn"> <b>Gemini 구독으로 쓰기</b> — API 키 없이 시트의 <code>=AI()</code> 함수로</label>
+    <div class="hint">학교 계정에 <b>Google AI Pro for Education</b>이 있거나, 개인 <b>Google AI Pro·Ultra</b>를 구독 중이면 켜세요. 켜면 아래 API 키는 넣지 않아도 됩니다.<br>
+      확인법: 빈 셀에 <code>=AI("안녕")</code>을 넣고 셀을 눌러 <b>[생성 및 삽입]</b>이 뜨고 답이 나오면 쓸 수 있습니다. 무료 학교 계정(Education Fundamentals)과 AI Plus 요금제는 아직 안 됩니다.<br>
+      구독만 쓰면: 결과는 AI 결과 칸을 선택하고 [생성 및 삽입]을 눌러야 나오고(한 번에 350칸), 여러 학생 묶음 생성·활동 만들기 AI 초안·예시 자동 만들기는 API 키가 있어야 합니다.</div>
+    <div class="msg" id="mSub"></div>
+  </div>
+
   <label>Gemini API 키 <span id="has-gemini"></span></label>
   <input class="full" type="password" id="k-gemini" placeholder="AIza...">
   <div class="hint"><a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> → Create API key. 무료 등급이 있어 처음 쓰기에 가장 부담이 적습니다. <b>대부분의 선생님께 권합니다.</b></div>
@@ -123,11 +135,6 @@
   <div class="msg" id="mKeys"></div>
 
   <div class="box">
-    <b class="t">API 키 없이 쓰는 방법</b>
-    학교 워크스페이스의 Gemini(교육용)나 개인 Google AI Pro·Ultra(옛 Google One AI Premium) 구독 계정이라면, 빈 셀에 <code>=AI("안녕")</code>을 넣어 답이 나오는지 보세요.
-    나온다면 [② 모델] 탭에서 <b>Gemini(구독)</b>을 활동용으로 고르면 키 없이 동작합니다. 다만 활동 만들기 마법사·예시 만들기에는 API 키가 필요합니다.
-  </div>
-  <div class="box">
     <b class="t">비용과 개인정보</b>
     · 학생 이름은 기본적으로 AI에 전송되지 않습니다([⚙️ 설정]의 학생 이름 마스킹).<br>
     · 유료 API는 호출한 만큼 과금됩니다. 체크박스를 켜 둔 채로 두면 재호출될 수 있으니 결과 확인 후 해제하세요.<br>
@@ -142,13 +149,14 @@
     모델명을 <b>적으면 자동으로 연결을 확인하고 저장</b>합니다. 따로 누를 버튼이 없습니다. 모르는 이름이면 <a href="#" id="toHelp">③ 도움말</a>에서 내 키로 쓸 수 있는 목록을 불러올 수 있습니다.
   </div>
   <div class="legend"><span><b>활동</b> = 활동별 세특 생성에 쓸 모델</span><span><b>합본</b> = 여러 활동을 한 편으로 압축할 때</span></div>
-  <div class="hint" style="margin:-4px 0 8px">활동·합본·예비 모델로는 <b>API 키를 넣은 회사의 모델만</b> 고를 수 있습니다. 키가 없는 모델은 흐리게 보입니다.</div>
+  <div class="hint" style="margin:-4px 0 8px">여기에는 <b>내가 키를 넣은 회사의 모델</b>과 <b>켜 둔 구독</b>만 보입니다. 다른 회사 모델을 쓰려면 [① 키 · 구독]에서 그 회사 키를 넣으세요.</div>
   <div class="msg" id="mFix" style="margin:0 0 8px" hidden></div>
   <datalist id="dl"></datalist>
   <div id="rows"></div>
+  <div class="hidden-note" id="hiddenNote"></div>
   <div class="actions">
     <button id="bAdd">+ 모델 추가</button>
-    <button id="bPreset" title="지금 목록에 없는 기본 추천 모델을 아래에 덧붙입니다">기본 추천 목록 넣기</button>
+    <button id="bPreset" title="키를 넣은 회사의 기본 추천 모델 중 지금 목록에 없는 것을 덧붙입니다">기본 추천 목록 넣기</button>
     <span class="spacer"></span>
     <button id="bTestAll">전체 다시 확인</button>
   </div>
@@ -251,6 +259,7 @@
 var $ = function (id) { return document.getElementById(id); };
 var SUB = 'Gemini(구독)';
 var S = null, ROWS = [], ACT = '', CMP = '', BK = '', THINK = true, BATCH = 5, AVAIL = {};
+var SHOWALL = false;    // 키 없는 회사 모델도 펼쳐 보기
 var SAVE_T = null, SAVING = false, PENDING = false, CLOSING = false;
 var QUEUE = [], TESTING = false;
 
@@ -279,11 +288,15 @@ google.script.run.withSuccessHandler(function (s) {
   });
   $('think').checked = THINK;
   $('batch').value = String([1, 3, 5, 10].indexOf(BATCH) >= 0 ? BATCH : 5);
+  $('subOn').checked = !!s.has.subscription;
   var fixed = fixSelections();
   drawKeys(); drawRows(); fillDatalist();
   if (fixed) { noteFix(fixed); scheduleSave(); }
   $('lg').href = s.links.gemini; $('lo').href = s.links.openai; $('la').href = s.links.anthropic;
-  if (!s.has.gemini && !s.has.openai && !s.has.anthropic) { say('mKeys', '먼저 키를 하나 넣으세요. 처음이라면 Gemini를 권합니다.'); return; }
+  if (!hasAnyKey()) {
+    if (!s.has.subscription) { say('mKeys', 'API 키를 하나 넣거나, 맨 위의 [Gemini 구독으로 쓰기]를 켜세요. 키라면 Gemini를 권합니다.'); return; }
+    showTab('models'); return;           // 구독만 쓰는 경우: 키 단계를 건너뛴다
+  }
   showTab('models');
   // 아직 확인하지 않았거나, 시트에서 직접 고친(⏳) 모델은 창을 열자마자 확인한다
   ROWS.forEach(function (r) { var st = r.status || ''; if ((!st || st.charAt(0) === '⏳') && S.has[provOf(r)]) enqueue(r); });
@@ -301,9 +314,28 @@ function drawKeys() {
   });
   $('keyChips').innerHTML = ['gemini', 'openai', 'anthropic'].map(function (p) {
     return '<span class="kc' + (S.has[p] ? ' on' : '') + '">' + label(p) + (S.has[p] ? ' ✓ 키 있음' : ' – 키 없음') + '</span>';
-  }).join('') + '<a href="#" id="toKeys">키 넣기·바꾸기</a>';
+  }).join('') +
+  '<span class="kc' + (S.has.subscription ? ' on' : '') + '">Gemini 구독' + (S.has.subscription ? ' ✓ 켜짐' : ' – 꺼짐') + '</span>' +
+  '<a href="#" id="toKeys">키 · 구독 바꾸기</a>';
   $('toKeys').onclick = function (e) { e.preventDefault(); showTab('keys'); };
 }
+function hasAnyKey() { return !!(S && (S.has.gemini || S.has.openai || S.has.anthropic)); }
+
+/* ---------- 구독 스위치 */
+$('subOn').onchange = function () {
+  var box = this, on = box.checked;
+  box.disabled = true; say('mSub', '<span class="spin"></span>저장 중…');
+  google.script.run.withSuccessHandler(function (r) {
+    box.disabled = false; S.has = r.has;
+    var fixed = fixSelections();
+    noteFix(fixed);
+    drawKeys(); drawRows(); fillDatalist();
+    say('mSub', esc(r.message) + (fixed ? '<br>' + esc(fixed) : ''), 'ok');
+    scheduleSave();
+    if (on && !hasAnyKey()) setTimeout(function () { showTab('models'); }, 700);   // 키 없이 구독만 → 키 단계를 건너뛴다
+  }).withFailureHandler(function (e) { box.disabled = false; box.checked = !on; say('mSub', esc(e.message), 'err'); })
+    .saveSubscription(on);
+};
 function kv(p) { var v = $('k-' + p).value.trim(); return v === '' ? '__KEEP__' : v; }
 function sendKeys(o) {
   say('mKeys', '<span class="spin"></span>저장 중…');
@@ -312,7 +344,7 @@ function sendKeys(o) {
     S.has = r.has;
     var fixed = fixSelections();
     noteFix(fixed);
-    drawKeys(); drawRows();
+    drawKeys(); drawRows(); fillDatalist();
     ['gemini', 'openai', 'anthropic'].forEach(function (p) { $('k-' + p).value = ''; });
     say('mKeys', esc(r.message) + ' 이 회사 모델들을 자동으로 확인합니다.' + (fixed ? '<br>' + esc(fixed) : ''), 'ok');
     // 새로 넣은(바꾼) 키의 모델은 바로 다시 확인
@@ -335,28 +367,31 @@ function guess(m) {
 function provOf(r) { return { 'Gemini': 'gemini', 'OpenAI': 'openai', 'Claude': 'anthropic' }[r.company] || guess(r.model); }
 function label(p) { return { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude' }[p] || '회사 모름'; }
 
-/* ---------- 키를 넣은 회사의 모델만 고를 수 있게 */
+/* ---------- 내가 키를 넣은 회사의 모델과 켜 둔 구독만 */
 function usable(r) { var p = provOf(r); return !!(p && S && S.has[p]); }
 function usableName(m) {
   if (!m) return false;
-  if (m === SUB) return true;                           // 구독은 키 없이 셀 수식으로
+  if (m === SUB) return !!(S && S.has.subscription);    // 구독은 키 대신 [구독으로 쓰기]를 켜야
   var r = ROWS.filter(function (x) { return norm(x.model) === m; })[0];
   return usable(r || { model: m, company: '자동' });
 }
-/** 대신 고를 모델: 연결이 확인된(✓) 것 → 키만 있는 것 순 */
+/** 목록에 보일 줄인지: 쓸 수 있는 모델, 아직 이름·회사를 정하는 중인 줄, 이번에 손댄 줄 */
+function visible(r) { return SHOWALL || r.touched || !norm(r.model) || !provOf(r) || usable(r); }
+/** 대신 고를 모델: 연결이 확인된(✓) 키 모델 → 키만 있는 모델 → 구독 순 */
 function firstUsable() {
   var ok = ROWS.filter(function (r) { return norm(r.model) && usable(r); });
   var good = ok.filter(function (r) { return (r.status || '').charAt(0) === '✓'; });
   var r = good[0] || ok[0];
-  return r ? norm(r.model) : '';
+  if (r) return norm(r.model);
+  return S && S.has.subscription ? SUB : '';
 }
-/** 고른 모델의 키가 없어졌으면 키 있는 모델로 바꾼다. 바꾼 내용을 한 줄로 돌려준다 */
+/** 고른 모델을 못 쓰게 됐으면 쓸 수 있는 모델로 바꾼다. 바꾼 내용을 한 줄로 돌려준다 */
 function fixSelections() {
   var f = firstUsable(), msg = [];
   if (ACT && !usableName(ACT) && f) { msg.push('활동용 ' + ACT + ' → ' + f); ACT = f; }
   if (CMP && !usableName(CMP) && f) { msg.push('합본용 ' + CMP + ' → ' + f); CMP = f; }
   if (BK && !usableName(BK)) { msg.push('예비 ' + BK + ' → 쓰지 않음'); BK = ''; }
-  return msg.length ? '키가 없는 모델이라 바꿨습니다: ' + msg.join(' · ') : '';
+  return msg.length ? '키나 구독이 없는 모델이라 바꿨습니다: ' + msg.join(' · ') : '';
 }
 
 function statusHtml(r) {
@@ -377,12 +412,17 @@ function drawRows() {
   var box = $('rows'), h = '';
   var counts = {};
   ROWS.forEach(function (r) { var m = norm(r.model); if (m) counts[m] = (counts[m] || 0) + 1; });
-  h += '<div class="mrow fixed"><div class="line1">' +
-       '<div class="name" style="padding:6px 2px">Gemini(구독) <span class="hint">— 키 없이 =AI() 셀 수식으로</span></div>' +
-       '<label class="radio">활동<input type="radio" name="act" value="' + SUB + '"' + (ACT === SUB ? ' checked' : '') + '></label>' +
-       '<label class="radio">합본<input type="radio" name="cmp" value="' + SUB + '"' + (CMP === SUB ? ' checked' : '') + '></label>' +
-       '<span style="width:34px"></span></div></div>';
+  if (S && S.has.subscription) {
+    h += '<div class="mrow fixed"><div class="line1">' +
+         '<div class="name" style="padding:6px 2px">Gemini(구독) <span class="hint">— 키 없이 =AI() 셀 수식으로</span></div>' +
+         '<label class="radio">활동<input type="radio" name="act" value="' + SUB + '"' + (ACT === SUB ? ' checked' : '') + '></label>' +
+         '<label class="radio">합본<input type="radio" name="cmp" value="' + SUB + '"' + (CMP === SUB ? ' checked' : '') + '></label>' +
+         '<span style="width:34px"></span></div></div>';
+  }
+  var shown = 0, hidden = 0;
   ROWS.forEach(function (r, i) {
+    if (!visible(r)) { hidden++; return; }
+    shown++;
     var m = norm(r.model), p = provOf(r);
     var off = !m || !usable(r);
     var offAttr = off ? ' disabled' : '';
@@ -403,19 +443,27 @@ function drawRows() {
       '<div class="stat"><button class="small" data-act="test">다시 확인</button>' + statusHtml(r) +
       (counts[m] > 1 ? '<span class="s-bad">· 같은 이름이 두 번 있습니다</span>' : '') + '</div></div>';
   });
+  if (!shown && !(S && S.has.subscription)) {
+    h += '<div class="empty">아직 쓸 수 있는 모델이 없습니다.<br>[① 키 · 구독]에서 API 키를 넣거나 Gemini 구독을 켜면 그 모델이 여기 나옵니다.</div>';
+  }
   box.innerHTML = h;
+  $('hiddenNote').innerHTML = SHOWALL
+    ? '키를 넣지 않은 회사의 모델도 함께 보는 중입니다(흐린 것). <a href="#" id="tgHidden">다시 숨기기</a>'
+    : hidden ? '키를 넣지 않은 회사의 모델 ' + hidden + '개는 숨겼습니다([⚙️ 설정]의 모델 목록에는 그대로 있습니다). <a href="#" id="tgHidden">펼쳐 보기</a>' : '';
+  if ($('tgHidden')) $('tgHidden').onclick = function (e) { e.preventDefault(); SHOWALL = !SHOWALL; drawRows(); };
 
   [].forEach.call(box.querySelectorAll('.mrow[data-i]'), function (el) {
     var i = +el.dataset.i;
     [].forEach.call(el.querySelectorAll('[data-f]'), function (inp) {
       var f = inp.dataset.f;
       if (f === 'company') {
-        inp.onchange = function () { ROWS[i].company = inp.value; ROWS[i].status = ''; noteFix(fixSelections()); drawRows(); enqueue(ROWS[i]); scheduleSave(); };
+        inp.onchange = function () { ROWS[i].company = inp.value; ROWS[i].status = ''; ROWS[i].touched = true; noteFix(fixSelections()); drawRows(); enqueue(ROWS[i]); scheduleSave(); };
         return;
       }
       inp.addEventListener('input', function () {
         var before = norm(ROWS[i].model);
         ROWS[i][f] = inp.value;
+        ROWS[i].touched = true;           // 고치는 중인 줄은 키가 없는 회사 이름이 되어도 숨기지 않는다
         if (f === 'model') { ROWS[i].status = ''; if (ACT === before) ACT = norm(inp.value); if (CMP === before) CMP = norm(inp.value); if (BK === before) BK = norm(inp.value); }
       });
       // 칸을 벗어나거나 엔터를 치면 확정 → 모델명이면 자동 확인, 모두 자동 저장
@@ -440,14 +488,13 @@ function drawRows() {
 }
 
 function drawBackup() {
-  var sel = $('backup'), h = '<option value="">(쓰지 않음)</option>', hidden = 0;
+  var sel = $('backup'), h = '<option value="">(쓰지 않음)</option>';
   ROWS.forEach(function (r) {
     var m = norm(r.model); if (!m) return;
-    if (!usable(r)) { hidden++; return; }              // 키가 없는 회사의 모델은 예비로 고를 수 없다
+    if (!usable(r)) return;                             // 키가 없는 회사의 모델은 예비로 고를 수 없다
     var ok = (r.status || '').charAt(0) === '✓';
     h += '<option value="' + esc(m) + '"' + (BK === m ? ' selected' : '') + '>' + esc(m) + ' · ' + label(provOf(r)) + (ok ? ' ✓' : '') + '</option>';
   });
-  if (hidden) h += '<option disabled>— 키가 없는 회사의 모델 ' + hidden + '개는 뺐습니다 —</option>';
   sel.innerHTML = h;
 }
 /** fixSelections() 결과가 있으면 [② 모델] 탭 위쪽에 남겨 둔다 (연결 확인 알림에 덮이지 않게) */
@@ -459,22 +506,25 @@ $('batch').onchange = function () { BATCH = Number(this.value); scheduleSave(); 
 function fillDatalist() {
   var seen = {}, h = '';
   var add = function (m, note) { m = norm(m); if (!m || seen[m]) return; seen[m] = 1; h += '<option value="' + esc(m) + '">' + esc(note || '') + '</option>'; };
-  (S.presets || []).forEach(function (p) { add(p.model, p.level); });
+  // 이름 제안도 키를 넣은 회사 것만
+  (S.presets || []).forEach(function (p) { if (usable({ model: p.model, company: '자동' })) add(p.model, p.level); });
   Object.keys(AVAIL).forEach(function (p) { (AVAIL[p].models || []).forEach(function (m) { add(m, label(p) + ' · 내 키'); }); });
   $('dl').innerHTML = h;
 }
 
 $('bAdd').onclick = function () {
-  ROWS.push({ model: '', company: '자동', level: '', memo: '', status: '' });
+  ROWS.push({ model: '', company: '자동', level: '', memo: '', status: '', touched: true });
   drawRows();
   var ins = $('rows').querySelectorAll('input.name'); if (ins.length) ins[ins.length - 1].focus();
 };
 $('bPreset').onclick = function () {
+  if (!hasAnyKey()) { say('mFoot', '기본 추천 모델은 회사 API 모델입니다. 먼저 [① 키 · 구독]에서 키를 넣으세요.', 'err'); return; }
   var added = [];
   S.presets.forEach(function (p) {
+    if (!usable({ model: p.model, company: '자동' })) return;          // 키를 넣은 회사 것만
     if (!ROWS.some(function (r) { return norm(r.model) === p.model; })) { var r = JSON.parse(JSON.stringify(p)); ROWS.push(r); added.push(r); }
   });
-  if (!added.length) { say('mFoot', '기본 추천 모델이 이미 모두 있습니다.'); return; }
+  if (!added.length) { say('mFoot', '키를 넣은 회사의 기본 추천 모델이 이미 모두 있습니다.'); return; }
   drawRows(); added.forEach(function (r) { enqueue(r); }); scheduleSave();
 };
 $('bTestAll').onclick = function () { ROWS.forEach(function (r) { r.status = ''; enqueue(r, true); }); };

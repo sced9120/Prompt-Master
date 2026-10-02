@@ -83,13 +83,15 @@ t('정렬: -latest → 버전 큰 순', () => {
   eq(M.sortModelIds(['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.5-flash-lite']).join(','),
      'gemini-flash-latest,gemini-3.8-flash,gemini-3.5-flash-lite,gemini-2.5-flash');
 });
-t('키 있는 회사의 모델만 남기기 — 구독은 늘 남음, 순서 유지', () => {
-  const has = { gemini: false, openai: true, anthropic: false };
+t('키 있는 회사의 모델(과 켠 구독)만 남기기 — 순서 유지', () => {
+  const list = ['Gemini(구독)', 'gemini-flash-latest', 'gpt-5.6-luna', 'claude-haiku-4-5', 'mistral-large', 'o4-mini'];
   const prov = m => (m === 'Gemini(구독)' ? 'subscription' : M.guessProvider(m));
-  eq(M.usableModels(['Gemini(구독)', 'gemini-flash-latest', 'gpt-5.6-luna', 'claude-haiku-4-5', 'mistral-large', 'o4-mini'], has, prov).join(','),
-     'Gemini(구독),gpt-5.6-luna,o4-mini');
+  eq(M.usableModels(list, { gemini: false, openai: true, anthropic: false, subscription: false }, prov).join(','),
+     'gpt-5.6-luna,o4-mini', '구독 꺼짐');
+  eq(M.usableModels(list, { gemini: false, openai: true, anthropic: false, subscription: true }, prov).join(','),
+     'Gemini(구독),gpt-5.6-luna,o4-mini', '구독 켜짐');
   eq(M.providerUsable('', { gemini: true }), false, '회사를 모르면 못 씀');
-  eq(M.providerUsable('subscription', {}), true, '구독은 키 없이');
+  eq(M.providerUsable('subscription', {}), false, '구독은 켜야 씀');
 });
 t('상태 한 줄', () => {
   eq(M.modelStatusText({ ok: true, sec: '1.8' }, '9/21 14:05'), '✓ 연결됨 · 1.8초 · 9/21 14:05');
@@ -134,22 +136,28 @@ t('모델 목록 표가 기본 8개로 채워짐', () => {
   eq(rows[0].model, 'gemini-flash-latest', '첫 줄');
   ok(rows.every(r => r.level && r.memo), '수준·설명 빈칸 있음');
 });
-t('키가 하나도 없으면 드롭다운에는 구독만', () => {
-  eq(A.modelChoices_().join(','), 'Gemini(구독)');
+t('키도 구독도 없으면 드롭다운이 비고, 검증 규칙은 걷어 냄(빈 목록은 구글이 거절)', () => {
+  eq(A.modelChoices_().join(','), '');
+  eq(A.modelValidation_(), null);
 });
-t('Gemini 키만 있으면 구독 + Gemini 모델만', () => {
+t('Gemini 키만 있으면 Gemini 모델만 (구독은 안 나옴)', () => {
   A.setKey_('gemini', 'AIza-x');
   const c = A.modelChoices_();
-  eq(c[0], 'Gemini(구독)');
-  ok(c.indexOf('gemini-flash-latest') > 0, 'Gemini 모델 누락: ' + c.join(','));
-  ok(c.every(m => m === 'Gemini(구독)' || /^gemini/.test(m)), '다른 회사 모델이 섞임: ' + c.join(','));
+  ok(c.indexOf('gemini-flash-latest') >= 0, 'Gemini 모델 누락: ' + c.join(','));
+  ok(c.every(m => /^gemini/.test(m)), '다른 회사 모델·구독이 섞임: ' + c.join(','));
 });
 t('키를 더 넣으면 그 회사 모델도 나옴', () => {
   A.setKey_('anthropic', 'sk-ant');
   const c = A.modelChoices_();
-  ok(c.indexOf('claude-haiku-4-5') > 0, 'Claude 모델 누락');
+  ok(c.indexOf('claude-haiku-4-5') >= 0, 'Claude 모델 누락');
   ok(!c.some(m => /^gpt/.test(m)), 'OpenAI 키가 없는데 gpt 모델이 나옴');
   A.setKey_('gemini', ''); A.setKey_('anthropic', '');
+});
+t('구독을 켜면 Gemini(구독)이 맨 앞에, 끄면 사라짐', () => {
+  A.saveSubscription(true);
+  eq(A.modelChoices_().join(','), 'Gemini(구독)');
+  A.saveSubscription(false);
+  eq(A.modelChoices_().join(','), '');
 });
 t('모델 표가 다른 설정 읽기를 방해하지 않음', () => {
   eq(Number(A.cfg_('1회 최대 생성 건수', 0)), 25);
@@ -557,13 +565,13 @@ t('[회사]를 직접 고른 이름도 그 회사 키가 있어야 나옴', () =
                         activity: 'gemini-flash-latest', compile: 'gemini-flash-latest' });
   ok(C.modelChoices_().indexOf('my-proxy') < 0, 'OpenAI 키 없이 나옴');
   C.setKey_('openai', 'sk');
-  ok(C.modelChoices_().indexOf('my-proxy') > 0, 'OpenAI 키가 있는데 안 나옴');
+  ok(C.modelChoices_().indexOf('my-proxy') >= 0, 'OpenAI 키가 있는데 안 나옴');
 });
 t('마법사 모델 목록도 키 있는 모델만', () => {
   const C = boot(); C.installCore_();
   C.setKey_('openai', 'sk');
   const ms = C.wizardContext().models;
-  ok(ms.indexOf('gpt-5.6-luna') > 0, 'gpt 누락: ' + ms.join(','));
+  ok(ms.indexOf('gpt-5.6-luna') >= 0, 'gpt 누락: ' + ms.join(','));
   ok(!ms.some(m => /^(gemini|claude)/.test(m)), '키 없는 회사 모델이 섞임: ' + ms.join(','));
 });
 t('시작하기 시험 생성: 활동용 모델 키가 없으면 키 있는 회사의 기본 모델로', () => {
@@ -576,6 +584,69 @@ t('시작하기 시험 생성: 활동용 모델 키가 없으면 키 있는 회�
   C.__fetch.handler = (url) => { urls.push(url); return oaOk('시험 문장.'); };
   const r = C.onboardTestGenerate(made.key || '탐구');
   eq(r.model, C.PROVIDER_DEFAULT_MODEL.openai); ok(/api\.openai\.com/.test(urls[0] || ''), urls[0]);
+});
+
+console.log('\n[Gemini 구독(학교 계정) — 키 없이]');
+function subSetup() {
+  const C = boot(); C.installCore_();
+  C.onboardSaveRoster('1\t1\t김하늘');
+  const made = C.createActivity_({ key: '탐구', name: '데이터 탐구', recordKey: '동아리', subjectKey: '공통',
+    columns: '탐구 주제', desc: '', examples: [{ values: ['기후'], result: '기후 자료를 분석함.' }] });
+  return { C, made };
+}
+t('구독 설정은 키처럼 내 계정(UserProperties)에, 설정 창에도 전달', () => {
+  const C = boot(); C.installCore_();
+  eq(C.getAiSettings().has.subscription, false);
+  C.saveSubscription(true);
+  eq(C.__userProps.getProperty('SUB_GEMINI'), '1');
+  eq(C.getAiSettings().has.subscription, true);
+});
+t('구독을 켜고 끄면 드롭다운을 새로 입힘 (그대로면 안 함)', () => {
+  const C = boot(); C.installCore_();
+  let n = 0; C.refreshModelDropdowns_ = () => { n++; return 0; };
+  C.saveSubscription(true); C.saveSubscription(true); C.saveSubscription(false);
+  eq(n, 2);
+});
+t('v3.4 이전에 Gemini(구독)을 골라 쓰던 사본은 구독이 켜진 것으로 이어짐', () => {
+  const C = boot(); C.installCore_();
+  C.setCfg_('활동용 모델', 'Gemini(구독)');
+  eq(C.subOn_(), true); eq(C.__userProps.getProperty('SUB_GEMINI'), '1', '한 번 정하면 저장');
+  C.saveSubscription(false);
+  eq(C.subOn_(), false, '직접 끄면 설정과 상관없이 꺼짐');
+});
+t('시작하기 [구독으로 쓰기]: 키 없이 2단계 완료, 활동용·합본용이 Gemini(구독)', () => {
+  const C = boot(); C.installCore_();
+  const r = C.onboardUseSubscription();
+  eq(r.ok, true); eq(r.status.subscription, true); eq(r.status.hasKey, false);
+  eq(C.cfg_('활동용 모델', ''), 'Gemini(구독)'); eq(C.cfg_('합본용 모델', ''), 'Gemini(구독)');
+  eq(C.modelChoices_()[0], 'Gemini(구독)');
+});
+t('이미 키로 쓰는 모델이 있으면 [구독으로 쓰기]가 주 모델을 바꾸지 않음', () => {
+  const C = boot(); C.installCore_();
+  C.setKey_('gemini', 'AIza-x');
+  C.onboardUseSubscription();
+  eq(C.cfg_('활동용 모델', ''), 'gemini-flash-latest');
+  ok(C.modelChoices_().indexOf('Gemini(구독)') === 0, '구독도 목록에 나와야 함');
+});
+t('구독만 쓸 때 스크립트 시험 생성은 호출 없이 안내', () => {
+  const { C, made } = subSetup();
+  C.onboardUseSubscription();
+  C.__fetch.calls.length = 0;
+  let err = null; try { C.onboardTestGenerate(made.key || '탐구'); } catch (e) { err = e; }
+  ok(err && /구독으로 시험/.test(err.message), err && err.message); eq(C.__fetch.calls.length, 0);
+});
+t('구독 시험: 시작하기 시트에 =AI 수식 셀을 만들고, [생성 및 삽입] 전·후를 구분해 읽음', () => {
+  const { C, made } = subSetup();
+  C.onboardUseSubscription();
+  const r = C.onboardTestSubscription(made.key || '탐구');
+  const s = C.__ss.getSheetByName('🚀 시작하기');
+  ok(/^=AI\("/.test(s.getRange(r.a1).getFormulas()[0][0]), '수식 없음: ' + s.getRange(r.a1).getFormulas()[0][0]);
+  ok(/기후/.test(s.getRange(r.a1).getFormulas()[0][0]), '예시 자료가 수식에 없음');
+  eq(C.__ss.getActiveSheet().getName(), '🚀 시작하기', '그 셀로 데려가기');
+  eq(C.onboardReadSubTest(r).ok, false, '생성 전');
+  s.getRange(r.a1).setValue('기후 자료의 추세를 해석하며 한계를 짚어 냄.');        // 선생님이 [생성 및 삽입]을 누른 뒤
+  const got = C.onboardReadSubTest(r);
+  eq(got.ok, true); ok(/추세/.test(got.text), got.text); ok(got.bytes > 0 && got.limit > 0, JSON.stringify(got));
 });
 
 console.log('\n[시트에서 모델을 직접 고치면]');
