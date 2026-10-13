@@ -81,6 +81,8 @@ function fillTokens(tpl, map) {
  *   o.common    {WRITING_RULES, NEIS_RULES, BYTE_RULE, GRADE_RULE, INSTRUCTION}
  *   o.examples  예시 합본 문자열 (없으면 빈 문자열)
  *   o.years     교직 경력 표기 (기본 15)
+ *   record.rules 이 기록 항목에만 붙는 기재 주의([🧩 기록종류]의 [기재 주의] — 기재요령 규칙판에서 옴)
+ *   activity.mode '바로쓰기' 면 입력 자료가 교사의 자유 메모 한 칸이다
  * @return {string}
  */
 function buildPrompt(o) {
@@ -103,6 +105,7 @@ function buildPrompt(o) {
       INSTRUCTION: com.INSTRUCTION || '',
       COMPETENCY: sub.comp || '',
       VIEW: rec.view || '',
+      RECORD_RULES: rec.rules || '',
       EXAMPLES: o.examples || '',
       CHARS: chars,
       BYTES: bytes,
@@ -128,8 +131,11 @@ function buildPrompt(o) {
   // ③ 서술 규칙
   if (com.WRITING_RULES) P.push('# 서술 규칙\n' + com.WRITING_RULES);
 
-  // ④ 기재 금지사항
+  // ④ 기재 금지사항 (+ 이 기록 항목에만 해당하는 기재 주의)
   if (com.NEIS_RULES) P.push('# 학생부 기재 금지사항\n' + com.NEIS_RULES);
+  if (rec.rules && String(rec.rules).trim()) {
+    P.push('# 이 기록 항목의 기재 주의 (' + (rec.name || act.recordKey || '') + ')\n' + String(rec.rules).trim());
+  }
 
   // ⑤ 관점 · 역량
   var persp = [];
@@ -138,14 +144,18 @@ function buildPrompt(o) {
   if (persp.length) P.push('# 서술 관점과 역량\n' + persp.join('\n\n'));
 
   // ⑥ 분량 (단일 출처)
+  // 2026 기재요령: 최대 글자 수 안에서 교사가 자율적으로 입력한다. 분량을 채우려 지어내면 허위·과장 기재가 된다.
   var len = ['# 분량'];
-  len.push('- ' + chars + '자(' + bytes + '바이트) 이내로 작성한다.');
-  len.push('- ' + Math.round(bytes * 0.9) + '바이트 이상을 채워 충실하게 작성한다.');
+  len.push('- ' + chars + '자(' + bytes + '바이트) 이내로 작성한다. 넘으면 안 된다.');
+  len.push('- 자료가 충분하면 ' + Math.round(bytes * 0.9) + '바이트 안팎으로 충실하게 쓰되, 자료에 없는 내용으로 분량을 채우지 않는다. 자료가 적으면 짧게 쓴다.');
   if (com.BYTE_RULE) len.push(com.BYTE_RULE);
   P.push(len.join('\n'));
 
   // ⑦-1 입력 형식
-  if (cols.length) {
+  if (String(act.mode || '') === '바로쓰기') {
+    P.push('# 입력 자료 형식\n아래 학생 자료는 교사가 수업·활동 중에 관찰하고 자유롭게 적은 메모다. ' +
+           '메모에 있는 사실만 근거로 문장을 다듬어 쓴다. 메모가 짧으면 짧게 쓴다.');
+  } else if (cols.length) {
     P.push('# 입력 자료 형식\n아래 학생 자료는 다음 항목이 | 로 구분되어 제공된다.\n' + cols.join('|'));
   }
 
@@ -197,8 +207,12 @@ function buildStudentBlock(cols, values, opts) {
   return out;
 }
 
-/** 결과 검증 — 바이트 / 기재 금지 / 형식 */
-function validateResult(text, limitBytes, banned, formatRules) {
+/**
+ * 결과 검증 — 바이트 / 기재 금지 / 형식 / 맞춤법
+ * 규칙마다 fix(바른 표기)·why(이유·근거)가 있으면 issue 에 함께 싣는다.
+ * spellIssues(16_Rules.gs)가 있으면 띄어쓰기·어미 검사도 더한다(opts.spell === false 면 뺀다).
+ */
+function validateResult(text, limitBytes, banned, formatRules, opts) {
   text = String(text || '');
   var issues = [];
   var b = byteLen(text);
@@ -220,8 +234,14 @@ function validateResult(text, limitBytes, banned, formatRules) {
     if (m && m.length) {
       var uniq = [];
       for (var j = 0; j < m.length; j++) if (uniq.indexOf(m[j]) === -1) uniq.push(m[j]);
-      issues.push({ level: r.level || 'check', label: r.label, hit: uniq.slice(0, 5).join(', ') });
+      var issue = { level: r.level || 'check', label: r.label, hit: uniq.slice(0, 5).join(', ') };
+      if (r.fix) issue.fix = r.fix;
+      if (r.why) issue.why = r.why;
+      issues.push(issue);
     }
+  }
+  if (typeof spellIssues === 'function' && !(opts && opts.spell === false)) {
+    issues = issues.concat(spellIssues(text));
   }
 
   var blocks = issues.filter(function (x) { return x.level === 'block'; });
@@ -232,7 +252,8 @@ function validateResult(text, limitBytes, banned, formatRules) {
 function formatIssues(v) {
   if (!v.issues.length) return '통과 (' + v.bytes + 'B)';
   var parts = v.issues.map(function (x) {
-    return (x.level === 'block' ? '[수정] ' : '[확인] ') + x.label + (x.hit ? ' → ' + x.hit : '');
+    return (x.level === 'block' ? '[수정] ' : '[확인] ') + x.label + (x.hit ? ' → ' + x.hit : '') +
+           (x.fix ? ' (바르게: ' + x.fix + ')' : '');
   });
   return (v.ok ? '확인필요 ' : '수정필요 ') + '(' + v.bytes + 'B)\n' + parts.join('\n');
 }

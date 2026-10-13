@@ -179,7 +179,9 @@ function pullResults_(act) {
 }
 
 /* ----------------------------------------------------------- 압축 생성 */
-function compileChecked() {
+/** @param {{manual?:boolean}=} opt  manual: 체크된 행을 모두 복사·붙여넣기로 */
+function compileChecked(opt) {
+  opt = (opt && typeof opt === 'object' && !opt.authMode) ? opt : {};
   var s = ss_().getActiveSheet();
   var recKey = recordKeyOfCompile_(s.getName());
   if (!recKey) {
@@ -208,6 +210,7 @@ function compileChecked() {
   var defModel = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
   var system = compressPrompt_(rec);
   var okN = 0, errN = 0, leftN = 0, backupN = 0, t0 = Date.now();
+  var has = keyStatus_(), anyApi = has.gemini || has.openai || has.anthropic, manualJobs = [];
   usageReset_();
 
   for (var k = 0; k < rows.length; k++) {
@@ -217,6 +220,12 @@ function compileChecked() {
     if (!merged) { s.getRange(row, cChk).setValue(false); continue; }
     var model = cModel ? String(s.getRange(row, cModel).getValue()).trim() : '';
     if (!model) model = defModel;
+    var prov = providerOf_(model);
+    if (opt.manual || prov === 'manual' || (!anyApi && prov !== 'subscription' && !providerUsable(prov, has))) {
+      var who = s.getRange(row, 1, 1, 3).getValues()[0];
+      manualJobs.push({ row: row, user: merged, label: String(who[0]) + '반 ' + String(who[1]) + '번 ' + String(who[2]) });
+      continue;
+    }
     toast_((k + 1) + '/' + rows.length + ' 압축 중…', APP.MENU);
     try {
       if (providerOf_(model) === 'subscription') {
@@ -227,7 +236,7 @@ function compileChecked() {
       var txt = cleanResult_(res.text);
       if (byteLen(txt) > limit) txt = trimToBytes(txt, limit);
       s.getRange(row, cAi).setValue(txt);
-      if (cValid) s.getRange(row, cValid).setValue(formatIssues(validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES)) +
+      if (cValid) s.getRange(row, cValid).setValue(formatIssues(inspect_(txt, limit)) +
         (res.backup ? '\n(예비 모델 ' + res.model + ' 로 생성)' : ''));
       if (res.backup) backupN++;
       s.getRange(row, cChk).setValue(false);
@@ -238,6 +247,12 @@ function compileChecked() {
       errN++;
     }
     SpreadsheetApp.flush();
+  }
+  if (manualJobs.length) {
+    openManualDialog_({ kind: 'compile', sheet: s.getName(), target: 'AI 압축결과', check: '압축',
+      title: (rec ? rec.name : recKey) + ' 압축', limit: limit, system: system, jobs: manualJobs, heading: '통합할 문장들',
+      note: opt.manual ? '' : (anyApi ? '' : 'API 키가 없어 [키 없이 — 복사·붙여넣기]로 진행합니다.') });
+    if (!okN && !errN) return;
   }
   var done = '압축 완료 ' + okN + '건' + (errN ? ' / 실패 ' + errN + '건' : '') + (backupN ? ' / 예비 모델 ' + backupN + '건' : '');
   var used = usageText_();

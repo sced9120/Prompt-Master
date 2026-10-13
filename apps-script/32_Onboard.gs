@@ -28,8 +28,9 @@ function isOnboardDone_() {
 }
 
 function openOnboard() {
+  try { if (sh_(APP.SH.RULES)) autoRulesCheck_(); } catch (e) {}
   var html = HtmlService.createHtmlOutputFromFile('UI_Onboard')
-    .setWidth(640).setHeight(700);
+    .setWidth(660).setHeight(720);
   ui_().showModelessDialog(html, '시작하기 — ' + APP.MENU);
 }
 
@@ -44,8 +45,10 @@ function onboardStatus() {
     installed: false, hasKey: false, keyNames: [],
     rosterCount: 0, activities: [], exampleCount: 0, done: isOnboardDone_(),
     models: [], defaultModel: '', compileModel: '',
-    providerDefaults: PROVIDER_DEFAULT_MODEL, presets: presetModelRows_(), links: MODEL_LINKS
+    providerDefaults: PROVIDER_DEFAULT_MODEL, presets: presetModelRows_(), links: MODEL_LINKS,
+    manual: false, manualModel: MANUAL_MODEL, account: accountInfo_(), aiNotice: AI_NOTICE_2026
   };
+  try { st.manual = manualOn_(); } catch (e) {}
   try {
     st.installed = !!(sh_(APP.SH.CONFIG) && sh_(APP.SH.RECORD) && sh_(APP.SH.ACTIVITY) && sh_(APP.SH.ROSTER));
   } catch (e) {}
@@ -57,18 +60,19 @@ function onboardStatus() {
     try { st.rosterCount = getRoster_().length; st.rosterMode = rosterMode_(); } catch (e) {}
     try {
       st.activities = getActivities_().map(function (a) {
-        return { key: a.key, name: a.name, inSheet: a.inSheet, exSheet: a.exSheet };
+        return { key: a.key, name: a.name, inSheet: a.inSheet, exSheet: a.exSheet, quick: a.mode === '바로쓰기' };
       });
     } catch (e) {}
     try {
       st.backupModel = normModel(cfg_('예비 모델', ''));
-      st.models = modelChoices_().filter(function (m) { return m.indexOf('구독') < 0; });
+      st.models = modelChoices_().filter(function (m) { return m !== SUBSCRIPTION_MODEL && m !== MANUAL_MODEL; });
       st.defaultModel = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
       st.compileModel = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
     } catch (e) {}
     if (st.activities.length) {
       try { st.exampleCount = readExampleRows_(getActivity_(st.activities[0].key)).length; } catch (e) {}
     }
+    try { st.rules = currentPackInfo_(); } catch (e) {}
   }
   return st;
 }
@@ -147,6 +151,25 @@ function onboardUseSubscription() {
   return { ok: true, status: onboardStatus(), message: msg };
 }
 
+/**
+ * 2단계를 [키 없이 — 복사·붙여넣기]로 마친다. 키로 잘 쓰는 모델이 있으면 그대로 두고,
+ * 키가 없는 모델이 골라져 있으면 활동용·합본용을 [키 없이(복사·붙여넣기)]로 맞춘다.
+ */
+function onboardUseManual() {
+  setManual_(true);
+  var changed = [];
+  ['활동용 모델', '합본용 모델'].forEach(function (k) {
+    var cur = normModel(cfg_(k, DEFAULT_MODEL));
+    if (cur === MANUAL_MODEL || modelUsable_(cur)) return;
+    setCfg_(k, MANUAL_MODEL);
+    changed.push(k);
+  });
+  try { refreshModelDropdowns_(); } catch (e) {}
+  return { ok: true, status: onboardStatus(),
+           message: '키 없이 쓰기로 시작합니다. ' + (changed.length ? changed.join('·') + '을 [' + MANUAL_MODEL + ']로 맞췄습니다. ' : '') +
+                    '나중에 키를 넣으면 메뉴 ⑥ 한 번으로 자동 생성됩니다.' };
+}
+
 /** 설정 시트의 값 하나를 바꾼다 */
 function setCfg_(key, value) {
   var s = sh_(APP.SH.CONFIG);
@@ -205,7 +228,42 @@ function onboardCreateActivity(p) {
   return { made: made, def: def, status: onboardStatus() };
 }
 
+/** 4단계를 [✍️ 바로 쓰기 시트]로 — 입력 항목 없이 */
+function onboardCreateQuick(p) {
+  var r = createQuickSheet({ name: p.name, recordKey: p.recordKey, subjectKey: p.subjectKey, desc: p.text });
+  return { made: { inSheet: r.inSheet, exSheet: '' }, status: onboardStatus() };
+}
+
 /* -------------------------------------------------------------- 5단계 */
+/** 시험에 쓸 학생 자료 한 건 — 예시 시트 1번, 없으면(바로 쓰기) 보기 메모 */
+function testBlockFor_(act) {
+  var cols = parseColumns(act.columns);
+  var rec = findByKey(getRecordTypes_(), act.recordKey);
+  var rows = readExampleRows_(act);
+  var values = rows.length ? rows[0].values : null;
+  if (!values && act.mode === '바로쓰기') values = [SAMPLE_MEMO[act.recordKey] || SAMPLE_MEMO['과세특']];
+  if (!values) throw new Error('예시 시트가 비어 있어 시험할 자료가 없습니다. 활동을 다시 만들거나 예시를 한 줄 채워 주세요.');
+  return buildStudentBlock(cols, values, { grade: (rec && rec.useGrade) ? 3 : '' });
+}
+
+/** 키 없이 시험: 요청문을 만들어 준다 */
+function onboardManualTest(activityKey) {
+  var act = getActivity_(activityKey);
+  if (!act) throw new Error('활동을 찾을 수 없습니다.');
+  var user = buildManualUser([{ id: 'S1', block: testBlockFor_(act) }]);
+  return { prompt: promptFor_(act) + '\n\n' + user, limit: charsFor_(act) * 3, gem: buildGemText(promptFor_(act)) };
+}
+
+/** 키 없이 시험: 받아 온 답을 검사만 한다(시트에 쓰지 않음) */
+function onboardManualCheck(p) {
+  var txt = cleanResult_(parseManualAnswer(p.answer, ['S1']).map.S1 || '');
+  if (!txt) return { ok: false, message: '받은 답을 붙여 넣어 주세요.' };
+  var limit = Number(p.limit) || 1500;
+  var v = inspect_(txt, limit);
+  return { ok: true, text: txt, bytes: v.bytes, limit: limit,
+           issues: v.issues.map(function (i) { return (i.level === 'block' ? '[수정] ' : '[확인] ') + i.label + (i.hit ? ' → ' + i.hit : ''); }) };
+}
+
 /**
  * 시험 생성 — 학생 데이터를 건드리지 않고, 예시 시트의 1번 입력값으로
  * 실제 호출을 한 번 돌려 본다. 여기까지 결과가 나오면 설정이 끝난 것이다.
@@ -213,24 +271,28 @@ function onboardCreateActivity(p) {
 function onboardTestGenerate(activityKey) {
   var act = getActivity_(activityKey);
   if (!act) throw new Error('활동을 찾을 수 없습니다.');
-  var cols = parseColumns(act.columns);
-  var rows = readExampleRows_(act);
-  if (!rows.length) throw new Error('예시 시트가 비어 있어 시험할 자료가 없습니다. 활동을 다시 만들거나 예시를 한 줄 채워 주세요.');
-
-  var rec = findByKey(getRecordTypes_(), act.recordKey);
-  var user = buildStudentBlock(cols, rows[0].values, { grade: (rec && rec.useGrade) ? 3 : '' });
+  var user = testBlockFor_(act);
   var model = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
-  if (providerOf_(model) === 'subscription' || !modelUsable_(model)) {
+  if (providerOf_(model) === 'subscription' || providerOf_(model) === 'manual' || !modelUsable_(model)) {
     var withKey = PROVIDERS.filter(function (x) { return getKey_(x); })[0];
-    if (!withKey) throw new Error('API 키가 없어 스크립트로 바로 시험할 수 없습니다. 구독만 쓰신다면 [구독으로 시험하기]를 누르세요.');
+    if (!withKey) throw new Error('API 키가 없어 스크립트로 바로 시험할 수 없습니다. [키 없이] 시험이나 [구독으로 시험하기]를 쓰세요.');
     model = PROVIDER_DEFAULT_MODEL[withKey];
   }
 
-  var txt = cleanResult_(callAI_(promptFor_(act), user, model));
+  var system = promptFor_(act);
+  var txt = cleanResult_(callAI_(system, user, model));
   var limit = charsFor_(act) * 3;
-  var v = validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES);
+  var v = inspect_(txt, limit), fixed = false;
+  // 시험에서도 실제 생성과 같은 흐름: [수정]이 나오면 한 번 고쳐 쓰게 한다
+  if (needsRepair(v) && cfgBool_('자동 고쳐쓰기', true)) {
+    try {
+      var t2 = cleanResult_(callAI_(system, buildRepairUser(user, txt, v.issues.filter(function (x) { return x.level === 'block'; }), limit), model));
+      var v2 = inspect_(t2, limit);
+      if (t2 && betterResult(v, v2) === 'b') { txt = t2; v = v2; fixed = true; }
+    } catch (e) {}
+  }
   return {
-    text: txt, bytes: v.bytes, limit: limit, model: model,
+    text: txt, bytes: v.bytes, limit: limit, model: model, repaired: fixed,
     issues: v.issues.map(function (i) { return (i.level === 'block' ? '[수정] ' : '[확인] ') + i.label; })
   };
 }
@@ -243,10 +305,7 @@ function onboardTestGenerate(activityKey) {
 function onboardTestSubscription(activityKey) {
   var act = getActivity_(activityKey);
   if (!act) throw new Error('활동을 찾을 수 없습니다.');
-  var rows = readExampleRows_(act);
-  if (!rows.length) throw new Error('예시 시트가 비어 있어 시험할 자료가 없습니다. 예시를 한 줄 채워 주세요.');
-  var rec = findByKey(getRecordTypes_(), act.recordKey);
-  var user = buildStudentBlock(parseColumns(act.columns), rows[0].values, { grade: (rec && rec.useGrade) ? 3 : '' });
+  var user = testBlockFor_(act);
 
   var s = sh_(APP.SH.START) || buildStart();
   var r = s.getLastRow() + 2;
@@ -271,7 +330,7 @@ function onboardReadSubTest(p) {
   }
   var txt = cleanResult_(v);
   var limit = Number(p.limit) || 1500;
-  var res = validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES);
+  var res = inspect_(txt, limit);
   return { ok: true, text: txt, bytes: res.bytes, limit: limit,
            issues: res.issues.map(function (i) { return (i.level === 'block' ? '[수정] ' : '[확인] ') + i.label; }) };
 }
@@ -295,6 +354,14 @@ function onboardGoto(name) {
 }
 
 /* ------------------------------------------------------ 시작하기 시트 */
+/** [🚀 시작하기] 시트 위쪽 버튼 — 그림에 함수를 붙인다(휴대폰 앱에서는 동작하지 않아 메뉴 안내를 함께 둔다) */
+var START_BUTTONS = [
+  { img: 'start', fn: 'openOnboard', alt: '시작하기 (처음이면 여기)', row: 0, col: 0 },
+  { img: 'quick', fn: 'openQuickSheetDialog', alt: '바로 쓰기 시트 만들기', row: 0, col: 1 },
+  { img: 'check', fn: 'openCheckSidebar', alt: '맞춤법 · 금지어 검사', row: 1, col: 0 },
+  { img: 'ocr', fn: 'openOcrGuide', alt: '스캔 문서 → 엑셀 사용 설명서', row: 1, col: 1 }
+];
+
 function buildStart() {
   var s = shOrCreate_(APP.SH.START);
   s.clear();
@@ -303,64 +370,92 @@ function buildStart() {
   var P = function (t) { L.push(['', t]); };
 
   L.push(['#', '세특 작성 도우미 ' + APP.VERSION]);
-  P('학생부 특기사항을 활동 단위로 모으고, 프롬프트를 자동으로 조립해 AI에게 맡기는 도구입니다.');
-  P('과목별 세특뿐 아니라 자율·동아리·진로·행동특성 및 종합의견까지 같은 방식으로 씁니다.');
+  P('학생부 특기사항을 활동 단위로 모으고, 프롬프트를 자동으로 조립해 AI에게 맡기는 도구입니다. 과목별 세특 · 자율 · 동아리 · 진로 · 행발까지 같은 방식으로 씁니다.');
+  L.push(['btn', '']);
+  L.push(['btn', '']);
+  P('버튼이 안 눌리면 상단 메뉴 [' + APP.MENU + '] 에서 같은 이름을 누르세요. (휴대폰·태블릿 앱에서는 버튼이 동작하지 않습니다)');
+  L.push(['!', '⚠️ 2026학년도 기재요령: ' + AI_NOTICE_2026]);
   P('');
 
   H('1단계.  이 파일을 내 드라이브로 복사하세요');
-  P('지금 보고 계신 파일이 남의 원본이라면, 상단 [파일] > [사본 만들기] 를 먼저 누르세요.');
-  P('이미 내 사본이라면 다음으로 넘어가면 됩니다.');
+  P('지금 보고 계신 파일이 남의 원본이라면, 상단 [파일] > [사본 만들기] 를 먼저 누르세요. 이미 내 사본이라면 다음으로 넘어가면 됩니다.');
   P('');
 
-  H('2단계.  메뉴에서 [🚀 시작하기] 를 누르세요');
-  P('상단 메뉴  [' + APP.MENU + ']  >  [🚀 시작하기]');
-  P('나머지는 팝업이 순서대로 안내합니다. 중간에 닫아도 다시 누르면 이어서 진행됩니다.');
+  H('2단계.  위 초록 버튼 [▶ 시작하기] 를 누르세요');
+  P('또는 상단 메뉴  [' + APP.MENU + ']  >  [🚀 시작하기].  팝업이 순서대로 안내합니다. 중간에 닫아도 다시 누르면 이어서 진행됩니다.');
   P('');
 
   H('⚠️ 처음 한 번만 — 권한 승인 화면 넘는 법');
-  P('메뉴를 처음 누르면 구글이 승인을 요구합니다. 아래 순서대로 누르시면 됩니다.');
-  P('');
+  P('버튼이나 메뉴를 처음 누르면 구글이 승인을 요구합니다. 아래 순서대로 누르시면 됩니다.');
   P('   ①  [승인 필요] 창에서  [계속]  클릭');
   P('   ②  구글 계정 선택');
-  P('   ③  "Google에서 확인하지 않은 앱입니다" 화면이 나오면');
-  P('        →  왼쪽 아래  [고급]  클릭');
-  P('        →  [세특 작성 도우미(안전하지 않음)(으)로 이동]  클릭');
+  P('   ③  "Google에서 확인하지 않은 앱입니다" 화면이 나오면  →  왼쪽 아래  [고급]  →  [세특 작성 도우미(안전하지 않음)(으)로 이동]');
   P('   ④  [허용]  클릭');
-  P('');
-  P('이 경고는 개인이 만든 스크립트라서 뜨는 것입니다. 구글 심사를 받은 앱이 아니면 모두 이 화면이 나옵니다.');
-  P('코드는 이 파일 안에 그대로 들어 있고, [확장 프로그램] > [Apps Script] 에서 직접 확인할 수 있습니다.');
+  P('이 경고는 개인이 만든 스크립트라서 뜨는 것입니다. 코드는 이 파일 안에 그대로 있고 [확장 프로그램] > [Apps Script] 에서 볼 수 있습니다.');
   P('');
 
-  H('무엇이 필요한가요');
-  P('· AI 키 하나.  Gemini 키가 가장 부담이 적습니다(무료 등급 있음). aistudio.google.com 에서 발급.');
-  P('· 학교 계정에 Google AI Pro for Education 이 있거나, 개인 Google AI Pro·Ultra 를 구독 중이면 키 없이도 쓸 수 있습니다.');
-  P('   시작하기 2단계에서 [Gemini 구독으로] 를 고르면 키 넣는 단계를 건너뜁니다. (AI Plus 요금제, 무료 학교 계정은 아직 안 됨)');
-  P('   확인법: 빈 셀에  =AI("안녕")  을 넣고 셀을 눌러 [생성 및 삽입] → 답이 나오면 됩니다.');
-  P('· 학생 명단(반·번호·이름, 동아리면 학년까지). 엑셀 양식을 내려받아 채워 올리거나, 복사해 붙여넣으면 됩니다.');
+  H('API 키가 없어도 됩니다 — 세 가지 방법 중 하나');
+  P('①  키 없이 (복사·붙여넣기) — 처음이라면 이것부터.  시트가 요청문을 만들어 주면 Gemini 앱(gemini.google.com)에 붙여 넣고, 받은 답을 다시 붙여 넣습니다.');
+  P('     학교 구글 계정으로 Gemini 앱에 들어가면 무료이고 입력 내용이 AI 학습에 쓰이지 않습니다(학교에서 Gemini를 켜 두었을 때). 학생 이름은 보내지 않습니다.');
+  P('②  Gemini API 키 — 생성 · 검사가 버튼 한 번.  aistudio.google.com/apikey 에서 무료 발급. 무료 등급은 보낸 내용이 서비스 개선에 쓰일 수 있어, 학생 자료는 결제를 켠 키를 권합니다.');
+  P('③  Gemini 구독(=AI 함수) — 학교에 Google AI Pro for Education 이 있거나 개인 Google AI Pro·Ultra 일 때.  무료 학교 계정(Education Fundamentals)에는 아직 없습니다.');
+  P('     확인법: 시작하기 2단계 [구독으로]에서 [구독 확인하기] — 시험 셀을 만들어 [생성 및 삽입]이 되는지 봅니다.');
+  P('');
+
+  H('이 도구로 할 수 있는 것');
+  P('· 활동별 세특·창체·행발 초안 — 메뉴 ④ 활동 만들기 (입력 항목은 직접 적거나 AI에게 맡김)');
+  P('· ✍️ 바로 쓰기 — 입력 항목을 정하지 않고 학생마다 메모만 적어 초안 받기, 또는 직접 쓴 글을 바로 검사하기');
+  P('· 🔍 맞춤법 · 금지어 검사 — 2026 기재요령 금지어, 어미 · 특수문자, 맞춤법 · 띄어쓰기, 나이스 바이트');
+  P('· 생성 직후 자동 검사 → [수정]이 나온 학생만 걸린 점을 짚어 한 번 더 고쳐 쓰기, 원하면 근거 확인(학생 자료에 없는 내용 찾기)');
+  P('· 📏 기재요령 규칙판은 해마다 저절로 업데이트 — 직접 고친 칸은 그대로 둡니다');
   P('');
 
   H('꼭 알아 두실 것');
   P('· AI 키는 이 파일이 아니라 각자의 구글 계정에 저장됩니다. 사본을 나눠 줘도 키는 넘어가지 않습니다.');
-  P('· 학생 이름은 기본적으로 AI에 전송되지 않습니다.');
-  P('· 주민등록번호, 가정환경, 건강 정보 같은 민감정보는 입력하지 마세요.');
-  P('· AI가 쓴 문장을 그대로 기재하지 마세요. 반드시 읽고 고쳐서 쓰는 것이 원칙이며,');
-  P('   최종 문장에 대한 책임은 작성한 교사에게 있습니다.');
+  P('· 학생 이름은 기본적으로 AI에 전송되지 않습니다. 주민등록번호, 가정환경, 건강 정보 같은 민감정보는 입력하지 마세요.');
+  P('· AI가 쓴 문장을 그대로 기재하지 마세요. 교사가 직접 관찰·평가한 내용을 바탕으로 고쳐 쓰고, 최종 문장의 책임은 작성한 교사에게 있습니다.');
   P('· 학교·교육청의 생성형 AI 활용 지침을 먼저 확인하세요. 시도교육청마다 다릅니다.');
+  P('');
+
+  H('함께 쓰면 좋은 도구');
+  P('📄 스캔 문서 → 엑셀 (업무 인수인계 대시보드) — 손글씨 활동지 · 신청서를 글자 그대로 표로 읽어 엑셀로. 위 파란 버튼을 누르면 설치 · 사용법이 열립니다.');
   P('');
   P('설정이 끝나면 이 탭은 닫아 두셔도 됩니다. 자세한 사용법은 [📖 사용법] 탭에 있습니다.');
 
   var rows = L.map(function (r) { return [r[1]]; });
   s.getRange(1, 1, rows.length, 1).setValues(rows);
+  var btnRows = [];
   for (var i = 0; i < L.length; i++) {
     var c = s.getRange(i + 1, 1);
     if (L[i][0] === '#') c.setFontSize(18).setFontWeight('bold').setFontColor('#1b3a2a');
     else if (L[i][0] === '§') {
       c.setFontWeight('bold').setFontSize(13).setBackground('#e3ece4').setFontColor('#1b3a2a');
       s.setRowHeight(i + 1, 32);
+    } else if (L[i][0] === '!') {
+      c.setBackground('#fdecea').setFontColor('#7f1d1d').setFontWeight('bold').setFontSize(10);
+      s.setRowHeight(i + 1, 50);
+    } else if (L[i][0] === 'btn') {
+      s.setRowHeight(i + 1, 62);
+      btnRows.push(i + 1);
     }
   }
   s.setColumnWidth(1, 820);
   s.getRange(1, 1, rows.length, 1).setWrap(true).setVerticalAlignment('middle');
   s.setHiddenGridlines(true);
+  try { placeStartButtons_(s, btnRows); } catch (e) {}   // 그림을 못 넣어도 시트는 그대로 쓴다
   return s;
+}
+
+/** 버튼 그림을 지우고 다시 붙인다 (여러 번 만들어도 겹치지 않게) */
+function placeStartButtons_(s, btnRows) {
+  s.getImages().forEach(function (img) { img.remove(); });
+  START_BUTTONS.forEach(function (b) {
+    var row = btnRows[b.row];
+    if (!row || !BUTTON_PNG[b.img]) return;
+    var blob = Utilities.newBlob(Utilities.base64Decode(BUTTON_PNG[b.img]), 'image/png', b.img + '.png');
+    var img = s.insertImage(blob, 1, row, 6 + b.col * 400, 5);
+    img.setWidth(380).setHeight(52);
+    img.assignScript(b.fn);
+    try { img.setAltTextTitle(b.alt).setAltTextDescription('누르면 ' + b.alt + ' 창이 열립니다'); } catch (e) {}
+  });
 }

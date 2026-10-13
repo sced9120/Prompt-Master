@@ -61,6 +61,10 @@
   code { background:#eef2ee; padding:0 4px; border-radius:4px; font-size:12px; }
   .done-box { text-align:center; padding:6px 0 2px; }
   .done-box .big { font-size:15px; font-weight:600; color:var(--ok); margin-bottom:6px; }
+  .acct { font-size:12px; background:#eef4fb; color:#1f3f66; border-radius:7px; padding:7px 10px; margin:2px 0 8px; }
+  .rec { font-size:10.5px; font-weight:700; color:#fff; background:var(--accent); border-radius:4px; padding:0 6px; margin-left:4px; }
+  .ainote { font-size:11.5px; color:#7f1d1d; background:#fdecea; border-radius:7px; padding:7px 10px; margin-top:10px; line-height:1.55; }
+  textarea.mono { font:11.5px/1.5 ui-monospace,Consolas,monospace; background:#fafbfa; color:#374151; }
   @media (prefers-reduced-motion:reduce) { * { animation:none !important; } }
 </style>
 </head>
@@ -71,6 +75,7 @@
 
 <div id="steps"></div>
 <div class="msg" id="globalMsg"></div>
+<div class="ainote" id="aiNote"></div>
 
 <script>
 var $ = function (id) { return document.getElementById(id); };
@@ -79,7 +84,7 @@ var ST = null, CTX = null, ACT = null, OPEN;   // undefined = 아직 안 정함,
 
 var STEPS = [
   { key:'install', title:'구조 설치', render:renderInstall, isDone:function(s){ return s.installed; } },
-  { key:'ai',      title:'AI 연결',   render:renderAi,      isDone:function(s){ return s.hasKey || s.subscription; } },
+  { key:'ai',      title:'AI 연결 — 키가 없어도 됩니다', render:renderAi, isDone:function(s){ return s.hasKey || s.subscription || s.manual; } },
   { key:'roster',  title:'학생 명단', render:renderRoster,  isDone:function(s){ return s.rosterCount > 0; } },
   { key:'act',     title:'첫 활동 만들기', render:renderAct, isDone:function(s){ return s.activities.length > 0; } },
   { key:'test',    title:'시험 생성', render:renderTest,    isDone:function(s){ return s.done; } }
@@ -94,7 +99,7 @@ function say(id, msg, cls) { var e = $(id); e.className = 'msg ' + (cls || ''); 
 
 function load(cb) {
   google.script.run
-    .withSuccessHandler(function (s) { ST = s; draw(); if (cb) cb(s); })
+    .withSuccessHandler(function (s) { ST = s; draw(); if (s.aiNotice) $('aiNote').textContent = '⚠️ ' + s.aiNotice; if (cb) cb(s); })
     .withFailureHandler(function (e) { say('globalMsg', e.message, 'err'); })
     .onboardStatus();
 }
@@ -150,30 +155,53 @@ function renderInstall(b, done) {
 }
 
 /* ───────────────────────── 2. AI 연결 */
+function copyText(text, msgId) {
+  var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+  document.body.appendChild(ta); ta.select(); var ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  say(msgId, ok ? '✓ 복사했습니다. Gemini 대화창에 붙여 넣으세요(Ctrl+V).' : '복사가 막혔습니다. 칸을 누르고 Ctrl+A → Ctrl+C 하세요.', ok ? 'ok' : 'err');
+}
+function acctHtml() {
+  var a = ST.account || {};
+  if (!a.email) return '';
+  return '<div class="acct">지금 로그인: <b>' + esc(a.email) + '</b> — ' +
+    (a.kind === 'school' ? '학교·기관 계정입니다. 같은 계정으로 <a href="https://gemini.google.com/app" target="_blank">Gemini 앱</a>을 쓰면 대화가 AI 학습에 쓰이지 않습니다(학교에서 켜 두었을 때).'
+                         : '개인 계정입니다. 학생 자료는 학교 계정 Gemini 를 권합니다(개인 무료판은 대화가 서비스 개선에 쓰일 수 있음).') + '</div>';
+}
 function renderAi(b, done) {
   var conn = ST.keyNames.map(function (k) { return LABEL[k] + ' 키 ✓'; });
   if (ST.subscription) conn.push('Gemini 구독 ✓');
-  var way = (ST.subscription && !ST.hasKey) ? 'sub' : 'key';
+  if (ST.manual) conn.push('키 없이(복사·붙여넣기) ✓');
+  var way = ST.hasKey ? 'key' : (ST.subscription ? 'sub' : 'manual');
   b.innerHTML =
+    acctHtml() +
     (done ? '<div class="note">연결: <b>' + conn.join(' · ') + '</b>' +
             ' · 주 모델 <b>' + esc(ST.defaultModel) + '</b>' + (ST.backupModel ? ' · 예비 <b>' + esc(ST.backupModel) + '</b>' : '') + '<br>' +
-            '<b>키는 여러 개 함께 쓸 수 있습니다.</b> 다른 회사 키도 넣으려면 회사를 바꿔 한 번 더 저장하세요. ' +
-            '주 모델은 그대로 두고, 새로 넣은 쪽을 예비 모델(주 모델이 실패하면 대신)로 둡니다.</div>' : '') +
+            '키는 여러 개 함께 쓸 수 있습니다. 다른 회사 키를 더 넣으면 주 모델은 그대로 두고 새 쪽을 예비 모델로 둡니다.</div>' : '') +
     '<label>어떻게 연결할까요</label>' +
     '<div class="ways">' +
-      '<label class="way" data-w="key"><input type="radio" name="way" value="key"><span><span class="t">API 키로</span><br>' +
-        '<span class="d">Gemini 키는 무료 등급이 있어 가장 부담이 적습니다. 모든 기능을 쓸 수 있습니다.</span></span></label>' +
-      '<label class="way" data-w="sub"><input type="radio" name="way" value="sub"><span><span class="t">Gemini 구독으로 — 키 없이</span><br>' +
-        '<span class="d">학교 계정에 Google AI Pro for Education 이 있거나, 개인 Google AI Pro·Ultra 를 구독 중일 때. 키 넣는 단계를 건너뜁니다.</span></span></label>' +
+      '<label class="way" data-w="manual"><input type="radio" name="way" value="manual"><span><span class="t">키 없이 — Gemini 앱에 복사·붙여넣기<span class="rec">처음이면 추천</span></span><br>' +
+        '<span class="d">키·비용·설치가 없습니다. 시트가 만든 요청문을 Gemini(학교 계정)에 붙여 넣고 답을 다시 붙여 넣으면 학생별로 나눠 넣고 검사합니다.</span></span></label>' +
+      '<label class="way" data-w="key"><input type="radio" name="way" value="key"><span><span class="t">API 키로 — 버튼 한 번에 자동 생성</span><br>' +
+        '<span class="d">Gemini 키는 무료로 1분이면 받습니다. 여러 명을 한 번에, 자동 고쳐쓰기·근거 확인·AI 맞춤법 검사까지 모두 됩니다.</span></span></label>' +
+      '<label class="way" data-w="sub"><input type="radio" name="way" value="sub"><span><span class="t">Gemini 구독으로 — =AI() 함수</span><br>' +
+        '<span class="d">학교에 Google AI Pro for Education 이 있거나 개인 Google AI Pro·Ultra 일 때. 무료 학교 계정(Education Fundamentals)에는 없습니다.</span></span></label>' +
+    '</div>' +
+    '<div id="wayManual">' +
+      '<div class="note" style="margin-top:10px">이렇게 씁니다: 입력 시트에서 [생성] 체크 → 메뉴 <b>⑥ 체크된 행 생성</b> → 열린 창에서 <b>[📋 전체 복사]</b> → ' +
+        '<a href="https://gemini.google.com/app" target="_blank">Gemini</a>에 붙여 넣기 → 받은 답을 창에 붙여 넣기 → 학생별로 [AI 결과]에 들어가고 바로 검사됩니다.<br>' +
+        '학생 이름은 요청문에 들어가지 않습니다(S1, S2 … 로 바뀜). 나중에 키를 넣으면 같은 버튼이 자동 생성으로 바뀝니다.</div>' +
+      '<div class="actions"><button class="primary" id="bManual">' + (ST.manual ? '키 없이 쓰는 중 ✓ · 다시 맞추기' : '이 방법으로 시작') + '</button></div>' +
+      '<div class="msg" id="mManual"></div>' +
     '</div>' +
     '<div id="waySub">' +
-      '<div class="note" style="margin-top:10px"><b>먼저 확인해 주세요.</b> 이 시트의 빈 셀에 <code>=AI("안녕")</code> 을 넣고 엔터 → 그 셀을 누르면 뜨는 ' +
-        '<b>[생성 및 삽입]</b>(Generate and insert)을 눌러 답이 나오면 쓸 수 있습니다. ' +
-        '<code>#NAME?</code> 이 뜨거나 버튼이 없으면 이 계정에는 구독이 없는 것입니다(무료 학교 계정·AI Plus 요금제는 아직 안 됨). 확인한 셀은 지우세요.</div>' +
-      '<div class="warn">구독만 쓰면 이렇게 다릅니다<br>' +
-        '· 결과는 AI 결과 칸을 선택하고 <b>[생성 및 삽입]</b>을 눌러야 들어옵니다(한 번에 350칸까지).<br>' +
-        '· 활동 만들기의 AI 초안, 예시 자동 만들기, 여러 학생 묶음 생성은 API 키가 있어야 합니다. 활동은 입력 항목을 직접 적어 만들면 됩니다.<br>' +
-        '· 나중에 키를 넣으면 이 기능들도 바로 쓸 수 있습니다(메뉴 ②).</div>' +
+      '<div class="note" style="margin-top:10px"><b>먼저 이 계정에 구독이 있는지 확인하세요.</b> [구독 확인하기]를 누르면 [🚀 시작하기] 시트 아래에 시험 셀이 생깁니다. ' +
+        '그 셀을 누르면 뜨는 <b>[생성 및 삽입]</b>을 누르고, 답이 들어오면 [결과 확인]. <code>#NAME?</code> 이 뜨거나 버튼이 없으면 이 계정에는 구독이 없는 것입니다.</div>' +
+      '<div class="actions"><button id="bProbe">구독 확인하기</button><button id="bProbeRead" disabled>결과 확인</button></div>' +
+      '<div class="msg" id="mProbe"></div>' +
+      '<div class="warn">구독만 쓰면: 결과는 AI 결과 칸을 선택하고 <b>[생성 및 삽입]</b>을 눌러야 들어옵니다(한 번에 350칸까지). ' +
+        '활동 만들기 AI 초안·예시 자동 만들기·묶음 생성·자동 고쳐쓰기는 API 키가 있어야 합니다.</div>' +
       '<div class="actions"><button class="primary" id="bSub">' + (ST.subscription ? '구독 사용 중 ✓ · 다시 맞추기' : '구독으로 쓰기') + '</button></div>' +
       '<div class="msg" id="mSub"></div>' +
     '</div>' +
@@ -194,8 +222,7 @@ function renderAi(b, done) {
     '<div class="actions"><button class="primary" id="bKey">저장하고 연결 확인</button></div>' +
     '<div class="msg" id="mKey"></div>' +
     '<div class="note" style="margin-top:12px">키는 <b>이 파일이 아니라 내 구글 계정</b>에 저장됩니다. ' +
-    '이 파일을 남에게 공유해도 키는 넘어가지 않습니다.<br>' +
-    '모델은 나중에 메뉴 <b>② AI 연결 · 모델 설정</b>에서 여러 개를 적어 두고 하나씩 연결 테스트할 수 있습니다.</div>' +
+    '이 파일을 남에게 공유해도 키는 넘어가지 않습니다. 모델 목록에는 <b>키를 넣은 회사의 모델만</b> 나옵니다.</div>' +
     '</div>';
 
   var pickWay = function (w) {
@@ -205,9 +232,34 @@ function renderAi(b, done) {
     });
     $('waySub').hidden = w !== 'sub';
     $('wayKey').hidden = w !== 'key';
+    $('wayManual').hidden = w !== 'manual';
   };
   [].forEach.call(b.querySelectorAll('input[name=way]'), function (r) { r.onchange = function () { pickWay(r.value); }; });
   pickWay(way);
+
+  $('bManual').onclick = function () {
+    var btn = this; busy(btn, true, '저장 중'); say('mManual', '');
+    google.script.run
+      .withSuccessHandler(function (r) { busy(btn, false); ST = r.status; say('mManual', '✓ ' + r.message, 'ok'); OPEN = 'roster'; setTimeout(draw, 1100); })
+      .withFailureHandler(function (e) { busy(btn, false); say('mManual', e.message, 'err'); })
+      .onboardUseManual();
+  };
+  var probe = null;
+  $('bProbe').onclick = function () {
+    var btn = this; busy(btn, true, '만드는 중'); say('mProbe', '');
+    google.script.run
+      .withSuccessHandler(function (r) { busy(btn, false); probe = r; $('bProbeRead').disabled = false;
+        say('mProbe', '[🚀 시작하기] 시트 ' + r.a1 + ' 셀에 시험 수식을 넣었습니다. 그 셀을 누르고 [생성 및 삽입]을 누른 뒤 [결과 확인].', 'ok'); })
+      .withFailureHandler(function (e) { busy(btn, false); say('mProbe', e.message, 'err'); })
+      .subProbeCreate();
+  };
+  $('bProbeRead').onclick = function () {
+    var btn = this; busy(btn, true, '읽는 중');
+    google.script.run
+      .withSuccessHandler(function (r) { busy(btn, false); say('mProbe', r.message, r.ok ? 'ok' : 'err'); if (r.ok) load(); })
+      .withFailureHandler(function (e) { busy(btn, false); say('mProbe', e.message, 'err'); })
+      .subProbeRead(probe);
+  };
 
   $('bSub').onclick = function () {
     var btn = this; busy(btn, true, '저장 중'); say('mSub', '');
@@ -233,7 +285,7 @@ function renderAi(b, done) {
     if (/^(gpt|chatgpt|o\d)/.test(m)) return 'openai';
     return '';
   };
-  var defs = ST.providerDefaults || { gemini: 'gemini-flash-latest', openai: 'gpt-5.6-luna', anthropic: 'claude-haiku-4-5' };
+  var defs = ST.providerDefaults || { gemini: 'gemini-flash-latest', openai: 'gpt-6-luna', anthropic: 'claude-haiku-5-5' };
   var links = ST.links || {};
   var typed = false;
   $('model').addEventListener('input', function () { typed = true; });
@@ -348,10 +400,13 @@ function renderAct(b, done) {
     '<label>활동 설명 <span style="font-weight:400;color:var(--muted)">— AI에게 맡길 때 필요</span></label>' +
     '<textarea id="desc" rows="3" placeholder="예) 2학기에 통합과학 실험 보고서를 씁니다. 가설을 세우고 실험을 직접 설계해서 결과를 해석하고, 오차 원인과 개선점까지 적게 했어요."></textarea>' +
     '<div class="note">창의적 체험활동이나 행동특성이면 교과는 <b>공통</b>을 고르세요.</div>' +
+    '<div class="box" style="border:1px dashed var(--accent);border-radius:8px;padding:9px 11px;margin:10px 0 2px;background:var(--accent-soft)">' +
+      '<b>입력 항목을 정하기 어렵다면</b> — <button id="bQuick" style="margin-left:4px">✍️ 바로 쓰기 시트로 시작</button>' +
+      '<div class="note">학생마다 [관찰 메모] 한 칸에 자유롭게 적는 시트를 만듭니다(위 기록·교과를 씀, 이름은 비우면 자동). 직접 쓴 글의 검사만 해도 됩니다.</div></div>' +
     '<div class="actions"><button class="primary" id="bActDirect">적은 대로 바로 만들기</button>' +
     '<button id="bAct"' + (ST.hasKey ? '' : ' disabled title="AI 초안은 API 키가 있어야 합니다"') + '>AI에게 맡기기 (예시까지)</button>' +
     '<span class="note" style="margin:0">' + (ST.hasKey ? 'AI는 20초쯤 걸립니다'
-      : '구독만 쓰는 중이라 AI 초안은 쓸 수 없습니다. 입력 항목을 적어 바로 만드세요.') + '</span></div>' +
+      : 'AI 초안은 API 키가 있어야 합니다. 입력 항목을 적어 바로 만들거나 바로 쓰기 시트로 시작하세요.') + '</span></div>' +
     '<div class="msg" id="mAct"></div>';
 
   var sets = [];
@@ -401,6 +456,13 @@ function renderAct(b, done) {
                                model: ST.defaultModel, columns: colsRaw || null, name: name, direct: !!direct });
   };
   $('bActDirect').onclick = function () { send(this, true); };
+  $('bQuick').onclick = function () {
+    var btn = this; busy(btn, true, '만드는 중'); say('mAct', '바로 쓰기 시트를 만드는 중…');
+    google.script.run
+      .withSuccessHandler(function (r) { busy(btn, false); ST = r.status; ACT = r.made; say('mAct', '만들었습니다 → ' + r.made.inSheet, 'ok'); OPEN = 'test'; setTimeout(draw, 600); })
+      .withFailureHandler(function (e) { busy(btn, false); say('mAct', e.message, 'err'); })
+      .onboardCreateQuick({ name: $('aName').value.trim(), recordKey: $('rec').value, subjectKey: $('sub').value, text: $('desc').value.trim() });
+  };
   $('bAct').onclick = function () { send(this, false); };
 }
 
@@ -412,17 +474,46 @@ function renderTest(b, done) {
   }
   var a = ST.activities[0];
   var subOnly = ST.subscription && !ST.hasKey;
+  var manualOnly = !ST.hasKey && !ST.subscription;
   var show = function (r) {
     var box = $('testOut');
     box.innerHTML = '<div class="result">' + esc(r.text) + '</div>' +
       '<div class="meta">' + r.bytes + ' / ' + r.limit + ' 바이트' +
-      (r.issues.length ? ' · ' + esc(r.issues.join(', ')) : ' · 걸리는 표현 없음') + '</div>';
+      (r.issues.length ? ' · ' + esc(r.issues.join(', ')) : ' · 걸리는 표현 없음') +
+      (r.repaired ? ' · 검사에 걸린 점을 자동으로 한 번 고쳐 썼습니다' : '') + '</div>';
     google.script.run.withSuccessHandler(function () {
       ST.done = true;
       box.innerHTML += doneHtml();
       bindDone(a);
     }).onboardFinish();
   };
+
+  if (manualOnly) {
+    b.innerHTML =
+      '<div class="note"><b>' + esc(a.name) + '</b> 의 ' + (a.quick ? '보기 메모' : '예시 자료') + '로 요청문을 만들었습니다. 학생 자료는 건드리지 않습니다.<br>' +
+      '① [요청문 복사] → ② <a href="https://gemini.google.com/app" target="_blank">Gemini</a>(학교 계정)에 붙여 넣기 → ③ 받은 답을 아래에 붙여 넣고 [검사].</div>' +
+      '<textarea id="mPrompt" class="mono" rows="5" readonly>만드는 중…</textarea>' +
+      '<div class="actions"><button class="primary" id="bMCopy">📋 요청문 복사</button><a href="https://gemini.google.com/app" target="_blank">Gemini 열기</a><span class="msg" id="mMCopy"></span></div>' +
+      '<label>받은 답</label><textarea id="mAnswer" rows="5" placeholder="Gemini가 쓴 답을 그대로 붙여 넣으세요"></textarea>' +
+      '<div class="actions"><button class="primary" id="bMCheck">검사</button></div>' +
+      '<div class="msg" id="mTest"></div><div id="testOut"></div>';
+    var mt = null;
+    google.script.run.withSuccessHandler(function (r) { mt = r; $('mPrompt').value = r.prompt; })
+      .withFailureHandler(function (e) { say('mTest', e.message, 'err'); }).onboardManualTest(a.key);
+    $('bMCopy').onclick = function () { if (mt) copyText(mt.prompt, 'mMCopy'); };
+    $('bMCheck').onclick = function () {
+      var btn = this; busy(btn, true, '검사 중');
+      google.script.run.withSuccessHandler(function (r) {
+        busy(btn, false);
+        if (!r.ok) { say('mTest', r.message, 'err'); return; }
+        say('mTest', '✓ 키 없이도 문장이 나왔습니다. 실제 학생은 메뉴 ⑥ 에서 같은 창으로 한 번에 여러 명씩 합니다.', 'ok');
+        show(r);
+      }).withFailureHandler(function (e) { busy(btn, false); say('mTest', e.message, 'err'); })
+        .onboardManualCheck({ answer: $('mAnswer').value, limit: mt ? mt.limit : 1500 });
+    };
+    if (done) { $('testOut').innerHTML = doneHtml(); bindDone(a); }
+    return;
+  }
 
   if (subOnly) {
     // =AI 수식은 선생님이 셀에서 [생성 및 삽입]을 눌러야 하므로 시험 셀을 만들어 그리로 안내한다
@@ -460,7 +551,7 @@ function renderTest(b, done) {
   }
 
   b.innerHTML =
-    '<div class="note">학생 자료는 건드리지 않고, 방금 만든 <b>' + a.name + '</b> 의 예시 자료로 ' +
+    '<div class="note">학생 자료는 건드리지 않고, 방금 만든 <b>' + esc(a.name) + '</b> 의 ' + (a.quick ? '보기 메모' : '예시 자료') + '로 ' +
     '실제 호출을 한 번 돌려 봅니다. 여기서 문장이 나오면 설정이 끝난 것입니다.</div>' +
     '<div class="actions"><button class="primary" id="bTest">시험 삼아 한 건 만들어 보기</button></div>' +
     '<div class="msg" id="mTest"></div><div id="testOut"></div>';
@@ -480,12 +571,13 @@ function doneHtml() {
   return '<div class="done-box" style="margin-top:14px">' +
     '<div class="big">설정이 끝났습니다</div>' +
     '<div class="note" style="text-align:left">이제 이렇게 쓰시면 됩니다.<br>' +
-    '① 활동의 <b>▸예시</b> 시트에 모범 예시를 채웁니다. 결과 품질을 가장 크게 좌우합니다.<br>' +
-    '② <b>▸입력</b> 시트 노란 칸에 학생별 자료를 넣습니다.<br>' +
+    '① 활동의 <b>▸예시</b> 시트에 모범 예시를 채웁니다(바로 쓰기는 없음). 결과 품질을 가장 크게 좌우합니다.<br>' +
+    '② <b>▸입력</b> 시트 노란 칸에 학생별 자료(바로 쓰기는 관찰 메모)를 넣습니다.<br>' +
     '③ [생성] 체크 후 메뉴 <b>⑥ 체크된 행 생성</b>.' +
-    (ST.subscription && !ST.hasKey ? ' 구독은 이어서 <b>AI 결과</b> 칸들을 선택하고 <b>[생성 및 삽입]</b>을 누릅니다.' : '') + '<br>' +
-    '④ AI 결과를 읽고 고쳐 파란 <b>최종본</b> 칸에 넣습니다.<br>' +
-    '⑤ 메뉴 <b>⑦ 최종취합</b> 으로 모아 나이스에 붙여넣습니다.</div>' +
+    (ST.subscription && !ST.hasKey ? ' 구독은 이어서 <b>AI 결과</b> 칸들을 선택하고 <b>[생성 및 삽입]</b>을 누릅니다.' : '') +
+    (!ST.hasKey && !ST.subscription ? ' 키 없이 쓰면 복사·붙여넣기 창이 열립니다.' : '') + '<br>' +
+    '④ AI 결과를 읽고 <b>직접 고쳐</b> 파란 <b>최종본</b> 칸에 넣습니다. 고치면 [검증]이 바로 다시 검사합니다.<br>' +
+    '⑤ 메뉴 <b>⑦ 최종취합</b> 으로 모아 나이스에 붙여넣습니다. 맞춤법·금지어는 메뉴 <b>🔍 검사</b>로 한 번 더.</div>' +
     '<div class="actions" style="justify-content:center">' +
     '<button class="primary" id="bGoIn">입력 시트 열기</button>' +
     '<button id="bGoEx">예시 시트 열기</button>' +
@@ -497,7 +589,8 @@ function bindDone(a) {
     var el = $(id);
     if (el) el.onclick = function () { google.script.run.onboardGoto(name); };
   };
-  go('bGoIn', a.inSheet); go('bGoEx', a.exSheet); go('bGoHelp', '📖 사용법');
+  go('bGoIn', a.inSheet); go('bGoHelp', '📖 사용법');
+  if (a.exSheet) go('bGoEx', a.exSheet); else if ($('bGoEx')) $('bGoEx').hidden = true;
 }
 
 function esc(s) {

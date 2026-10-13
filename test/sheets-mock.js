@@ -40,7 +40,22 @@ function makeSheet(ss, name) {
   let frozenRows = 0, frozenCols = 0, maxRows = 1000, maxCols = 26;
   const key = (r, c) => r + ',' + c;
 
+  const images = [];
   const sheet = {
+    __images: images,
+    insertImage(blob, col, row, ox, oy) {
+      const img = { blob, col, row, ox: ox || 0, oy: oy || 0, script: '', alt: '', w: 0, h: 0 };
+      const api = strict({
+        assignScript(fn) { img.script = fn; return api; }, getScript: () => img.script,
+        setAltTextTitle(t) { img.alt = t; return api; }, setAltTextDescription() { return api; },
+        setWidth(w) { img.w = w; return api; }, setHeight(h) { img.h = h; return api; },
+        remove() { const i = images.indexOf(api); if (i >= 0) images.splice(i, 1); },
+        __img: img
+      }, 'OverGridImage');
+      images.push(api); return api;
+    },
+    getImages: () => images.slice(),
+    getActiveRange: () => { const r = ss.__activeRange; return r && r.getSheet().getName() === name ? r : null; },
     getMaxColumns: () => maxCols,
     insertColumnsAfter(after, n) { maxCols += n; return proxy; },
     __merges: merges, __vals: vals,
@@ -94,7 +109,8 @@ function makeRange(sheet, sheetProxy, r1, c1, nr, nc, vals, forms, merges, froze
     getValues() { const out = []; for (let i = 0; i < nr; i++) { const row = []; for (let j = 0; j < nc; j++) { const v = vals.get(key(r1 + i, c1 + j)); row.push(v === undefined ? '' : v); } out.push(row); } return out; },
     getValue() { const v = vals.get(key(r1, c1)); return v === undefined ? '' : v; },
     getDisplayValue() { const v = vals.get(key(r1, c1)); return v === undefined ? '' : String(v); },
-    activate() { sheetProxy.getParent().setActiveSheet(sheetProxy); return proxy; },
+    activate() { sheetProxy.getParent().setActiveSheet(sheetProxy); sheetProxy.getParent().__setActiveRange(proxy); return proxy; },
+    getFormula() { return forms.get(key(r1, c1)) || ''; },
     getFormulas() { const out = []; for (let i = 0; i < nr; i++) { const row = []; for (let j = 0; j < nc; j++) row.push(forms.get(key(r1 + i, c1 + j)) || ''); out.push(row); } return out; },
     setValues(arr) {
       if (!Array.isArray(arr) || arr.length !== nr || arr.some(r => !Array.isArray(r) || r.length !== nc))
@@ -152,6 +168,8 @@ function makeSpreadsheet() {
   const toasts = [];
   const ss = {
     __toasts: toasts,
+    __activeRange: null,
+    __setActiveRange(r) { ss.__activeRange = r; },
     getSheetByName: n => sheets.find(s => s.getName() === n) || null,
     getSheets: () => sheets.slice(),
     insertSheet(n) {
@@ -192,10 +210,15 @@ function makeGlobals() {
     createMenu: () => { const m = { addItem: () => m, addSeparator: () => m, addSubMenu: () => m, addToUi: () => m }; return m; },
     showModalDialog() {}, showModelessDialog() {}, showSidebar() {}
   };
+  const templates = [];
+  const out = () => { const o = { setWidth() { return o; }, setHeight() { return o; }, setTitle() { return o; } }; return o; };
+  const blob = (bytes, type, name) => ({ getBytes: () => bytes, getName: () => name, getContentType: () => type,
+                                        getDataAsString: () => Buffer.from(bytes).toString('utf8') });
   return {
-    __ss: ss, __alerts: alerts, __docProps: docProps, __userProps: userProps,
+    __ss: ss, __alerts: alerts, __docProps: docProps, __userProps: userProps, __templates: templates,
     SpreadsheetApp: {
       getActiveSpreadsheet: () => ss,
+      getActiveRange: () => ss.__activeRange,
       getUi: () => ui,
       flush() {},
       newDataValidation: () => builder(['requireValueInList', 'setAllowInvalid', 'setHelpText'], st => ({ list: st.requireValueInList })),
@@ -206,9 +229,19 @@ function makeGlobals() {
     LockService: { getDocumentLock: () => ({ tryLock: () => true, releaseLock() {} }) },
     PropertiesService: { getDocumentProperties: () => docProps, getUserProperties: () => userProps },
     Session: { getActiveUser: () => ({ getEmail: () => 'teacher@example.com' }), getScriptTimeZone: () => 'Asia/Seoul' },
-    Utilities: { formatDate: () => '9/21', sleep() {} },
+    Utilities: {
+      formatDate: () => '9/21', sleep() {},
+      newBlob: (data, type, name) => blob(typeof data === 'string' ? Array.from(Buffer.from(data, 'utf8')) : data, type, name),
+      base64Decode: s => Array.from(Buffer.from(s, 'base64')),
+      base64Encode: b => Buffer.from(b).toString('base64'),
+      zip: (blobs, name) => blob(Array.from(Buffer.from('PK' + blobs.map(b => b.getName()).join('|'))), 'application/zip', name)
+    },
     ScriptApp: { getProjectTriggers: () => [], deleteTrigger() {}, newTrigger: () => builder(['forSpreadsheet', 'onEdit', 'create'], () => ({})) },
-    HtmlService: { createHtmlOutputFromFile: () => ({ setWidth() { return this; }, setHeight() { return this; }, setTitle() { return this; } }) },
+    HtmlService: {
+      createHtmlOutputFromFile: () => out(),
+      createHtmlOutput: () => out(),
+      createTemplateFromFile: (file) => { const t = { file, evaluate: () => out() }; templates.push(t); return t; }
+    },
     // 가짜 인터넷 — 테스트가 __fetch.handler 를 바꿔 끼운다. 기본은 "연결 안 됨"
     __fetch: fetchBox,
     UrlFetchApp: {

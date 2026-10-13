@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root { --line:#dde3dd; --muted:#6b7280; --accent:#1f4f8f; --accent-soft:#e3edf9; --green:#35583f; --warn:#8f2f20; --warn-soft:#f8eae6; --bg:#f6f8f6; }
+  * { box-sizing:border-box; }
+  body { margin:0; color:#16202a; font:13.5px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
+  .top { padding:14px 20px 10px; background:var(--accent-soft); border-bottom:1px solid #cbd9ee; }
+  .top h2 { margin:0; font-size:16px; color:#173a68; }
+  .top p { margin:3px 0 0; font-size:12.5px; color:#33507a; }
+  .nav { display:flex; flex-wrap:wrap; gap:5px; padding:9px 20px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#fff; z-index:2; }
+  .nav a { font-size:12px; font-weight:600; text-decoration:none; color:var(--accent); border:1px solid #cbd9ee; border-radius:14px; padding:2px 10px; }
+  .wrap { padding:6px 20px 30px; }
+  h3 { font-size:14.5px; margin:18px 0 6px; display:flex; gap:8px; align-items:center; }
+  .n { flex:none; width:23px; height:23px; border-radius:50%; background:var(--accent); color:#fff; font-size:12px; line-height:23px; text-align:center; }
+  ol, ul { margin:4px 0; padding-left:20px; } li { margin:3px 0; }
+  .btn { display:inline-block; background:var(--accent); color:#fff; font-weight:600; text-decoration:none; border-radius:7px; padding:8px 15px; font-size:13px; }
+  .btn.g { background:#fff; color:var(--accent); border:1px solid #cbd9ee; }
+  .box { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:9px 12px; margin:8px 0; font-size:12.5px; }
+  .warn { background:var(--warn-soft); border-radius:8px; padding:9px 12px; margin:8px 0; font-size:12.5px; color:#6b2417; }
+  .warn b { color:var(--warn); }
+  code, kbd { background:#eef2ee; padding:0 5px; border-radius:4px; font-size:12px; }
+  .flow { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:6px 0; font-size:12.5px; }
+  .flow span { border:1px solid var(--line); border-radius:8px; padding:5px 9px; background:#fff; }
+  .flow i { color:var(--muted); font-style:normal; }
+  table { border-collapse:collapse; width:100%; font-size:12.5px; margin-top:4px; }
+  td { border-bottom:1px solid var(--line); padding:6px 4px; vertical-align:top; }
+  td:first-child { width:190px; font-weight:600; }
+  .muted { color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<script>var L = <?!= links ?>;</script>
+<div class="top">
+  <h2>📄 스캔 문서 → 엑셀 — 손글씨 활동지를 글자 그대로 표로</h2>
+  <p>업무 인수인계 대시보드(윈도우 프로그램)의 기능입니다. 스캔 PDF·사진을 AI가 <b>요약하지 않고 글자 그대로</b> 읽어 표로 만들고 엑셀로 저장합니다.
+     헷갈리는 글자는 <code>[불확실: 김태용/김태영]</code>처럼 남기고 화면에 노랗게 칠해 줍니다.</p>
+</div>
+<div class="nav">
+  <a href="#s1">① 받기·설치</a><a href="#s2">② AI 키</a><a href="#s3">③ 읽기</a><a href="#s4">④ 세특 시트와 함께</a><a href="#s5">⑤ 개인정보</a><a href="#s6">⑥ 막힐 때</a>
+</div>
+<div class="wrap">
+
+<h3 id="s1"><span class="n">1</span>내려받기 · 설치 (윈도우)</h3>
+<div class="flow"><a class="btn" id="lLatest" target="_blank">⬇ 최신 버전 받으러 가기</a><a class="btn g" id="lRepo" target="_blank">프로그램 소개 페이지</a></div>
+<ol>
+  <li>열린 페이지 아래쪽 <b>Assets</b>에서 <code>WorkDashboard-Setup-(버전).exe</code>를 받아 실행합니다(관리자 권한 필요 없음, 새 버전이 나오면 알아서 업데이트).
+      설치가 막힌 PC라면 <code>WorkDashboard-Portable-(버전).exe</code>를 받아 그 파일만 더블클릭하세요.</li>
+  <li><b>"Windows의 PC 보호"</b> 파란 창이 뜨면 → <b>[추가 정보]</b> → <b>[실행]</b>. 개인이 만든 프로그램이라 뜨는 안내입니다.</li>
+  <li>Edge가 "일반적으로 다운로드되지 않습니다"로 막으면 <kbd>Ctrl</kbd>+<kbd>J</kbd> → 그 항목의 <b>⋯</b> → <b>유지</b>. 그래도 막히면 Chrome으로 받으세요.</li>
+</ol>
+<div class="box">이 기능은 <b id="since"></b> 이상에 있습니다(OpenAI 키로 읽기는 v3.3.1부터). 이미 설치해 쓰고 있다면 켤 때 뜨는 업데이트 안내로 올리면 됩니다.</div>
+
+<h3 id="s2"><span class="n">2</span>AI 키 넣기 (한 번만)</h3>
+<ol>
+  <li>프로그램 <b>[설정] → AI 연결</b>에서 <b>Gemini API 키</b>를 넣습니다. <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> → Create API key (AIza… 로 시작).</li>
+  <li>OpenAI 키만 있어도 됩니다(값싼 <code>gpt-6-luna</code>로 같은 방식으로 읽음). 두 키가 다 있으면 화면의 [모델]에서 골라 씁니다(Gemini 가 먼저).</li>
+  <li>이 세특 시트에 넣은 키와는 <b>따로</b>입니다. 프로그램이 달라서 각각 넣어야 합니다.</li>
+</ol>
+
+<h3 id="s3"><span class="n">3</span>읽어서 표로 만들기</h3>
+<ol>
+  <li>왼쪽 메뉴 <b>[자료 만들기 → 스캔 문서 → 엑셀]</b></li>
+  <li><b>[파일 고르기]</b> 또는 화면에 <b>끌어 놓기</b> — PDF · PNG · JPG · WEBP · HEIC (PDF 50MB · 사진 20MB까지). 여러 파일이면 이름 차례로 한 표에 모읍니다.</li>
+  <li><b>추가 요청</b>(선택) — 예) "학번 순으로", "한 학생이 한 행, 열은 이름·탐구 주제·느낀 점"</li>
+  <li>보내는 내용을 확인하는 칸을 켜고 <b>[🔎 읽어서 표로 만들기]</b> — 쪽수가 많으면 몇 분 걸립니다. 다른 화면으로 가도 계속 읽고, 다 읽으면 알려 줍니다.</li>
+  <li>표를 확인합니다. <b>노란 칸</b>은 AI가 헷갈린 글자이니 원본과 맞춰 보세요. 취소선으로 지운 글은 빠집니다.</li>
+  <li><b>[📥 엑셀로 저장]</b> 또는 <b>[📋 표 복사]</b>(엑셀·한글·이 시트에 바로 붙여 넣기)</li>
+</ol>
+<div class="box">· 반복 양식(학생별 활동지)은 <b>학생 한 명이 한 행</b>, 서술형 문서는 페이지마다 한 행으로 정리합니다.<br>
+  · 답이 길어 끊기면 <b>[이어서 받기]</b> — 마지막 행 다음부터 같은 표에 붙입니다. 탭으로 문서 5개까지 따로 읽을 수 있습니다.<br>
+  · 손글씨 수식은 <code>(4 1; 2 3)</code> · <code>5/3</code> · <code>x²</code>처럼 읽기 쉽게 바꿔 넣습니다. 엑셀에는 모든 칸이 글자 그대로 들어가 학번 앞 0이 사라지지 않습니다.<br>
+  · 결과는 프로그램을 끄거나 탭을 닫으면 사라집니다. <b>꼭 엑셀로 저장</b>하세요.</div>
+
+<h3 id="s4"><span class="n">4</span>세특 시트와 함께 쓰기 — 활동지에서 세특 초안까지</h3>
+<div class="flow"><span>손글씨 활동지 스캔</span><i>→</i><span>스캔 문서 → 엑셀<br><span class="muted">학생 한 명이 한 행</span></span><i>→</i><span>[📋 표 복사]</span><i>→</i>
+  <span>이 시트의 <b>▸입력</b> 노란 칸<br><span class="muted">또는 ✍️ 바로 쓰기의 [관찰 메모]</span></span><i>→</i><span>⑥ 생성 · 🔍 검사</span></div>
+<ol>
+  <li>추가 요청에 <b>"반·번호 순으로, 한 학생이 한 행, 열은 ○○·○○"</b>처럼 입력 시트의 열 순서를 적어 두면 붙여 넣기가 쉽습니다.</li>
+  <li>붙여 넣기 전에 학생 순서가 입력 시트(반·번호)와 같은지 확인하세요. 이름 열은 붙여 넣지 말고 학생 자료 열만 붙입니다.</li>
+  <li>학생 글은 <b>근거 자료</b>입니다. 2026 기재요령에 따라 세특은 교사가 직접 관찰·평가한 내용을 바탕으로 쓰고, AI 결과는 그대로 입력하지 않습니다.</li>
+</ol>
+
+<h3 id="s5"><span class="n">5</span>개인정보 — 꼭 읽어 주세요</h3>
+<div class="warn">
+  · <b>파일 원본이 그대로 Google(또는 OpenAI)로 갑니다.</b> 사진 속 학생 이름·학번은 미리 가릴 수 없습니다. 가려야 하면 스캔 전에 가리세요.<br>
+  · <b>무료 등급 키</b>로 보낸 내용은 회사가 서비스 개선에 쓰고 사람이 볼 수도 있습니다. 학생 자료는 <b>결제를 켠(유료 등급) 키</b>를 쓰세요.<br>
+  · 학교·교육청의 생성형 AI 활용 지침을 먼저 확인하세요. 시작 전에 확인란을 켜야 읽기가 시작됩니다.<br>
+  · 큰 파일(Gemini 14MB, OpenAI 30MB 넘게)은 회사 파일 저장소에 잠깐 올려 읽고, 탭을 닫거나 프로그램을 끌 때 지웁니다(파일 이름은 보내지 않음).
+</div>
+
+<h3 id="s6"><span class="n">6</span>막힐 때</h3>
+<table>
+  <tr><td>내려받기가 안 열려요</td><td>학교망에서 GitHub 가 막혀 있을 수 있습니다. 집이나 휴대폰 핫스팟에서 받아 USB로 옮기세요.</td></tr>
+  <tr><td>"키가 없습니다"</td><td>프로그램 [설정] → AI 연결에서 Gemini(또는 OpenAI) 키를 넣고 연결 테스트.</td></tr>
+  <tr><td>중간에 끊겼어요</td><td>[이어서 받기]. 그래도 짧으면 파일을 몇 쪽씩 나눠서 읽으세요.</td></tr>
+  <tr><td>표 모양이 마음에 안 들어요</td><td>추가 요청에 행·열을 구체적으로 적고 다시 읽습니다. 예) "한 학생이 한 행, 열은 이름·주제·느낀 점"</td></tr>
+  <tr><td>아이폰 사진(HEIC)이 안 돼요</td><td>OpenAI 로 읽을 때는 HEIC 를 못 읽습니다. JPG·PNG 로 바꾸거나 Gemini 키를 쓰세요.</td></tr>
+  <tr><td>자세한 사용법</td><td>프로그램 왼쪽 메뉴 <b>[따라 배우기]</b>(F1) — 실제 화면 위에서 한 단계씩 짚어 줍니다.</td></tr>
+</table>
+<p class="muted" style="margin-top:14px">만든이: 김해분성고 정현서 · 업무 인수인계 대시보드 · <a id="lRepo2" target="_blank">github.com/sced9120/work-dashboard</a></p>
+</div>
+<script>
+document.getElementById('lLatest').href = L.latest;
+document.getElementById('lRepo').href = L.repo;
+document.getElementById('lRepo2').href = L.repo;
+document.getElementById('since').textContent = L.since;
+// <base target="_top"> 때문에 #링크가 바깥 창을 움직이지 않도록 직접 스크롤한다
+[].forEach.call(document.querySelectorAll('.nav a'), function (a) {
+  a.onclick = function (e) {
+    e.preventDefault();
+    var t = document.getElementById(a.getAttribute('href').slice(1));
+    if (t) window.scrollTo({ top: t.getBoundingClientRect().top + window.pageYOffset - 52, behavior: 'smooth' });
+  };
+});
+</script>
+</body>
+</html>

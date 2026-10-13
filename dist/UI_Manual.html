@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root { --line:#dde3dd; --muted:#6b7280; --accent:#35583f; --accent-soft:#e3ece4;
+          --warn:#8f2f20; --warn-soft:#f8eae6; --ok:#2c6340; --bg:#f6f8f6; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; padding:14px 18px 70px; color:#16202a;
+         font:13.5px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
+  h3 { margin:0 0 4px; font-size:14px; display:flex; gap:8px; align-items:center; }
+  .num { flex:none; width:22px; height:22px; border-radius:50%; background:var(--accent); color:#fff;
+         font-size:11px; font-weight:600; line-height:22px; text-align:center; }
+  .card { border:1px solid var(--line); border-radius:9px; padding:11px 13px; margin-bottom:9px; background:#fff; }
+  .note { font-size:12px; color:var(--muted); line-height:1.55; }
+  .warn { background:var(--warn-soft); border-radius:7px; padding:8px 11px; font-size:12px; color:#6b2417; margin:0 0 9px; }
+  .info { background:#eef4fb; border-radius:7px; padding:8px 11px; font-size:12px; color:#1f3f66; margin:6px 0 0; }
+  textarea { width:100%; padding:8px 10px; border:1px solid #c9d1c9; border-radius:6px; font:12px/1.5 inherit; resize:vertical; }
+  textarea.mono { font:11.5px/1.5 ui-monospace,Consolas,monospace; color:#374151; background:#fafbfa; }
+  button, a.btn { font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; padding:7px 13px; border:1px solid #c9d1c9;
+                  border-radius:6px; background:#fff; color:#16202a; text-decoration:none; display:inline-block; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  .actions { display:flex; gap:7px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+  .msg { font-size:12.5px; margin-top:6px; min-height:16px; }
+  .msg.ok { color:var(--ok); } .msg.err { color:var(--warn); }
+  .who { display:flex; flex-wrap:wrap; gap:4px; margin:4px 0 2px; }
+  .who span { border:1px solid var(--line); border-radius:11px; padding:1px 8px; font-size:11.5px; background:var(--bg); cursor:pointer; }
+  .res { border-top:1px solid var(--line); padding:5px 0; font-size:12px; }
+  .res b.ok { color:var(--ok); } .res b.bad { color:var(--warn); }
+  .tabs { display:flex; gap:4px; margin-bottom:9px; }
+  .tab { padding:5px 11px; border-radius:14px; border:1px solid var(--line); background:#fff; font-size:12px; cursor:pointer; font-weight:600; color:var(--muted); }
+  .tab.on { background:var(--accent-soft); color:var(--ok); border-color:#c6d8c9; }
+  .foot { position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line); padding:8px 18px;
+          display:flex; gap:8px; align-items:center; }
+  .foot .sp { flex:1; font-size:11.5px; color:#7f1d1d; }
+  ol { margin:4px 0 0; padding-left:18px; font-size:12px; } li { margin:1px 0; }
+</style>
+</head>
+<body>
+<script>var DATA = <?!= data ?>;</script>
+
+<div class="tabs">
+  <span class="tab on" data-t="each">학생별로 복사 · 붙여넣기</span>
+  <span class="tab" data-t="gem">Gem(지침)으로 만들어 두기 — 다음부터 더 짧게</span>
+</div>
+
+<div id="t-each">
+  <div class="warn" id="note" hidden></div>
+  <div class="card">
+    <h3><span class="num">1</span>요청문 복사 <span class="note" id="chunkInfo" style="font-weight:400"></span></h3>
+    <div class="who" id="who"></div>
+    <div class="note" id="maskNote"></div>
+    <textarea id="prompt" class="mono" rows="6" readonly></textarea>
+    <div class="actions">
+      <button class="primary" id="bCopyAll">📋 전체 복사 (규칙 + 학생 자료)</button>
+      <button id="bCopyUser" title="Gem 을 만들어 두었으면 학생 자료만 붙여 넣으면 됩니다">학생 자료만 복사 (Gem 사용 시)</button>
+      <span class="msg" id="mCopy"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="num">2</span>AI 대화창에 붙여 넣기</h3>
+    <div class="actions" style="margin-top:2px">
+      <a class="btn" href="https://gemini.google.com/app" target="_blank">Gemini 열기</a>
+      <a class="btn" href="https://chatgpt.com/" target="_blank">ChatGPT 열기</a>
+      <a class="btn" href="https://claude.ai/new" target="_blank">Claude 열기</a>
+    </div>
+    <div class="info" id="acct"></div>
+  </div>
+
+  <div class="card">
+    <h3><span class="num">3</span>받은 답을 통째로 복사해 여기에 붙여 넣기</h3>
+    <textarea id="answer" rows="7" placeholder="AI가 쓴 답을 그대로 붙여 넣으세요. [S1] [S2] 표시를 보고 학생별로 나눠 넣습니다."></textarea>
+    <div class="actions">
+      <button class="primary" id="bApply">시트에 넣고 검사</button>
+      <button id="bNext" hidden>다음 묶음 →</button>
+      <span class="msg" id="mApply"></span>
+    </div>
+    <div id="results"></div>
+  </div>
+</div>
+
+<div id="t-gem" hidden>
+  <div class="card">
+    <h3>Gem(맞춤 지침)으로 저장해 두면</h3>
+    <div class="note">규칙을 Gem에 한 번 넣어 두면, 다음부터는 1단계에서 <b>[학생 자료만 복사]</b>로 짧게 붙여 넣으면 됩니다.
+      ChatGPT는 "GPT 만들기"·프로젝트 지침, Claude는 프로젝트 지침에 같은 글을 넣으면 됩니다.</div>
+    <ol>
+      <li><a href="https://gemini.google.com/gems/create" target="_blank">Gemini › Gem 만들기</a>를 엽니다(학교 계정 권장. 메뉴에 Gem이 없으면 관리자가 끈 것이니 [학생별로 복사]를 쓰세요)</li>
+      <li>이름: <b id="gemName"></b></li>
+      <li>[안내(Instructions)]에 아래 글을 통째로 붙여 넣고 저장합니다</li>
+      <li>규칙(기록종류·공통규칙·기재요령)을 고친 뒤에는 Gem 안내도 다시 붙여 넣으세요</li>
+    </ol>
+    <textarea id="gemText" class="mono" rows="12" readonly></textarea>
+    <div class="actions"><button class="primary" id="bCopyGem">📋 Gem 안내 복사</button><span class="msg" id="mGem"></span></div>
+  </div>
+</div>
+
+<div class="foot">
+  <span class="sp" id="aiNotice"></span>
+  <button id="bClose">닫기</button>
+</div>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var IDX = 0;
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+function say(id, t, cls) { var e = $(id); e.className = 'msg ' + (cls || ''); e.textContent = t || ''; }
+
+/** iframe 안에서도 되도록: 숨긴 textarea 를 골라 복사 → 안 되면 navigator.clipboard */
+function copyText(text, msgId) {
+  var ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+  document.body.appendChild(ta); ta.select();
+  var ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  if (ok) { say(msgId, '✓ 복사했습니다. 대화창에 붙여 넣으세요(Ctrl+V).', 'ok'); return; }
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(function () { say(msgId, '✓ 복사했습니다.', 'ok'); },
+      function () { say(msgId, '자동 복사가 막혔습니다. 위 칸을 누르고 Ctrl+A → Ctrl+C 하세요.', 'err'); });
+  } else say(msgId, '자동 복사가 막혔습니다. 위 칸을 누르고 Ctrl+A → Ctrl+C 하세요.', 'err');
+}
+
+function full(c) { return DATA.system + '\n\n' + c.user; }
+
+function draw() {
+  var c = DATA.chunks[IDX];
+  $('chunkInfo').textContent = DATA.chunks.length > 1 ? '묶음 ' + (IDX + 1) + ' / ' + DATA.chunks.length + ' · 학생 ' + c.ids.length + '명'
+                                                      : '학생 ' + c.ids.length + '명';
+  $('who').innerHTML = c.labels.map(function (l, i) { return '<span data-i="' + i + '" title="시트에서 보기">' + esc(c.ids[i] + ' = ' + l) + '</span>'; }).join('');
+  [].forEach.call($('who').querySelectorAll('span'), function (sp) {
+    sp.onclick = function () { google.script.run.manualGoto({ sheet: DATA.sheet, target: DATA.target, row: c.rows[+sp.dataset.i] }); };
+  });
+  $('prompt').value = full(c);
+  $('answer').value = '';
+  $('results').innerHTML = '';
+  $('bNext').hidden = true;
+  say('mApply', ''); say('mCopy', '');
+}
+
+$('maskNote').textContent = DATA.masked
+  ? '학생 이름은 요청문에 들어가지 않습니다(S1, S2 … 로 바뀜). 위 이름표는 이 창에서만 보입니다.'
+  : '⚠ [⚙️ 설정]의 학생 이름 마스킹이 꺼져 있어 요청문에 이름이 들어갑니다.';
+var a = DATA.account || {};
+$('acct').innerHTML = a.kind === 'school'
+  ? '지금 시트는 <b>' + esc(a.email) + '</b>(학교·기관 계정)로 열려 있습니다. Gemini도 <b>같은 학교 계정</b>으로 들어가면 대화가 AI 학습에 쓰이지 않습니다(학교에서 Gemini를 켜 두었을 때). 오른쪽 위 계정 사진으로 확인하세요.'
+  : a.kind === 'personal'
+    ? '지금 시트는 개인 계정(<b>' + esc(a.email) + '</b>)입니다. 개인 계정 Gemini·ChatGPT 무료판은 대화가 서비스 개선에 쓰일 수 있어, <b>학생 자료는 학교 계정 Gemini</b>를 권합니다(개인이면 Gemini 앱 활동 끄기).'
+    : '학생 자료는 <b>학교 계정 Gemini</b>를 권합니다. 학교 계정은 대화가 AI 학습에 쓰이지 않습니다.';
+if (DATA.note) { $('note').hidden = false; $('note').textContent = DATA.note; }
+$('aiNotice').textContent = '⚠ ' + DATA.aiNotice;
+$('gemName').textContent = '세특 · ' + DATA.title;
+$('gemText').value = DATA.gem;
+
+$('bCopyAll').onclick = function () { copyText(full(DATA.chunks[IDX]), 'mCopy'); };
+$('bCopyUser').onclick = function () { copyText(DATA.chunks[IDX].user, 'mCopy'); };
+$('bCopyGem').onclick = function () { copyText($('gemText').value, 'mGem'); };
+$('bClose').onclick = function () { google.script.host.close(); };
+[].forEach.call(document.querySelectorAll('.tab'), function (t) {
+  t.onclick = function () {
+    [].forEach.call(document.querySelectorAll('.tab'), function (x) { x.classList.toggle('on', x === t); });
+    $('t-each').hidden = t.dataset.t !== 'each'; $('t-gem').hidden = t.dataset.t !== 'gem';
+  };
+});
+
+$('bApply').onclick = function () {
+  var ans = $('answer').value.trim();
+  if (!ans) { say('mApply', '받은 답을 먼저 붙여 넣으세요.', 'err'); return; }
+  var btn = this, c = DATA.chunks[IDX];
+  btn.disabled = true; say('mApply', '넣는 중…');
+  google.script.run.withSuccessHandler(function (r) {
+    btn.disabled = false;
+    var h = r.results.map(function (x) {
+      return '<div class="res"><b class="' + (x.ok ? 'ok' : 'bad') + '">' + (x.ok ? '✓ ' : '✗ ') + esc(x.label) + '</b> · ' + x.bytes + ' / ' + x.limit + '바이트' +
+             (x.issues.length ? '<br><span class="note">' + esc(x.issues.join(' · ')) + '</span>' : ' · 걸리는 표현 없음') + '</div>';
+    }).join('');
+    if (r.missing.length) h += '<div class="res"><b class="bad">빠진 학생: ' + esc(r.missing.join(', ')) + '</b> — 답에 [S번호] 표시가 없거나 비었습니다. 그 학생만 다시 요청하세요.</div>';
+    $('results').innerHTML = h;
+    say('mApply', r.written + '명을 [' + DATA.target + ']에 넣었습니다. 읽고 고쳐서 [최종본]에 옮기세요.', r.missing.length ? 'err' : 'ok');
+    if (IDX + 1 < DATA.chunks.length) { $('bNext').hidden = false; }
+  }).withFailureHandler(function (e) { btn.disabled = false; say('mApply', e.message, 'err'); })
+    .manualApply({ sheet: DATA.sheet, target: DATA.target, check: DATA.check, limit: DATA.limit,
+                   rows: c.rows, ids: c.ids, labels: c.labels, answer: ans });
+};
+$('bNext').onclick = function () { IDX++; draw(); window.scrollTo(0, 0); };
+draw();
+</script>
+</body>
+</html>

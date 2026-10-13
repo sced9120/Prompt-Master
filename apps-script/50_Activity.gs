@@ -19,7 +19,9 @@ var RESERVED_NAMES = ['반', '번호', '이름', '성취수준', '생성', '모�
 
 /**
  * 활동 생성 (마법사·직접추가 공용)
- * def = {key, name, recordKey, subjectKey, chars, columns, desc, examples:[{values:[],result:''}]}
+ * def = {key, name, recordKey, subjectKey, chars, columns, desc, examples:[{values:[],result:''}],
+ *        mode?:'자동'|'바로쓰기', noExamples?:boolean}
+ *   바로쓰기: 입력 항목을 정하지 않고 [관찰 메모] 한 칸에 자유롭게 적는 시트 (예시 시트 없이)
  */
 function createActivity_(def) {
   var key = safeKey_(def.key || def.name);
@@ -40,26 +42,28 @@ function createActivity_(def) {
   var rec = findByKey(recs, def.recordKey) || recs[0];
   var chars = Number(def.chars || 0) || rec.chars;
 
-  var inSheet = buildActivityInputSheet_(key, name, cols, rec);
-  var exSheet = buildActivityExampleSheet_(key, name, cols, def.examples || []);
+  var mode = def.mode === '바로쓰기' ? '바로쓰기' : '자동';
+  var inSheet = buildActivityInputSheet_(key, name, cols, rec, mode);
+  var exSheet = def.noExamples ? null : buildActivityExampleSheet_(key, name, cols, def.examples || []);
 
   var s = shRequire_(APP.SH.ACTIVITY);
   var row = [key, name, rec.key, def.subjectKey || cfg_('기본 교과영역', '공통'),
-             chars, cols.join('|'), def.desc || '', '자동', '',
-             inSheet.getName(), exSheet.getName()];
+             chars, cols.join('|'), def.desc || '', mode, '',
+             inSheet.getName(), exSheet ? exSheet.getName() : ''];
   s.appendRow(row);
   refreshActivityValidation_();
 
   try { syncRosterInto_(inSheet, getRoster_()); } catch (e) {}
-  return { key: key, inSheet: inSheet.getName(), exSheet: exSheet.getName() };
+  return { key: key, inSheet: inSheet.getName(), exSheet: exSheet ? exSheet.getName() : '' };
 }
 
-function buildActivityInputSheet_(key, name, cols, rec) {
-  return layoutInputSheet_(ss_().insertSheet(sheetNameIn_(key)), name, cols, rec);
+function buildActivityInputSheet_(key, name, cols, rec, mode) {
+  return layoutInputSheet_(ss_().insertSheet(sheetNameIn_(key)), name, cols, rec, mode);
 }
 
 /** 입력 시트의 머리말·헤더·폭·서식 (활동 만들 때와 입력 항목 바꿀 때 함께 씀) */
-function layoutInputSheet_(s, name, cols, rec) {
+function layoutInputSheet_(s, name, cols, rec, mode) {
+  var quick = mode === '바로쓰기';
   var head = ['반', '번호', '이름', '성취수준']
     .concat(cols)
     .concat(['생성', '모델', 'AI 결과', '최종본', '바이트', '검증']);
@@ -67,9 +71,12 @@ function layoutInputSheet_(s, name, cols, rec) {
   var n = head.length;
 
   splitBanner_(s, 3, n,
-    '▶ ' + name + '\n' + rec.name + ' · ' + rec.chars + '자',
-    '① 노란 칸에 학생 자료 입력  →  ② [모델] 선택  →  ③ [생성] 체크 또는 메뉴 ⑥ 체크된 행 생성  →  ' +
-    '④ AI 결과를 확인하고 [최종본] 칸에 붙여넣어 다듬기  →  ⑤ 체크 해제(재호출·비용 방지)');
+    (quick ? '✍️ ' : '▶ ') + name + '\n' + rec.name + ' · ' + rec.chars + '자',
+    quick
+      ? '바로 쓰기 — 입력 항목을 정하지 않고 [관찰 메모]에 자유롭게 적습니다.  AI 초안: [생성] 체크 → 메뉴 ⑥ (키가 없으면 복사·붙여넣기 창)  ·  ' +
+        '직접 쓰기: [최종본]에 바로 쓰면 [검증]이 즉시 금지어·맞춤법을 검사합니다.  학생 줄은 명단에서 채워지고, 명단이 없으면 반·번호·이름을 직접 적어도 됩니다.'
+      : '① 노란 칸에 학생 자료 입력  →  ② [모델] 선택  →  ③ [생성] 체크 또는 메뉴 ⑥ 체크된 행 생성  →  ' +
+        '④ AI 결과를 확인하고 [최종본] 칸에 붙여넣어 다듬기(고치면 [검증]이 바로 다시 검사)  →  ⑤ 체크 해제(재호출·비용 방지)');
   s.getRange(2, 1).setValue('').setFontSize(8);
   s.setRowHeight(2, 8);
 
@@ -80,7 +87,7 @@ function layoutInputSheet_(s, name, cols, rec) {
 
   // 폭
   s.setColumnWidth(1, 55); s.setColumnWidth(2, 55); s.setColumnWidth(3, 90); s.setColumnWidth(4, 80);
-  for (var i = 0; i < cols.length; i++) s.setColumnWidth(5 + i, 230);
+  for (var i = 0; i < cols.length; i++) s.setColumnWidth(5 + i, quick ? 420 : 230);
   var base = 4 + cols.length;
   s.setColumnWidth(base + 1, 60);   // 생성
   s.setColumnWidth(base + 2, 150);  // 모델
@@ -142,7 +149,7 @@ function updateActivity_(key, p) {
     rows = out.length;
 
     inS.clear();
-    layoutInputSheet_(inS, name, cols, rec);
+    layoutInputSheet_(inS, name, cols, rec, act.mode);
     if (out.length) {
       var n = 4 + cols.length + 6;
       ensureRows_(inS, first + out.length - 1);

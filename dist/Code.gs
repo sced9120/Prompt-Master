@@ -1,16 +1,16 @@
 /******************************************************************************
- * 세특 작성 도우미 v3.5.0 — 설치용 합본
+ * 세특 작성 도우미 v3.6.0 — 설치용 합본
  *
  * 이 파일 하나에 모든 스크립트가 들어 있습니다.
  * Apps Script 편집기에서 Code.gs 의 내용을 전부 지우고 이 파일을 통째로 붙여넣으세요.
- * HTML 파일 5개는 각각 같은 이름으로 따로 만들어야 합니다:
- *   UI_ApiKey, UI_Observe, UI_Onboard, UI_Roster, UI_Wizard
+ * HTML 파일 10개는 각각 같은 이름으로 따로 만들어야 합니다:
+ *   UI_ApiKey, UI_Check, UI_Export, UI_Manual, UI_Observe, UI_OcrGuide, UI_Onboard, UI_Quick, UI_Roster, UI_Wizard
  *
  * 원본은 모듈별로 나뉘어 있습니다: github.com/sced9120/Prompt-Master
  * 고칠 때는 apps-script/ 의 해당 파일을 고치고 node tools/build.js 를 다시 돌리세요.
  * 이 파일을 직접 고치면 다음 빌드 때 덮어써집니다.
  *
- * 빌드: 2026-10-02  ·  원본 17개 파일
+ * 빌드: 2026-10-13  ·  원본 25개 파일
  *****************************************************************************/
 
 /* ==========================================================================
@@ -27,7 +27,7 @@
  */
 
 var APP = {
-  VERSION: 'v3.5.0',
+  VERSION: 'v3.6.0',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -41,6 +41,7 @@ var APP = {
     ACTIVITY: '🗂 활동목록',
     COMPILE_PREFIX: '📦 취합 ▸',
     REVIEW: '✅ 검토',
+    RULES: '📏 기재요령',
     FORM_RAW: '📥 폼응답원본'
   },
   SUFFIX: { IN: ' ▸입력', EX: ' ▸예시' },
@@ -72,7 +73,7 @@ var PRESET_RECORD_TYPES = [
     view: '- 교과 수업·평가 장면에서 실제로 관찰된 사실을 근거로 서술할 것\n' +
           '- 결과물의 우수성보다 탐구 과정·사고의 전개·태도의 변화를 중심으로 서술할 것\n' +
           '- 해당 교과의 핵심역량이 드러나는 장면을 구체적으로 연결할 것',
-    note: '공통과목은 학년 전체 500자. 2026학년도 기준.'
+    note: '과목별 최대 500자. 2022 개정 공통과목(공통국어·공통수학·공통영어·통합사회·통합과학·한국사·과학탐구실험)은 1·2를 합산해 500자, 전공실무과목은 학기별 500자. 2026학년도 기준(고 p.208).'
   },
   {
     key: '개세특',
@@ -246,6 +247,49 @@ var PRESET_SUBJECTS = [
 ];
 
 /**
+ * [📐 공통규칙]의 NEIS_RULES 기본 문구 — 2026학년도 학교생활기록부 기재요령 기준.
+ * 프롬프트의 [학생부 기재 금지사항] 칸에 그대로 들어간다.
+ * 해마다 바뀌는 부분은 16_Rules.gs 의 규칙판(RULES_2026)과 원격 규칙판이 이어받는다.
+ */
+var NEIS_RULES_2026 =
+  '다음은 학교생활기록부에 기재할 수 없다(2026학년도 학교생활기록부 기재요령 기준). 결과물에 절대 포함하지 않는다.\n' +
+  '- 교내·외 대회 참여 사실과 그 성적·수상실적, 수상 등수(수상경력란에만 기재). 대회 이름을 단순 행사로 바꿔 쓰는 것도 안 된다.\n' +
+  '- 교외 기관·단체(장)에게 받은 상(표창장·감사장·공로상 포함)\n' +
+  '- 공인어학시험(TOEIC, TOEFL, TEPS, HSK, JLPT, G-TELP 등)과 교내·외 인증시험의 참여 사실·점수·등급\n' +
+  '- 자격증·인증 취득 사실, 기능사·산업기사 같은 자격명(자격증란에만 기재)\n' +
+  '- 모의고사·전국연합학력평가 성적(원점수, 석차, 등급, 백분위)\n' +
+  '- 논문(소논문)의 학회지 투고·등재·학회 발표 사실, 도서 출간 사실, 특허·실용신안·상표·디자인 출원·등록 사실\n' +
+  '- 연구보고서(소논문) 관련 실적(제목, 연구 주제, 참여 인원, 소요 시간)\n' +
+  '- K-MOOC·MOOC·KOCW 같은 온라인 공개강좌 수강 내용, 방과후학교 활동\n' +
+  '- 해외 활동실적, 어학연수, 해외봉사\n' +
+  '- 특정 대학명·학과명, 기관명, 사설 학원·강사명, 상호명(도서명·저자명에 들어 있는 경우만 예외)\n' +
+  '- 부모 및 친인척의 사회적·경제적 지위를 암시하는 내용(직업, 직위, 직장명 등)\n' +
+  '- 학교교육계획에 없거나 정규교육과정 밖에서 이루어진 활동\n' +
+  '- 봉사활동 시간, 헌혈 횟수처럼 다른 항목에 적는 사항\n' +
+  '- 도서명만 늘어놓는 식의 기재(도서가 필요하면 교육활동과 연결해 도서명(저자) 형식으로)\n' +
+  '- 사교육을 유발할 수 있는 요소';
+
+/**
+ * 예전 판(v3.0~v3.5)이 설치하던 NEIS_RULES 문구.
+ * [공통규칙] 칸이 이 문구 그대로면 선생님이 손대지 않은 것이므로, 새 학년도 문구로 바꿔도 된다.
+ */
+var OLD_NEIS_RULES = [
+  '다음은 학교생활기록부에 기재할 수 없다. 결과물에 절대 포함하지 않는다.\n' +
+  '- 교외 대회·경시대회 수상 실적, 교내외 수상 사실 및 등수(수상경력란에만 기재)\n' +
+  '- 공인어학시험(TOEIC, TOEFL, TEPS, HSK, JLPT, 지텔프 등) 점수·등급\n' +
+  '- 각종 자격증·인증 취득 사실, 기능사·산업기사 등 자격명\n' +
+  '- 논문 학회지 등재, 도서 출간, 발명 특허 출원 사실\n' +
+  '- 모의고사·전국연합학력평가 성적, 석차, 백분위, 등급\n' +
+  '- 해외 활동실적, 어학연수, 해외봉사\n' +
+  '- 특정 대학명, 학과명, 사설 기관·학원·강사명, 상호명, 프로그램 상품명\n' +
+  '- 부모 및 친인척의 사회적·경제적 지위를 암시하는 내용\n' +
+  '- 정규 교육과정 외에 이루어진 활동(학교교육계획에 없는 활동)\n' +
+  '- 헌혈, 봉사활동 시간 등 별도 항목에 기재하는 사항\n' +
+  '- 특정 도서명의 나열식 기재\n' +
+  '- 사교육을 유발할 수 있는 요소'
+];
+
+/**
  * 공통규칙 프리셋 (교과와 무관하게 전 기록에 적용)
  */
 var PRESET_COMMON = [
@@ -266,20 +310,7 @@ var PRESET_COMMON = [
   {
     key: 'NEIS_RULES',
     title: '학생부 기재 금지사항',
-    body:
-      '다음은 학교생활기록부에 기재할 수 없다. 결과물에 절대 포함하지 않는다.\n' +
-      '- 교외 대회·경시대회 수상 실적, 교내외 수상 사실 및 등수(수상경력란에만 기재)\n' +
-      '- 공인어학시험(TOEIC, TOEFL, TEPS, HSK, JLPT, 지텔프 등) 점수·등급\n' +
-      '- 각종 자격증·인증 취득 사실, 기능사·산업기사 등 자격명\n' +
-      '- 논문 학회지 등재, 도서 출간, 발명 특허 출원 사실\n' +
-      '- 모의고사·전국연합학력평가 성적, 석차, 백분위, 등급\n' +
-      '- 해외 활동실적, 어학연수, 해외봉사\n' +
-      '- 특정 대학명, 학과명, 사설 기관·학원·강사명, 상호명, 프로그램 상품명\n' +
-      '- 부모 및 친인척의 사회적·경제적 지위를 암시하는 내용\n' +
-      '- 정규 교육과정 외에 이루어진 활동(학교교육계획에 없는 활동)\n' +
-      '- 헌혈, 봉사활동 시간 등 별도 항목에 기재하는 사항\n' +
-      '- 특정 도서명의 나열식 기재\n' +
-      '- 사교육을 유발할 수 있는 요소'
+    body: NEIS_RULES_2026
   },
   {
     key: 'BYTE_RULE',
@@ -310,35 +341,66 @@ var PRESET_COMMON = [
 ];
 
 /**
- * 결과 검증용 패턴
+ * 결과 검증용 패턴 (2026학년도 기재요령 기준)
  * level: 'block'(기재 금지 · 반드시 수정) | 'check'(오탐 가능 · 눈으로 확인)
+ * why  : 검사 창·[📏 기재요령] 시트에 보이는 이유와 근거(기재요령 쪽수는 고등학교 판)
+ * 설치하면 [📏 기재요령] 시트에 표로 채워지고, 그다음부터는 그 표가 우선합니다.
  */
 var PRESET_BANNED = [
-  { level: 'block', label: '공인어학시험', re: '토익|토플|텝스|지텔프|TOEIC|TOEFL|TEPS|G-TELP|HSK|JLPT|OPIc' },
-  { level: 'block', label: '수상·등수', re: '수상|최우수상|우수상|장려상|금상|은상|동상|대상 수상|입상|[1-3]위 ?(입상|차지|기록)|메달' },
-  { level: 'block', label: '자격증', re: '자격증|자격 ?취득|기능사|산업기사|기사 ?자격|정보처리기사|한국사능력검정' },
-  { level: 'block', label: '논문·특허·출판', re: '논문|학회지|등재|특허 ?출원|실용신안|저서 ?출간|책을 ?출간' },
-  { level: 'block', label: '모의고사·수능', re: '모의고사|전국연합학력평가|모평|수능 ?성적|백분위|표준점수' },
-  { level: 'block', label: '해외활동', re: '어학연수|해외 ?연수|해외 ?봉사|교환학생' },
-  { level: 'block', label: '사설기관·학원', re: '학원|과외|사설 ?기관|아카데미|인강|사교육' },
-  { level: 'block', label: '부모 정보', re: '아버지|어머니|부모님(의)? ?(직업|회사|사업)|가정 ?형편' },
-  { level: 'check', label: '대학·기관명 가능성', re: '[가-힣A-Za-z]{2,10}대학교|[가-힣]{2,10}연구원|[가-힣]{2,10}재단' },
-  { level: 'check', label: '대회 언급', re: '대회|공모전|경시' },
-  { level: 'check', label: '봉사시간', re: '봉사 ?\\d+ ?시간|헌혈' }
+  { level: 'block', label: '공인어학시험', re: '토익|토플|텝스|지텔프|아이엘츠|오픽|TOEIC|TOEFL|TEPS|G-TELP|IELTS|HSK|JLPT|JPT|OPIc|DELF',
+    why: '공인어학시험 참여 사실·점수·등급은 학생부 어느 항목에도 쓸 수 없음 (2026 기재요령 고 p.118)' },
+  { level: 'block', label: '수상·등수', re: '수상|최우수상|우수상|장려상|금상|은상|동상|대상 수상|입상|[1-3]위 ?(입상|차지|기록)|메달',
+    why: '대회 참여 사실·성적·수상실적은 수상경력란에만. 대회 이름을 행사로 바꿔 쓰는 것도 안 됨 (고 p.118)' },
+  { level: 'block', label: '교외상', re: '표창장|감사장|공로상',
+    why: '교외 기관·단체(장)에게 받은 상은 기재할 수 없음 (고 p.118)' },
+  { level: 'block', label: '자격증·인증시험', re: '자격증|자격 ?취득|기능사|산업기사|기사 ?자격|정보처리기사|한국사능력검정|인증시험',
+    why: '자격증·인증시험은 [자격증 및 인증 취득상황]란에만 (고 p.66·p.118)' },
+  { level: 'block', label: '논문·특허·출판', re: '논문|학회지|학술지|학회 ?발표|특허 ?(출원|등록|취득)|실용신안|상표 ?(출원|등록)|저서 ?출간|책을 ?출간|도서 ?출간',
+    why: '논문 투고·등재·학회 발표, 도서 출간, 지식재산권 출원·등록 사실은 기재 불가 (고 p.118)' },
+  { level: 'block', label: '모의고사·석차', re: '모의고사|전국연합학력평가|모평|수능 ?성적|백분위|표준점수|석차|내신 ?[1-9] ?등급',
+    why: '모의고사·전국연합학력평가 성적, 석차, 등급은 기재 불가 (고 p.118)' },
+  { level: 'block', label: '온라인 공개강좌', re: '[Kk]-?MOOC|MOOC|KOCW|케이무크',
+    why: 'K-MOOC·MOOC·KOCW 관련 사항은 세특에 쓸 수 없음 (2026 신설, 고 p.118)' },
+  { level: 'block', label: '방과후학교', re: '방과후 ?학교|방과후 ?수업|방과후 ?강좌|방과후 ?활동',
+    why: '방과후학교 활동은 세특·행발 어디에도 쓸 수 없음 (2026 신설, 고 p.118·p.159)' },
+  { level: 'block', label: '해외활동', re: '어학연수|해외 ?연수|해외 ?봉사|교환학생|해외 ?캠프',
+    why: '해외 활동실적은 기재 불가' },
+  { level: 'block', label: '사설기관·학원', re: '학원|과외|사설 ?기관|아카데미|인강|사교육|입시 ?컨설팅',
+    why: '사설 기관·학원·강사명 등 사교육을 유발하는 요소는 기재 불가' },
+  { level: 'block', label: '부모 정보', re: '아버지|어머니|부모님?(의)? ?(직업|직장|회사|사업|직위)|가정 ?형편',
+    why: '부모·친인척의 사회적·경제적 지위를 암시하는 내용은 기재 불가' },
+  { level: 'check', label: '대학·기관명 가능성', re: '[가-힣A-Za-z]{2,10}대학교|[가-힣]{2,10}연구원|[가-힣]{2,10}재단|[가-힣]{2,8}학과',
+    why: '특정 대학·학과·기관명은 쓰지 않음. 도서명·저자명 안에 든 것만 예외 (고 p.157)' },
+  { level: 'check', label: '대회 언급', re: '대회|공모전|경시|올림피아드',
+    why: '대회 참여 사실은 기재 불가 — 수업 중 활동이면 대회라는 말 없이 활동 내용으로' },
+  { level: 'check', label: '봉사시간', re: '봉사 ?\\d+ ?시간|헌혈',
+    why: '봉사활동 시간·헌혈은 다른 항목에 적는 사항' },
+  { level: 'check', label: '청소년단체', re: '청소년 ?단체|스카우트|아람단|누리단|RCY|청소년적십자',
+    why: '고등학교는 청소년단체 활동의 단체명·특기사항을 입력하지 않음' },
+  { level: 'check', label: '학교스포츠클럽', re: '스포츠 ?클럽',
+    why: '정규교육과정 밖 학교스포츠클럽은 특기사항을 입력하지 않음 — 동아리란에 클럽명만 (2026 고 p.78)' },
+  { level: 'check', label: '자율동아리', re: '자율 ?동아리',
+    why: '고등학교 자율동아리는 동아리명만 입력하고 특기사항은 쓰지 않음 (고 p.84)' },
+  { level: 'check', label: '도서명 표기', re: '[『』《》]',
+    why: '도서는 교육활동과 연결될 때 도서명(저자) 형식으로 (고 p.157)' }
 ];
 
 /** 형식 검증(어미·인칭·특수문자) */
 var PRESET_FORMAT_RULES = [
-  { level: 'block', label: '존댓말/평서형 어미', re: '습니다|입니다|했다\\.|이다\\.|였다\\.|한다\\.' },
-  { level: 'block', label: "'학생' 주어", re: '학생(은|이|의|을|를|과|와|도)' },
-  { level: 'block', label: '금지 특수문자', re: "[·‘’“”\"'\\-–—*#]" },
-  { level: 'check', label: '줄바꿈 포함', re: '\\n' }
+  { level: 'block', label: '존댓말/평서형 어미', re: '습니다|입니다|했다\\.|이다\\.|였다\\.|한다\\.',
+    why: '학생부 문장은 명사형 어미(~함, ~음, ~임)로 끝냄' },
+  { level: 'block', label: "'학생' 주어", re: '학생(은|이|의|을|를|과|와|도)',
+    why: '학생을 지칭하는 주어를 쓰지 않음' },
+  { level: 'block', label: '금지 특수문자', re: "[·‘’“”\"'\\-–—*#]",
+    why: '[📐 공통규칙]의 서술 규칙: 쉼표와 마침표만 사용' },
+  { level: 'check', label: '줄바꿈 포함', re: '\\n',
+    why: '한 문단으로 씀. 줄바꿈은 2바이트로 셈' }
 ];
 
 /* ================================================================ AI 모델 */
 /**
  * 기본 모델 목록 — 설치할 때 [⚙️ 설정] 시트 아래 [🤖 모델 목록] 표에 한 번 채워지고,
- * 그다음부터는 선생님이 고친 표가 우선합니다. (2026년 9월 기준으로 확인한 이름)
+ * 그다음부터는 선생님이 고친 표가 우선합니다. (2026년 10월 기준으로 확인한 이름)
  *
  * 모델 이름은 회사들이 몇 달마다 바꿉니다. 그래서 기본값은 '-latest' 이름을 씁니다.
  * gemini-flash-latest 는 구글이 새 Flash 모델을 낼 때마다 자동으로 그 모델을 가리키므로
@@ -351,8 +413,8 @@ var DEFAULT_MODEL = 'gemini-flash-latest';
 /** 회사별 "이 정도면 충분" 모델 — 시작하기에서 키를 넣으면 이것으로 맞춘다 */
 var PROVIDER_DEFAULT_MODEL = {
   gemini: 'gemini-flash-latest',
-  openai: 'gpt-5.6-luna',
-  anthropic: 'claude-haiku-4-5'
+  openai: 'gpt-6-luna',
+  anthropic: 'claude-haiku-5-5'
 };
 
 var PRESET_MODELS = [
@@ -364,13 +426,13 @@ var PRESET_MODELS = [
     memo: '학기 중에 문체가 바뀌지 않게 버전을 못 박고 싶을 때. 1년쯤 지나면 종료될 수 있으니 가끔 연결 테스트로 확인하세요.' },
   { model: 'gemini-pro-latest', level: '고급 · 유료',
     memo: '여러 활동을 합친 압축본이 글자수를 잘 못 맞출 때만. 느리고 비싸며, 무료 등급에서는 막힐 수 있습니다.' },
-  { model: 'gpt-5.6-luna', level: '충분',
+  { model: 'gpt-6-luna', level: '충분',
     memo: 'OpenAI 키를 쓸 때의 기본. 세특 작성에 충분합니다.' },
-  { model: 'gpt-5.6-terra', level: '고급',
+  { model: 'gpt-6-sol', level: '고급',
     memo: 'OpenAI 상위 모델. 압축본 품질을 더 올리고 싶을 때.' },
-  { model: 'claude-haiku-4-5', level: '충분',
+  { model: 'claude-haiku-5-5', level: '충분',
     memo: 'Claude 키를 쓸 때의 기본. 세특 작성에 충분합니다.' },
-  { model: 'claude-sonnet-5', level: '고급',
+  { model: 'claude-sonnet-5-5', level: '고급',
     memo: 'Claude 상위 모델. 압축본 품질을 더 올리고 싶을 때.' }
 ];
 
@@ -501,6 +563,8 @@ function fillTokens(tpl, map) {
  *   o.common    {WRITING_RULES, NEIS_RULES, BYTE_RULE, GRADE_RULE, INSTRUCTION}
  *   o.examples  예시 합본 문자열 (없으면 빈 문자열)
  *   o.years     교직 경력 표기 (기본 15)
+ *   record.rules 이 기록 항목에만 붙는 기재 주의([🧩 기록종류]의 [기재 주의] — 기재요령 규칙판에서 옴)
+ *   activity.mode '바로쓰기' 면 입력 자료가 교사의 자유 메모 한 칸이다
  * @return {string}
  */
 function buildPrompt(o) {
@@ -523,6 +587,7 @@ function buildPrompt(o) {
       INSTRUCTION: com.INSTRUCTION || '',
       COMPETENCY: sub.comp || '',
       VIEW: rec.view || '',
+      RECORD_RULES: rec.rules || '',
       EXAMPLES: o.examples || '',
       CHARS: chars,
       BYTES: bytes,
@@ -548,8 +613,11 @@ function buildPrompt(o) {
   // ③ 서술 규칙
   if (com.WRITING_RULES) P.push('# 서술 규칙\n' + com.WRITING_RULES);
 
-  // ④ 기재 금지사항
+  // ④ 기재 금지사항 (+ 이 기록 항목에만 해당하는 기재 주의)
   if (com.NEIS_RULES) P.push('# 학생부 기재 금지사항\n' + com.NEIS_RULES);
+  if (rec.rules && String(rec.rules).trim()) {
+    P.push('# 이 기록 항목의 기재 주의 (' + (rec.name || act.recordKey || '') + ')\n' + String(rec.rules).trim());
+  }
 
   // ⑤ 관점 · 역량
   var persp = [];
@@ -558,14 +626,18 @@ function buildPrompt(o) {
   if (persp.length) P.push('# 서술 관점과 역량\n' + persp.join('\n\n'));
 
   // ⑥ 분량 (단일 출처)
+  // 2026 기재요령: 최대 글자 수 안에서 교사가 자율적으로 입력한다. 분량을 채우려 지어내면 허위·과장 기재가 된다.
   var len = ['# 분량'];
-  len.push('- ' + chars + '자(' + bytes + '바이트) 이내로 작성한다.');
-  len.push('- ' + Math.round(bytes * 0.9) + '바이트 이상을 채워 충실하게 작성한다.');
+  len.push('- ' + chars + '자(' + bytes + '바이트) 이내로 작성한다. 넘으면 안 된다.');
+  len.push('- 자료가 충분하면 ' + Math.round(bytes * 0.9) + '바이트 안팎으로 충실하게 쓰되, 자료에 없는 내용으로 분량을 채우지 않는다. 자료가 적으면 짧게 쓴다.');
   if (com.BYTE_RULE) len.push(com.BYTE_RULE);
   P.push(len.join('\n'));
 
   // ⑦-1 입력 형식
-  if (cols.length) {
+  if (String(act.mode || '') === '바로쓰기') {
+    P.push('# 입력 자료 형식\n아래 학생 자료는 교사가 수업·활동 중에 관찰하고 자유롭게 적은 메모다. ' +
+           '메모에 있는 사실만 근거로 문장을 다듬어 쓴다. 메모가 짧으면 짧게 쓴다.');
+  } else if (cols.length) {
     P.push('# 입력 자료 형식\n아래 학생 자료는 다음 항목이 | 로 구분되어 제공된다.\n' + cols.join('|'));
   }
 
@@ -617,8 +689,12 @@ function buildStudentBlock(cols, values, opts) {
   return out;
 }
 
-/** 결과 검증 — 바이트 / 기재 금지 / 형식 */
-function validateResult(text, limitBytes, banned, formatRules) {
+/**
+ * 결과 검증 — 바이트 / 기재 금지 / 형식 / 맞춤법
+ * 규칙마다 fix(바른 표기)·why(이유·근거)가 있으면 issue 에 함께 싣는다.
+ * spellIssues(16_Rules.gs)가 있으면 띄어쓰기·어미 검사도 더한다(opts.spell === false 면 뺀다).
+ */
+function validateResult(text, limitBytes, banned, formatRules, opts) {
   text = String(text || '');
   var issues = [];
   var b = byteLen(text);
@@ -640,8 +716,14 @@ function validateResult(text, limitBytes, banned, formatRules) {
     if (m && m.length) {
       var uniq = [];
       for (var j = 0; j < m.length; j++) if (uniq.indexOf(m[j]) === -1) uniq.push(m[j]);
-      issues.push({ level: r.level || 'check', label: r.label, hit: uniq.slice(0, 5).join(', ') });
+      var issue = { level: r.level || 'check', label: r.label, hit: uniq.slice(0, 5).join(', ') };
+      if (r.fix) issue.fix = r.fix;
+      if (r.why) issue.why = r.why;
+      issues.push(issue);
     }
+  }
+  if (typeof spellIssues === 'function' && !(opts && opts.spell === false)) {
+    issues = issues.concat(spellIssues(text));
   }
 
   var blocks = issues.filter(function (x) { return x.level === 'block'; });
@@ -652,7 +734,8 @@ function validateResult(text, limitBytes, banned, formatRules) {
 function formatIssues(v) {
   if (!v.issues.length) return '통과 (' + v.bytes + 'B)';
   var parts = v.issues.map(function (x) {
-    return (x.level === 'block' ? '[수정] ' : '[확인] ') + x.label + (x.hit ? ' → ' + x.hit : '');
+    return (x.level === 'block' ? '[수정] ' : '[확인] ') + x.label + (x.hit ? ' → ' + x.hit : '') +
+           (x.fix ? ' (바르게: ' + x.fix + ')' : '');
   });
   return (v.ok ? '확인필요 ' : '수정필요 ') + '(' + v.bytes + 'B)\n' + parts.join('\n');
 }
@@ -1156,6 +1239,456 @@ if (typeof module !== 'undefined' && module.exports) {
 
 
 /* ==========================================================================
+   16_Rules.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 기재요령 규칙판 · 맞춤법 · 고쳐쓰기 (순수 로직)
+ * ---------------------------------------------------------------
+ * 해마다 바뀌는 학교생활기록부 기재요령을 "규칙판" 하나로 묶는다.
+ *   · 금지어·형식·맞춤법 검사 표       → [📏 기재요령] 시트
+ *   · 프롬프트의 [학생부 기재 금지사항] → [📐 공통규칙] NEIS_RULES
+ *   · 기록 항목별 기재 주의            → [🧩 기록종류] [기재 주의] 칸 (그 항목 프롬프트에만 붙는다)
+ *   · 기록 항목별 최대 글자 수         → [🧩 기록종류] [글자수] 칸
+ * 새 학년도 기재요령이 나오면 만든이가 rules/latest.json 하나만 고치고,
+ * 사본들은 그것을 받아 선생님이 손대지 않은 칸만 바꾼다(손댄 칸은 그대로 두고 알린다).
+ *
+ * 이 파일은 Apps Script와 Node 양쪽에서 동작한다(테스트: test/rules.test.js).
+ * ---------------------------------------------------------------
+ */
+
+/** 원격 규칙판 주소 — 구글 서버에서 받으므로 학교망에서 github 가 막혀도 된다 */
+var RULES_URL = 'https://raw.githubusercontent.com/sced9120/Prompt-Master/main/rules/latest.json';
+/** 원격 규칙판을 저절로 확인하는 간격 */
+var RULES_CHECK_DAYS = 7;
+
+/** 2026 기재요령의 생성형 AI 원칙 — 시작하기·사용법·검사 창·복사 창에 보여 준다 */
+var AI_NOTICE_2026 =
+  'AI로 생성한 자료를 학교생활기록부 서술형 항목에 그대로 입력하는 것은 금지입니다(2026학년도 기재요령 고 p.19). ' +
+  '이 도구의 결과는 초안입니다. 교사가 평소 직접 관찰·평가한 내용을 바탕으로 고쳐 쓰고, 최종 입력 전에 ' +
+  '학생의 실제 수행과 무관한 허위·과장 기재가 없는지, 기재요령을 지켰는지 반드시 확인하세요.';
+
+/** 맞춤법 표(자주 틀리는 표기) — [📏 기재요령] 시트에 함께 채워져 선생님이 더할 수 있다 */
+var PRESET_SPELL_RULES = [
+  ['역활', '역할'], ['됬', '됐'], ['몇 ?일', '며칠'], ['왠만', '웬만'], ['웬지', '왠지'],
+  ['금새', '금세'], ['희안', '희한'], ['설레임', '설렘'], ['오랫만', '오랜만'],
+  ['일일히', '일일이'], ['깨끗히', '깨끗이'], ['틈틈히', '틈틈이'], ['곰곰히', '곰곰이'],
+  ['꼼꼼이', '꼼꼼히'], ['솔직이', '솔직히'], ['꾸준이', '꾸준히'], ['열심이', '열심히'],
+  ['번번히', '번번이'], ['어떻해', '어떻게 해'], ['할께', '할게'], ['내노라', '내로라'],
+  ['어의없', '어이없'], ['문안하게', '무난하게'], ['뒤쳐', '뒤처'], ['짜집기', '짜깁기'],
+  ['염두해', '염두에 두어'], ['단언컨데', '단언컨대'], ['요컨데', '요컨대'], ['생각컨대', '생각건대'],
+  ['할려고', '하려고'], ['볼려고', '보려고'], ['갈려고', '가려고'], ['들어나', '드러나'], ['들어남', '드러남'],
+  ['가르키', '가리키'], ['어줍잖', '어쭙잖'], ['안밖', '안팎'], ['되여', '되어'], ['바뀌였', '바뀌었']
+].map(function (p) { return { level: 'check', label: '맞춤법', re: p[0], fix: p[1], why: '바른 표기: ' + p[1] }; });
+
+/* ============================================================ 2026 규칙판 */
+/**
+ * 기록 항목별 기재 주의 — 그 기록 항목의 프롬프트에만 붙는다(필요한 규칙만 꺼내 쓰기).
+ * 출처: 2026학년도 학교생활기록부 기재요령 주요 개정사항 안내(고등학교, 교육부·KERIS)
+ */
+var RECORD_RULES_2026 = {
+  '과세특':
+    '- 교사가 수업과 수업에 연계한 수행평가 등에서 수시·상시로 관찰·평가한 내용만 바탕으로 쓴다(고 p.117).\n' +
+    '- 성취기준에 따른 성취수준의 특성, 학습활동 참여도, 자기주도적 학습에 의한 변화와 성장 정도를 중심으로 쓴다.\n' +
+    '- 수업 활동을 단순히 나열하거나 성취기준에 이미 적힌 지식을 그대로 옮기지 않는다(고 p.95).\n' +
+    '- 교내·외 대회, 방과후학교 활동, K-MOOC·MOOC·KOCW, 연구보고서(소논문) 실적은 쓰지 않는다(고 p.118).\n' +
+    '- 수학과제 탐구·사회문제 탐구·융합과학 탐구·과학과제 연구·사회과제 연구·윤리문제 탐구 과목은 연구보고서의 제목·주제·참여 인원·소요 시간을 빼고 과정만 쓸 수 있다.',
+  '개세특':
+    '- 정규교육과정의 교육활동에서 교사가 직접 관찰·평가한 내용만 쓴다.\n' +
+    '- 교내·외 대회, 방과후학교 활동, K-MOOC·MOOC·KOCW, 연구보고서(소논문) 실적은 쓰지 않는다(고 p.118).',
+  '자율':
+    '- 학교교육계획에 따른 정규교육과정의 자율·자치활동만 쓴다(고 p.81).\n' +
+    '- 이 영역과 연계해 학교교육계획에 따라 실시한 봉사활동은 이 영역 특기사항에 쓸 수 있다(2026학년도 1·2학년, 고 p.86).',
+  '동아리':
+    '- 정규교육과정의 동아리활동만 특기사항을 쓴다(고 p.81).\n' +
+    '- 자율동아리, 정규교육과정 밖의 학교스포츠클럽, 청소년단체 활동은 특기사항을 쓰지 않는다(고등학교, 고 p.78·p.84).\n' +
+    '- 이 영역과 연계해 학교교육계획에 따라 실시한 봉사활동은 이 영역 특기사항에 쓸 수 있다(2026학년도 1·2학년).',
+  '진로':
+    '- 정규교육과정의 진로활동만 쓴다(고 p.81).\n' +
+    '- 희망 진로를 특정 대학명·학과명으로 쓰지 않는다.\n' +
+    '- 최대 500자다(2026학년도부터 700자에서 줄어듦, 고 p.208).',
+  '행발':
+    '- 학습·행동·인성 등 학교 교육활동 전반에서 지속적으로 관찰한 행동특성을 바탕으로, 학생의 성장을 지원하는 교육적 관점에서 쓴다(고 p.158).\n' +
+    '- 부정적 행동특성을 쓸 때는 구체적 관찰 사실과 함께 변화 가능성을 쓴다.\n' +
+    '- 다른 항목에 입력할 수 없는 내용(방과후학교 활동 등)은 여기에도 쓰지 않는다(고 p.159).\n' +
+    '- 최대 300자다(2026학년도부터 500자에서 줄어듦, 고 p.208).'
+};
+
+/** 2026학년도 규칙판 — 원격 규칙판(rules/latest.json)도 같은 모양이다 */
+var RULES_2026 = {
+  id: '2026.1',
+  year: 2026,
+  checked: '2026-10-13',
+  source: '2026학년도 학교생활기록부 기재요령 · 주요 개정사항 안내(고등학교, 교육부·KERIS, 2026-02)',
+  aiNotice: AI_NOTICE_2026,
+  neisRules: NEIS_RULES_2026,
+  chars: { '과세특': 500, '개세특': 500, '자율': 500, '동아리': 500, '진로': 500, '행발': 300 },
+  byRecord: RECORD_RULES_2026,
+  rules: PRESET_BANNED.concat(PRESET_FORMAT_RULES).concat(PRESET_SPELL_RULES),
+  // 직전 기준 — 이 값 그대로인 칸은 손대지 않은 옛 기본값으로 보고 새 값으로 바꾼다
+  history: [{ id: '2025', chars: { '진로': 700, '행발': 500 } }]
+};
+
+/**
+ * 규칙판이 바뀌기 전 판들의 [기재 주의]·NEIS 문구 — 이 문구 그대로면 선생님이 손대지 않은 것.
+ * 다음 학년도 규칙판을 만들 때 직전 판의 문구가 여기에 남도록 rules/latest.json 의 history 에 넣는다.
+ */
+function knownOldTexts(pack, field, key) {
+  var out = [];
+  var add = function (t) { t = normText(t); if (t && out.indexOf(t) < 0) out.push(t); };
+  if (field === 'neisRules') (typeof OLD_NEIS_RULES !== 'undefined' ? OLD_NEIS_RULES : []).forEach(add);
+  [RULES_2026].concat(pack && pack.history ? pack.history : []).forEach(function (h) {
+    if (!h) return;
+    if (field === 'neisRules') add(h.neisRules);
+    else if (field === 'byRecord' && h.byRecord) add(h.byRecord[key]);
+  });
+  return out;
+}
+
+/** 비교용으로 줄 끝 공백·줄바꿈 종류를 맞춘다 */
+function normText(t) {
+  return String(t === null || t === undefined ? '' : t).replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').trim();
+}
+
+/** 규칙판 번호 비교: '2026.1' < '2026.2' < '2027.1' */
+function packNewer(a, b) {
+  var p = function (x) { return String(x || '0').split('.').map(function (n) { return Number(n) || 0; }); };
+  var x = p(a), y = p(b);
+  for (var i = 0; i < Math.max(x.length, y.length); i++) {
+    var d = (x[i] || 0) - (y[i] || 0);
+    if (d) return d > 0;
+  }
+  return false;
+}
+
+/**
+ * 원격에서 받은 규칙판 검사. 깨진 정규식·너무 긴 값은 빼고, 쓸 수 있는 것만 남긴다.
+ * @return {{ok:boolean, pack?:Object, errors:string[]}}
+ */
+function validatePack(raw) {
+  var errors = [];
+  var p = raw;
+  if (typeof p === 'string') { try { p = JSON.parse(p); } catch (e) { return { ok: false, errors: ['JSON 이 아님'] }; } }
+  if (!p || typeof p !== 'object') return { ok: false, errors: ['비어 있음'] };
+  if (!/^\d{4}\.\d+$/.test(String(p.id || ''))) errors.push('id 형식이 아님(예: 2027.1)');
+  var rules = [];
+  (Array.isArray(p.rules) ? p.rules : []).forEach(function (r, i) {
+    if (!r || !r.re || String(r.re).length > 400) { errors.push('rules[' + i + '] 비었거나 너무 김'); return; }
+    try { new RegExp(r.re); } catch (e) { errors.push('rules[' + i + '] 정규식 오류: ' + r.re); return; }
+    rules.push({ level: r.level === 'block' ? 'block' : 'check', label: String(r.label || '기타').slice(0, 40),
+                 re: String(r.re), fix: r.fix ? String(r.fix).slice(0, 60) : '', why: String(r.why || '').slice(0, 300) });
+  });
+  if (!rules.length) errors.push('rules 가 비었음');
+  var chars = {};
+  Object.keys(p.chars || {}).forEach(function (k) {
+    var n = Number(p.chars[k]);
+    if (n >= 50 && n <= 3000) chars[k] = Math.round(n);
+  });
+  var byRecord = {};
+  Object.keys(p.byRecord || {}).forEach(function (k) {
+    var t = String(p.byRecord[k] || '');
+    if (t.length <= 3000) byRecord[k] = t;
+  });
+  var fatal = !/^\d{4}\.\d+$/.test(String(p.id || '')) || !rules.length;
+  if (fatal) return { ok: false, errors: errors };
+  return {
+    ok: true, errors: errors,
+    pack: {
+      id: String(p.id), year: Number(p.year) || Number(String(p.id).slice(0, 4)),
+      checked: String(p.checked || ''), source: String(p.source || '').slice(0, 300),
+      aiNotice: String(p.aiNotice || AI_NOTICE_2026).slice(0, 1200),
+      neisRules: String(p.neisRules || '').slice(0, 6000),
+      chars: chars, byRecord: byRecord, rules: rules,
+      history: Array.isArray(p.history) ? p.history.slice(0, 10) : []
+    }
+  };
+}
+
+/** 규칙판 → [📏 기재요령] 표의 줄 [사용, 수준, 분류, 찾을 말, 바르게, 이유·근거, 출처] */
+function packRuleRows(pack) {
+  var src = (pack.year || '') + ' 기재요령';
+  return (pack.rules || []).map(function (r) {
+    return [true, r.level === 'block' ? '수정' : '확인', r.label, r.re, r.fix || '', r.why || '',
+            r.label === '맞춤법' ? '맞춤법(기본)' : src];
+  });
+}
+
+/** 표의 한 줄 → 검사 규칙. 사용을 끈 줄·빈 줄·깨진 정규식은 null */
+function ruleFromRow(row) {
+  var use = row[0] === true || String(row[0]).toUpperCase() === 'TRUE';
+  var re = String(row[3] || '').trim();
+  if (!use || !re) return null;
+  try { new RegExp(re); } catch (e) { return null; }
+  var lv = String(row[1] || '').trim();
+  return { level: (lv === '수정' || lv === 'block') ? 'block' : 'check', label: String(row[2] || '기타').trim() || '기타',
+           re: re, fix: String(row[4] || '').trim(), why: String(row[5] || '').trim() };
+}
+
+/** 표의 [출처]가 기본(규칙판)에서 온 줄인지 — 선생님이 더한 '내 학교' 줄은 업데이트 때 남긴다 */
+function isPackRow(src) {
+  src = String(src || '').trim();
+  return !src || /기재요령|맞춤법\(기본\)/.test(src);
+}
+
+/* ============================================================ 맞춤법 */
+var JONG_RIEUL = 8, JONG_NIEUN = 4, JONG_SS = 20, JONG_BS = 18;
+/** '안'·'않' 뒤에 오는 되·돼·하·해 (받침이 붙은 된·됨·한·했… 까지) */
+var NEG_NEXT = /^[돼-됳하-햏]/;
+function jongOf_(ch) {
+  var c = ch ? ch.charCodeAt(0) : 0;
+  if (c < 0xAC00 || c > 0xD7A3) return -1;
+  return (c - 0xAC00) % 28;
+}
+
+/**
+ * 표로 잡기 어려운 띄어쓰기·어미 오류 (정확도가 높은 것만, 모두 [확인] 수준)
+ *   · 할수 있다 → 할 수 있다,  할것 → 할 것,  할때 → 할 때,  할줄 알다 → 할 줄 알다
+ *   · 있슴/했슴 → 있음/했음,  않하다 → 안 하다,  해서는 안된다 → 안 된다
+ *   · 같은 낱말 연속, 빈칸 두 번, 문장부호 앞 빈칸, 마침표·쉼표 뒤 붙여 쓰기
+ * @return {Array<{level, label, hit, fix, why}>}
+ */
+function spellIssues(text) {
+  var s = String(text || ''), out = [], seen = {};
+  var push = function (hit, fix, why) {
+    var k = hit + '→' + fix;
+    if (seen[k]) return;
+    seen[k] = 1;
+    out.push({ level: 'check', label: '맞춤법', hit: hit, fix: fix, why: why });
+  };
+  for (var i = 1; i < s.length; i++) {
+    var prev = s.charAt(i - 1), ch = s.charAt(i), next = s.charAt(i + 1), j = jongOf_(prev);
+    if (ch === '수' && j === JONG_RIEUL) {
+      var rest = s.slice(i + 1).replace(/^ +/, '');
+      if (/^(있|없)/.test(rest)) push(prev + '수', prev + ' 수', "의존명사 '수'는 띄어 씀");
+    } else if (ch === '것' && (j === JONG_RIEUL || j === JONG_NIEUN) && ['날', '별', '온', '산'].indexOf(prev) < 0) {
+      push(prev + '것', prev + ' 것', "의존명사 '것'은 띄어 씀");
+    } else if (ch === '때' && j === JONG_RIEUL) {
+      push(prev + '때', prev + ' 때', "'~ㄹ 때'는 띄어 씀");
+    } else if (ch === '줄' && j === JONG_RIEUL && /^ ?(알|몰)/.test(s.slice(i + 1))) {
+      push(prev + '줄', prev + ' 줄', "의존명사 '줄'은 띄어 씀");
+    } else if (ch === '슴' && (j === JONG_SS || j === JONG_BS)) {
+      push(prev + '슴', prev + '음', "명사형은 '~음' (있음, 했음)");
+    } else if (ch === '않' && NEG_NEXT.test(next)) {
+      push('않' + next, '안 ' + next, "부정은 '안 ~' (않은 '~지 않다'에만)");
+    }
+  }
+  var m, re1 = new RegExp('(^|[\\s,.])안(' + NEG_NEXT.source.slice(1) + ')', 'g');
+  while ((m = re1.exec(s))) push('안' + m[2], '안 ' + m[2], "부정의 '안'은 띄어 씀");
+  var re2 = /(^|\s)([가-힣A-Za-z]{2,})\s+\2(?=[\s.,]|$)/g;
+  while ((m = re2.exec(s))) push(m[2] + ' ' + m[2], m[2], '같은 낱말이 잇따라 나옴');
+  if (/ {2,}/.test(s)) push('빈칸 두 번', '빈칸 한 번', '빈칸이 겹침');
+  if ((m = s.match(/\S\s+[.,]/))) push(m[0], m[0].replace(/\s+/, ''), '문장부호 앞에는 빈칸을 두지 않음');
+  if ((m = s.match(/[가-힣][.,][가-힣A-Za-z]/))) push(m[0], m[0].charAt(0) + m[0].charAt(1) + ' ' + m[0].charAt(2), '마침표·쉼표 뒤는 한 칸 띄움');
+  return out;
+}
+
+/* ============================================================ 고쳐쓰기 (하네스) */
+/**
+ * 생성 → 자동 검사 → 걸린 것만 짚어 다시 쓰게 하는 "고쳐쓰기" 요청문.
+ * 규칙(시스템 프롬프트)은 처음 생성과 똑같이 보내므로 회사 쪽 캐시 할인도 그대로 받는다.
+ * @param {string} block      학생 자료
+ * @param {string} draft      첫 결과
+ * @param {Array} issues      validateResult 의 issues 중 고칠 것
+ * @param {number} limitBytes
+ */
+function buildRepairUser(block, draft, issues, limitBytes) {
+  var L = ['# 학생 자료', String(block || '').trim(), '', '# 고쳐 쓸 초안', String(draft || '').trim(), '',
+           '# 자동 검사에서 걸린 점 — 이것만 바로잡는다'];
+  (issues || []).forEach(function (x) {
+    if (x.label === '분량 초과') L.push('- 분량 초과(' + x.hit + '): ' + limitBytes + '바이트 이내가 되도록 덜 중요한 문장을 줄인다.');
+    else if (x.fix) L.push('- ' + x.label + ': "' + x.hit + '" → "' + x.fix + '"');
+    else L.push('- ' + x.label + ': "' + x.hit + '" ' + (x.why ? '— ' + x.why : '') + ' → 이 내용을 빼거나 기재요령에 맞게 바꾼다.');
+  });
+  L.push('', '# 출력', '위 점만 바로잡은 특기사항 본문만 한 문단으로 출력한다. 학생 자료에 없는 내용을 새로 넣지 않는다. 설명을 붙이지 않는다.');
+  return L.join('\n');
+}
+
+/** 고쳐 쓸 만한지: [수정] 수준이 하나라도 있으면 */
+function needsRepair(v) {
+  return !!(v && v.issues && v.issues.some(function (x) { return x.level === 'block' && x.label !== '결과 없음'; }));
+}
+
+/** 두 검사 결과 중 나은 쪽: [수정] 수가 적은 쪽, 같으면 [확인] 수가 적은 쪽 */
+function betterResult(a, b) {
+  var cnt = function (v, lv) { return v.issues.filter(function (x) { return x.level === lv; }).length; };
+  var ab = cnt(a, 'block'), bb = cnt(b, 'block');
+  if (ab !== bb) return bb < ab ? 'b' : 'a';
+  return cnt(b, 'check') < cnt(a, 'check') ? 'b' : 'a';
+}
+
+/* ============================================================ 근거 확인 */
+/**
+ * "AI 결과가 학생 자료에 있는 내용인가" — 2026 기재요령의 허위·과장 확인을 돕는 검토 요청.
+ * 결과는 JSON {"unsupported":[{"quote","why"}]}.
+ */
+var GROUND_SYSTEM =
+  '# 역할\n당신은 학교생활기록부 문장을 검토하는 교사다.\n\n' +
+  '# 할 일\n[학생 자료]와 [특기사항 초안]을 비교해, 초안에서 학생 자료로 뒷받침되지 않는 내용을 찾는다.\n' +
+  '- 자료에 없는 활동, 결과, 수치, 횟수, 도서·인물, 과장된 평가(예: 탁월함, 뛰어남)를 찾는다.\n' +
+  '- 자료의 표현을 자연스럽게 바꾼 것, 자료에서 바로 읽히는 의미 부여는 문제 삼지 않는다.\n' +
+  '- 근거가 없는 구절만 초안 원문 그대로 짧게 뽑는다.\n\n' +
+  '# 출력\nJSON 하나만 출력한다. {"unsupported":[{"quote":"초안의 구절","why":"자료에 없는 이유"}]}\n없으면 {"unsupported":[]}';
+
+function buildGroundUser(source, draft) {
+  return '# 학생 자료\n' + String(source || '').trim() + '\n\n# 특기사항 초안\n' + String(draft || '').trim();
+}
+
+function parseGroundResult(text) {
+  var t = String(text || '').replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
+  var j = null;
+  try { j = JSON.parse(t); } catch (e) {
+    var a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a >= 0 && b > a) { try { j = JSON.parse(t.slice(a, b + 1)); } catch (e2) {} }
+  }
+  var list = j && Array.isArray(j.unsupported) ? j.unsupported : (Array.isArray(j) ? j : []);
+  return list.map(function (x) {
+    return { quote: String((x && (x.quote || x.text)) || '').trim(), why: String((x && x.why) || '').trim() };
+  }).filter(function (x) { return x.quote; });
+}
+
+/* ============================================================ 맞춤법 (AI) */
+var SPELL_SYSTEM =
+  '# 역할\n당신은 한국어 맞춤법·띄어쓰기 교정자다.\n\n' +
+  '# 할 일\n[글]의 맞춤법, 띄어쓰기, 오탈자, 문장부호만 바로잡는다.\n' +
+  '- 내용, 낱말 선택, 문장 순서, 문체는 바꾸지 않는다. 학교생활기록부 문장이라 "~함.", "~음." 처럼 끝나는 것은 그대로 둔다.\n' +
+  '- 고칠 곳마다 글에 있는 그대로의 짧은 구절(from)과 바른 표기(to)를 쓴다.\n\n' +
+  '# 출력\nJSON 하나만 출력한다. {"changes":[{"from":"틀린 구절","to":"바른 구절","why":"짧은 이유"}]}\n고칠 것이 없으면 {"changes":[]}';
+
+function parseSpellResult(text, original) {
+  var t = String(text || '').replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
+  var j = null;
+  try { j = JSON.parse(t); } catch (e) {
+    var a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a >= 0 && b > a) { try { j = JSON.parse(t.slice(a, b + 1)); } catch (e2) {} }
+  }
+  var src = String(original || '');
+  return (j && Array.isArray(j.changes) ? j.changes : []).map(function (c) {
+    return { from: String((c && c.from) || ''), to: String((c && c.to) || ''), why: String((c && c.why) || '') };
+  }).filter(function (c) { return c.from && c.from !== c.to && src.indexOf(c.from) >= 0; });
+}
+
+/** 고칠 목록을 글에 적용 (앞에서부터 한 번씩) */
+function applyChanges(text, changes) {
+  var s = String(text || '');
+  (changes || []).forEach(function (c) {
+    var i = s.indexOf(c.from);
+    if (i >= 0) s = s.slice(0, i) + c.to + s.slice(i + c.from.length);
+  });
+  return s;
+}
+
+/* ============================================================ 키 없이 (복사·붙여넣기) */
+/**
+ * Gemini 앱(학교 계정)·ChatGPT·Claude 같은 대화창에 붙여 넣을 요청문.
+ * 대화창은 JSON 대신 [S1] 같은 표시로 나눠 받는 편이 안정적이다.
+ * @param {Array<{id:string, block:string}>} items
+ * @param {string=} heading  한 명일 때 자료 제목 (기본 '학생 자료', 압축은 '통합할 문장들')
+ */
+function buildManualUser(items, heading) {
+  heading = heading || '학생 자료';
+  if (items.length === 1) {
+    return '# ' + heading + '\n' + String(items[0].block || '').trim() + '\n\n# 출력\n위 규칙대로 특기사항 본문만 한 문단으로 출력한다. 설명, 제목, 따옴표를 붙이지 않는다.';
+  }
+  var L = ['# 이번에 작성할 학생 ' + items.length + '명',
+           '아래 학생들의 특기사항을 한 명씩 따로 작성한다.',
+           '- 위의 모든 규칙(분량 포함)을 학생마다 따로 지킨다. 분량은 학생 한 명 기준이다.',
+           '- 다른 학생의 자료를 섞지 않는다. 그 학생 자료에 없는 내용을 지어내지 않는다.',
+           '- 학생마다 첫 문장과 문장 구조를 다르게 한다.'];
+  items.forEach(function (it) { L.push('', '## ' + it.id, String(it.block || '').trim()); });
+  L.push('', '# 출력 형식',
+         '학생마다 [번호] 한 줄을 쓰고 다음 줄에 특기사항 본문만 쓴다. 다른 설명은 붙이지 않는다.',
+         items.map(function (it) { return '[' + it.id + ']\n(본문)'; }).join('\n'));
+  return L.join('\n');
+}
+
+/**
+ * 대화창에서 복사해 온 답 → id → 본문.
+ * [S1] / S1: / **S1** / ## S1 같은 표시를 모두 받고, JSON 으로 왔으면 그것도 읽는다.
+ */
+function parseManualAnswer(text, ids) {
+  var t = String(text || '').replace(/\r\n?/g, '\n').trim();
+  var map = {};
+  if (!t) return { map: map, missing: ids.slice() };
+  if (ids.length === 1 && !/\[?\*{0,2}#*\s*S1\b/.test(t)) {
+    map[ids[0]] = t;
+    return { map: map, missing: [] };
+  }
+  var re = /(^|\n)\s*(?:#+\s*)?(?:\*\*)?\[?\s*(S\d+)\s*\]?(?:\*\*)?\s*[:：]?[ \t]*/g, m, marks = [];
+  while ((m = re.exec(t))) marks.push({ id: m[2], start: m.index + m[0].length, at: m.index });
+  if (marks.length) {
+    marks.forEach(function (mk, i) {
+      var body = t.slice(mk.start, i + 1 < marks.length ? marks[i + 1].at : t.length).trim();
+      if (ids.indexOf(mk.id) >= 0 && body && !map[mk.id]) map[mk.id] = body;
+    });
+  } else if (typeof parseBatchResult === 'function') {
+    map = parseBatchResult(t, ids).map;
+  }
+  return { map: map, missing: ids.filter(function (id) { return !map[id]; }) };
+}
+
+/* ============================================================ AI 앱으로 내보내기 */
+var RECORD_SLUG = { '과세특': 'subject', '개세특': 'individual', '자율': 'autonomy', '동아리': 'club', '진로': 'career', '행발': 'behavior' };
+
+/** 스킬 이름: 영문 소문자·숫자·하이픈만, 64자 이내 */
+function skillName(recordKey, n) {
+  return ('saeteuk-' + (RECORD_SLUG[recordKey] || 'record') + '-' + (Number(n) || 1)).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 64);
+}
+
+/** Gemini Gem 안내 · ChatGPT/Claude 프로젝트 지침에 붙여 넣을 글 */
+function buildGemText(system) {
+  return String(system || '').trim() + '\n\n# 사용법\n교사가 학생 자료를 붙여 넣으면 위 규칙대로 특기사항 본문만 쓴다. ' +
+    '여러 명이면 [S1] [S2] 처럼 학생마다 표시 한 줄을 쓰고 다음 줄에 본문을 쓴다.';
+}
+
+/**
+ * Claude 스킬(SKILL.md) — 시트가 조립한 규칙을 그대로 담는다. 시트를 고치면 다시 내보내야 한다.
+ * @param {{name:string, activity:string, record:string, system:string, notice:string, rulesId:string}} o
+ */
+function buildSkillMd(o) {
+  var desc = (o.activity + ' 활동의 학교생활기록부 ' + o.record + ' 초안을 2026학년도 기재요령에 맞춰 쓴다. ' +
+              '교사가 학생 관찰 자료(메모·입력 항목)를 주고 세특·특기사항 초안을 부탁할 때 쓴다.').replace(/\s+/g, ' ');
+  return [
+    '---',
+    'name: ' + o.name,
+    'description: ' + desc.slice(0, 1000),
+    '---',
+    '',
+    '# ' + o.activity + ' — ' + o.record + ' 초안 쓰기',
+    '',
+    '세특 작성 도우미(구글 시트)에서 내보낸 규칙입니다. 기재요령 규칙판 ' + o.rulesId + '.',
+    '',
+    '## 규칙',
+    '',
+    String(o.system || '').trim(),
+    '',
+    '## 여러 학생을 한 번에 받을 때',
+    '',
+    '학생마다 [S1] [S2] 처럼 표시 한 줄을 쓰고 다음 줄에 그 학생의 본문만 쓴다. 학생 자료를 서로 섞지 않는다.',
+    '',
+    '## 꼭 지킬 것',
+    '',
+    '- ' + String(o.notice || '').trim(),
+    '- 결과는 초안이다. 교사가 직접 관찰한 사실과 맞는지 확인하고 고쳐 쓰도록 답 끝에 한 줄로 알린다.',
+    ''
+  ].join('\n');
+}
+
+/* Node 테스트용 export (Apps Script에서는 무시됨) */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    RULES_2026: RULES_2026, PRESET_SPELL_RULES: PRESET_SPELL_RULES, RECORD_RULES_2026: RECORD_RULES_2026,
+    knownOldTexts: knownOldTexts, normText: normText, packNewer: packNewer, validatePack: validatePack,
+    packRuleRows: packRuleRows, ruleFromRow: ruleFromRow, isPackRow: isPackRow, spellIssues: spellIssues,
+    buildRepairUser: buildRepairUser, needsRepair: needsRepair, betterResult: betterResult,
+    buildGroundUser: buildGroundUser, parseGroundResult: parseGroundResult,
+    parseSpellResult: parseSpellResult, applyChanges: applyChanges,
+    buildManualUser: buildManualUser, parseManualAnswer: parseManualAnswer,
+    skillName: skillName, buildGemText: buildGemText, buildSkillMd: buildSkillMd
+  };
+}
+
+
+/* ==========================================================================
    20_Lib.gs
    ========================================================================== */
 
@@ -1239,7 +1772,8 @@ function getRecordTypes_() {
       role: String(r['역할'] || ''),
       goal: String(r['목표'] || ''),
       view: String(r['서술 관점'] || ''),
-      note: String(r['비고'] || '')
+      note: String(r['비고'] || ''),
+      rules: String(r['기재 주의'] || '')
     };
   }).filter(function (r) { return r.key; });
 }
@@ -1454,46 +1988,60 @@ function maskName_() { return cfgBool_('학생 이름 마스킹', true); }
  */
 
 function onOpen() {
-  var m = ui_().createMenu(APP.MENU);
+  var ui = ui_();
+  // 화면이 작은 노트북에서도 메뉴가 아래로 잘리지 않게, 자주 쓰는 것만 맨 위에 두고 나머지는 하위 메뉴로 묶는다.
+  // 항목 이름의 ①~⑧ 번호는 안내문·오류 메시지가 가리키는 이름이라 그대로 둔다.
+  var m = ui.createMenu(APP.MENU);
   m.addItem('🚀 시작하기 (처음이면 여기)', 'openOnboard');
-  m.addSeparator();
-  m.addItem('① 처음 설치 / 구조 복구', 'installAll');
-  m.addSeparator();
-  m.addItem('② AI 연결 · 모델 설정', 'openApiDialog');
-  m.addItem('   모델 연결 테스트', 'testAllModels');
-  m.addSeparator();
-  m.addItem('③ 학생 명단 불러오기 (엑셀·붙여넣기)', 'openRosterDialog');
-  m.addItem('   학생 명단 동기화', 'syncRoster');
-  m.addSeparator();
-  m.addItem('④ 활동 만들기 · 입력 항목 바꾸기 ★', 'openWizard');
-  m.addItem('   활동 직접 추가 (질문에 답하기)', 'addActivityDialog');
-  m.addItem('   활동 복제', 'duplicateActivityDialog');
-  m.addItem('   활동 삭제', 'deleteActivityDialog');
-  m.addSeparator();
-  m.addItem('⑤ 예시 더 만들기 (AI)', 'generateMoreExamples');
-  m.addItem('   예시 칸 늘리기', 'addExampleRows');
-  m.addItem('   예시 검증', 'validateExamples');
+  m.addItem('✍️ 바로 쓰기 시트 추가 (항목 정하지 않고)', 'openQuickSheetDialog');
+  m.addItem('🔍 맞춤법 · 금지어 검사', 'openCheckSidebar');
   m.addSeparator();
   m.addItem('⑥ 체크된 행 생성', 'generateChecked');
-  m.addItem('   선택한 행만 생성', 'generateSelection');
-  m.addItem('   자동 생성(체크 즉시) 켜기', 'enableAutoTrigger');
-  m.addItem('   자동 생성 끄기', 'disableAutoTrigger');
-  m.addSeparator();
   m.addItem('⑦ 최종취합 시트 생성/갱신', 'buildCompile');
-  m.addItem('   최종 압축본 생성(체크된 행)', 'compileChecked');
   m.addSeparator();
-  m.addItem('⑧ 프롬프트 미리보기', 'previewPrompt');
-  m.addItem('   결과 전체 재검증', 'revalidateAll');
-  m.addSeparator();
-  var sub = ui_().createMenu('부가 기능');
-  sub.addItem('구글폼 응답 동기화', 'syncFormResponses');
-  sub.addItem('수업관찰 기록 열기', 'openObserve');
-  sub.addItem('수업관찰 웹앱 배포 안내', 'observeDeployHelp');
-  sub.addItem('예시 시트 구조 복구', 'repairExampleSheet');
-  sub.addItem('사용법 시트 갱신', 'buildHelp');
-  sub.addItem('시작하기 안내 다시 켜기', 'onboardReset');
-  sub.addItem('버전 정보', 'showVersion');
-  m.addSubMenu(sub);
+  m.addSubMenu(ui.createMenu('①②③ 준비 — 설치 · AI 연결 · 학생 명단')
+    .addItem('① 처음 설치 / 구조 복구', 'installAll')
+    .addItem('② AI 연결 · 모델 설정', 'openApiDialog')
+    .addItem('   모델 연결 테스트', 'testAllModels')
+    .addItem('③ 학생 명단 불러오기 (엑셀·붙여넣기)', 'openRosterDialog')
+    .addItem('   학생 명단 동기화', 'syncRoster'));
+  m.addSubMenu(ui.createMenu('④⑤ 활동 · 예시')
+    .addItem('④ 활동 만들기 · 입력 항목 바꾸기 ★', 'openWizard')
+    .addItem('   활동 직접 추가 (질문에 답하기)', 'addActivityDialog')
+    .addItem('   활동 복제', 'duplicateActivityDialog')
+    .addItem('   활동 삭제', 'deleteActivityDialog')
+    .addSeparator()
+    .addItem('⑤ 예시 더 만들기 (AI)', 'generateMoreExamples')
+    .addItem('   예시 칸 늘리기', 'addExampleRows')
+    .addItem('   예시 검증', 'validateExamples'));
+  m.addSubMenu(ui.createMenu('⑥ 생성 더 보기')
+    .addItem('📋 키 없이 — 프롬프트 복사 · 답 붙여넣기 (체크된 행)', 'openManualForChecked')
+    .addItem('   선택한 행만 생성', 'generateSelection')
+    .addItem('   자동 생성(체크 즉시) 켜기', 'enableAutoTrigger')
+    .addItem('   자동 생성 끄기', 'disableAutoTrigger')
+    .addSeparator()
+    .addItem('⑦ 최종 압축본 생성 (체크된 행)', 'compileChecked'));
+  m.addSubMenu(ui.createMenu('⑧ 점검 · 기재요령 2026')
+    .addItem('🔍 맞춤법 · 금지어 검사', 'openCheckSidebar')
+    .addItem('   근거 확인 — AI 결과가 학생 자료에 있는 내용인지 (선택한 행)', 'groundCheckSelection')
+    .addItem('   결과 전체 재검증', 'revalidateAll')
+    .addItem('⑧ 프롬프트 미리보기', 'previewPrompt')
+    .addItem('   AI 앱용 지침 내보내기 (Gemini Gem · Claude 스킬)', 'openExportDialog')
+    .addSeparator()
+    .addItem('📏 기재요령 규칙 보기 · 고치기', 'openRulesSheet')
+    .addItem('   기재요령 규칙 업데이트 확인', 'checkRulesUpdate'));
+  m.addSubMenu(ui.createMenu('도움말 · 부가 기능')
+    .addItem('📄 스캔 문서 → 엑셀 사용 설명서 (업무 대시보드)', 'openOcrGuide')
+    .addItem('📖 사용법 시트 열기', 'openHelpSheet')
+    .addSeparator()
+    .addItem('구글폼 응답 동기화', 'syncFormResponses')
+    .addItem('수업관찰 기록 열기', 'openObserve')
+    .addItem('수업관찰 웹앱 배포 안내', 'observeDeployHelp')
+    .addItem('예시 시트 구조 복구', 'repairExampleSheet')
+    .addItem('사용법 시트 갱신', 'buildHelp')
+    .addItem('시작하기 시트 다시 만들기 (버튼 포함)', 'rebuildStart')
+    .addItem('시작하기 안내 다시 켜기', 'onboardReset')
+    .addItem('버전 정보', 'showVersion'));
   m.addToUi();
 
   // 아직 설정을 끝내지 않은 사본이면 [🚀 시작하기] 탭을 열어 준다.
@@ -1508,7 +2056,23 @@ function onOpen() {
 }
 
 function showVersion() {
-  ui_().alert(APP.MENU, '세특 작성 도우미 ' + APP.VERSION + '\n\n프롬프트 조립형 구조.\n교과·창체·행발을 한 틀로 지원합니다.', ui_().ButtonSet.OK);
+  var info = { id: '', year: '' };
+  try { info = currentPackInfo_(); } catch (e) {}
+  ui_().alert(APP.MENU, '세특 작성 도우미 ' + APP.VERSION + '\n\n프롬프트 조립형 구조.\n교과·창체·행발을 한 틀로 지원합니다.' +
+    (info.id ? '\n\n기재요령 규칙판: ' + info.id + ' (' + info.year + '학년도)' : ''), ui_().ButtonSet.OK);
+}
+
+/** 메뉴: [📖 사용법] 시트로 */
+function openHelpSheet() {
+  var s = sh_(APP.SH.HELP) || (buildHelp(), sh_(APP.SH.HELP));
+  if (s) ss_().setActiveSheet(s);
+}
+
+/** 메뉴: [🚀 시작하기] 시트를 버튼까지 새로 만든다 */
+function rebuildStart() {
+  var s = buildStart();
+  ss_().setActiveSheet(s);
+  toast_('시작하기 시트를 새로 만들었습니다.');
 }
 
 /** 전체 설치 (여러 번 실행해도 안전 — 기존 데이터는 보존) */
@@ -1535,7 +2099,8 @@ function installCore_() {
   if (!lock.tryLock(30000)) throw new Error('다른 작업이 실행 중입니다. 잠시 후 다시 시도하세요.');
   var steps = [
     ['🚀 시작하기', buildStart], ['⚙️ 설정', buildConfig], ['🧩 기록종류', buildRecordTypes],
-    ['📚 교과영역', buildSubjects], ['📐 공통규칙', buildCommonRules], ['🗂 활동목록', buildActivityList],
+    ['📚 교과영역', buildSubjects], ['📐 공통규칙', buildCommonRules], ['📏 기재요령', buildRulesSheet],
+    ['2026 기재요령 반영', migrateRules_], ['🗂 활동목록', buildActivityList],
     ['👤 학생명단', buildRoster], ['✅ 검토', buildReview], ['📖 사용법', buildHelp],
     ['시트 순서 정리', orderSheets_]
   ];
@@ -1553,7 +2118,7 @@ function installCore_() {
 
 function orderSheets_() {
   var order = [APP.SH.START, APP.SH.HELP, APP.SH.CONFIG, APP.SH.ROSTER, APP.SH.ACTIVITY,
-               APP.SH.RECORD, APP.SH.SUBJECT, APP.SH.COMMON];
+               APP.SH.RECORD, APP.SH.SUBJECT, APP.SH.COMMON, APP.SH.RULES];
   var i = 1;
   order.forEach(function (n) {
     var s = sh_(n);
@@ -1611,7 +2176,9 @@ function buildConfig() {
     ['1회 최대 생성 건수', 25, '한 번에 처리할 최대 학생 수. 실행 시간(약 6분) 제한 때문에 넘치면 나눠서 처리합니다.'],
     ['예비 모델', '', '활동용·합본용 모델이 한도 초과·서버 오류 등으로 실패하면 이 모델로 한 번 더 시도합니다. 다른 회사 모델을 적어 두면 좋습니다(예: gpt-5.6-luna). 비우면 쓰지 않습니다.'],
     ['생각 줄이기', true, 'TRUE면 모델의 생각(추론) 단계를 줄여 더 빠르고 싸게 씁니다. 생각 토큰은 출력 요금으로 청구됩니다. 세특 품질에는 거의 영향이 없습니다.'],
-    ['한 번에 묶을 학생 수', 5, '여러 학생을 한 번의 호출로 생성합니다. 규칙 부분을 한 번만 보내 비용과 호출 횟수가 줄어듭니다. 1이면 한 명씩(가장 꼼꼼, 가장 비쌈). 최대 10.']
+    ['한 번에 묶을 학생 수', 5, '여러 학생을 한 번의 호출로 생성합니다. 규칙 부분을 한 번만 보내 비용과 호출 횟수가 줄어듭니다. 1이면 한 명씩(가장 꼼꼼, 가장 비쌈). 최대 10.'],
+    ['자동 고쳐쓰기', true, 'TRUE면 생성 직후 검사에서 [수정]이 나온 학생만 걸린 점을 짚어 한 번 더 고쳐 쓰게 합니다(분량 초과·기재 금지어·어미). 그 학생만 호출이 한 번 늘어납니다.'],
+    ['근거 자동 확인', false, 'TRUE면 생성할 때마다 AI 결과가 학생 자료에 있는 내용인지 한 번 더 확인합니다(호출이 학생마다 한 번 늘어남). FALSE여도 메뉴 ⑧ [근거 확인]으로 골라서 할 수 있습니다.']
   ];
   rows.forEach(function (r) { if (existing.hasOwnProperty(r[0])) r[1] = existing[r[0]]; });
   s.getRange(4, 1, rows.length, 3).setValues(rows);
@@ -1641,23 +2208,28 @@ function buildConfig() {
 }
 
 /* ------------------------------------------------------------ 기록종류 */
+var RECORD_BANNER_TITLE = '🧩 기록종류 — 항목별 기본 규칙';
+var RECORD_BANNER_NOTE =
+  '⚠️ 글자수는 학년도마다 바뀝니다(2026학년도: 진로활동 700→500자, 행동특성 및 종합의견 500→300자, 2022 개정 공통과목 세특은 1·2 합산 500자). ' +
+  '숫자 하나만 고치면 프롬프트·검증·압축에 모두 반영됩니다. [기재 주의]는 그 기록 항목의 프롬프트에만 붙는 2026 기재요령 주의점으로, ' +
+  '새 학년도 규칙판이 나오면 손대지 않은 칸만 저절로 바뀝니다(메뉴 ⑧ 기재요령 규칙 업데이트 확인).';
+
 function buildRecordTypes() {
   var s = shOrCreate_(APP.SH.RECORD);
-  if (s.getLastRow() > 2) return;   // 이미 있으면 보존
+  if (s.getLastRow() > 2) return;   // 이미 있으면 보존 ([기재 주의] 칸은 migrateRules_ 가 채운다)
   s.clear();
-  var head = ['키', '기록 항목명', '글자수', '성취수준 사용', '역할', '목표', '서술 관점', '비고'];
-  banner_(s, head.length, '🧩 기록종류 — 항목별 기본 규칙',
-    '⚠️ 글자수는 학년도마다 바뀝니다(2026학년도: 진로활동 700→500자, 행동특성 및 종합의견 500→300자). ' +
-    '해당 연도 학교생활기록부 기재요령을 확인하고 이 표의 숫자를 고치세요. 숫자 하나만 고치면 프롬프트·검증·압축에 모두 반영됩니다.');
+  var head = ['키', '기록 항목명', '글자수', '성취수준 사용', '역할', '목표', '서술 관점', '비고', '기재 주의'];
+  banner_(s, head.length, RECORD_BANNER_TITLE, RECORD_BANNER_NOTE);
   s.getRange(2, 1, 1, head.length).setValues([head]);
   styleHeader_(s, 2, head.length);
   var rows = PRESET_RECORD_TYPES.map(function (r) {
-    return [r.key, r.name, r.chars, r.useGrade, r.role, r.goal, r.view, r.note];
+    var caution = RECORD_RULES_2026.hasOwnProperty(r.key) ? RECORD_RULES_2026[r.key] : '';
+    return [r.key, r.name, r.chars, r.useGrade, r.role, r.goal, r.view, r.note, caution];
   });
   s.getRange(3, 1, rows.length, head.length).setValues(rows);
   s.getRange(3, 4, rows.length, 1).insertCheckboxes();
   s.getRange(3, 1, rows.length, head.length).setWrap(true).setVerticalAlignment('top');
-  [90, 220, 80, 110, 260, 320, 380, 220].forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
+  [90, 220, 80, 110, 260, 320, 380, 220, 380].forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
   s.setFrozenRows(2);
 }
 
@@ -1732,7 +2304,7 @@ function refreshActivityValidation_() {
   if (subKeys.length) s.getRange(3, 4, n, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(subKeys, true).build());
   s.getRange(3, 8, n, 1).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList(['자동', '직접작성'], true).build());
+    SpreadsheetApp.newDataValidation().requireValueInList(['자동', '직접작성', '바로쓰기'], true).build());
 }
 
 /* -------------------------------------------------------------- 학생명단 */
@@ -1774,6 +2346,15 @@ function buildReview() {
     .setFontColor('#555555').setFontWeight('bold');
   s.getRange('A7:D7').merge().setBackground(APP.COLORS.paste).setWrap(true).setVerticalAlignment('top');
   s.getRange('E7').setFormula('=IF($A$7="","",saeteukBytes($A$7)&"바이트")');
+  s.getRange('A9').setValue('▼ 위 칸에 쓴 글의 자동 검사 (기재 금지어 · 어미 · 맞춤법 — [📏 기재요령] 시트의 규칙). 더 자세히는 메뉴 [🔍 맞춤법 · 금지어 검사]')
+    .setFontColor('#555555').setFontWeight('bold');
+  s.getRange('A10:E10').merge().setWrap(true).setVerticalAlignment('top').setFontSize(10).setBackground('#fafafa');
+  s.getRange('A10').setFormula('=IF($A$7="","",SAETEUK_CHECK($A$7, IFERROR(VLOOKUP($C$4, ' +
+    "'" + APP.SH.RECORD + "'!$A$3:$C, 3, FALSE), 500)))");
+  s.setRowHeight(10, 90);
+  s.getRange('A12').setValue('⚠️ ' + AI_NOTICE_2026).setWrap(true).setFontColor('#7f1d1d').setFontSize(10);
+  s.getRange('A12:E12').merge();
+  s.setRowHeight(12, 54);
   s.setColumnWidth(1, 70); s.setColumnWidth(2, 70); s.setColumnWidth(3, 110);
   s.setColumnWidth(4, 110); s.setColumnWidth(5, 620);
   s.getRange('E4').setWrap(true).setVerticalAlignment('top');
@@ -1822,8 +2403,9 @@ function isOnboardDone_() {
 }
 
 function openOnboard() {
+  try { if (sh_(APP.SH.RULES)) autoRulesCheck_(); } catch (e) {}
   var html = HtmlService.createHtmlOutputFromFile('UI_Onboard')
-    .setWidth(640).setHeight(700);
+    .setWidth(660).setHeight(720);
   ui_().showModelessDialog(html, '시작하기 — ' + APP.MENU);
 }
 
@@ -1838,8 +2420,10 @@ function onboardStatus() {
     installed: false, hasKey: false, keyNames: [],
     rosterCount: 0, activities: [], exampleCount: 0, done: isOnboardDone_(),
     models: [], defaultModel: '', compileModel: '',
-    providerDefaults: PROVIDER_DEFAULT_MODEL, presets: presetModelRows_(), links: MODEL_LINKS
+    providerDefaults: PROVIDER_DEFAULT_MODEL, presets: presetModelRows_(), links: MODEL_LINKS,
+    manual: false, manualModel: MANUAL_MODEL, account: accountInfo_(), aiNotice: AI_NOTICE_2026
   };
+  try { st.manual = manualOn_(); } catch (e) {}
   try {
     st.installed = !!(sh_(APP.SH.CONFIG) && sh_(APP.SH.RECORD) && sh_(APP.SH.ACTIVITY) && sh_(APP.SH.ROSTER));
   } catch (e) {}
@@ -1851,18 +2435,19 @@ function onboardStatus() {
     try { st.rosterCount = getRoster_().length; st.rosterMode = rosterMode_(); } catch (e) {}
     try {
       st.activities = getActivities_().map(function (a) {
-        return { key: a.key, name: a.name, inSheet: a.inSheet, exSheet: a.exSheet };
+        return { key: a.key, name: a.name, inSheet: a.inSheet, exSheet: a.exSheet, quick: a.mode === '바로쓰기' };
       });
     } catch (e) {}
     try {
       st.backupModel = normModel(cfg_('예비 모델', ''));
-      st.models = modelChoices_().filter(function (m) { return m.indexOf('구독') < 0; });
+      st.models = modelChoices_().filter(function (m) { return m !== SUBSCRIPTION_MODEL && m !== MANUAL_MODEL; });
       st.defaultModel = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
       st.compileModel = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
     } catch (e) {}
     if (st.activities.length) {
       try { st.exampleCount = readExampleRows_(getActivity_(st.activities[0].key)).length; } catch (e) {}
     }
+    try { st.rules = currentPackInfo_(); } catch (e) {}
   }
   return st;
 }
@@ -1941,6 +2526,25 @@ function onboardUseSubscription() {
   return { ok: true, status: onboardStatus(), message: msg };
 }
 
+/**
+ * 2단계를 [키 없이 — 복사·붙여넣기]로 마친다. 키로 잘 쓰는 모델이 있으면 그대로 두고,
+ * 키가 없는 모델이 골라져 있으면 활동용·합본용을 [키 없이(복사·붙여넣기)]로 맞춘다.
+ */
+function onboardUseManual() {
+  setManual_(true);
+  var changed = [];
+  ['활동용 모델', '합본용 모델'].forEach(function (k) {
+    var cur = normModel(cfg_(k, DEFAULT_MODEL));
+    if (cur === MANUAL_MODEL || modelUsable_(cur)) return;
+    setCfg_(k, MANUAL_MODEL);
+    changed.push(k);
+  });
+  try { refreshModelDropdowns_(); } catch (e) {}
+  return { ok: true, status: onboardStatus(),
+           message: '키 없이 쓰기로 시작합니다. ' + (changed.length ? changed.join('·') + '을 [' + MANUAL_MODEL + ']로 맞췄습니다. ' : '') +
+                    '나중에 키를 넣으면 메뉴 ⑥ 한 번으로 자동 생성됩니다.' };
+}
+
 /** 설정 시트의 값 하나를 바꾼다 */
 function setCfg_(key, value) {
   var s = sh_(APP.SH.CONFIG);
@@ -1999,7 +2603,42 @@ function onboardCreateActivity(p) {
   return { made: made, def: def, status: onboardStatus() };
 }
 
+/** 4단계를 [✍️ 바로 쓰기 시트]로 — 입력 항목 없이 */
+function onboardCreateQuick(p) {
+  var r = createQuickSheet({ name: p.name, recordKey: p.recordKey, subjectKey: p.subjectKey, desc: p.text });
+  return { made: { inSheet: r.inSheet, exSheet: '' }, status: onboardStatus() };
+}
+
 /* -------------------------------------------------------------- 5단계 */
+/** 시험에 쓸 학생 자료 한 건 — 예시 시트 1번, 없으면(바로 쓰기) 보기 메모 */
+function testBlockFor_(act) {
+  var cols = parseColumns(act.columns);
+  var rec = findByKey(getRecordTypes_(), act.recordKey);
+  var rows = readExampleRows_(act);
+  var values = rows.length ? rows[0].values : null;
+  if (!values && act.mode === '바로쓰기') values = [SAMPLE_MEMO[act.recordKey] || SAMPLE_MEMO['과세특']];
+  if (!values) throw new Error('예시 시트가 비어 있어 시험할 자료가 없습니다. 활동을 다시 만들거나 예시를 한 줄 채워 주세요.');
+  return buildStudentBlock(cols, values, { grade: (rec && rec.useGrade) ? 3 : '' });
+}
+
+/** 키 없이 시험: 요청문을 만들어 준다 */
+function onboardManualTest(activityKey) {
+  var act = getActivity_(activityKey);
+  if (!act) throw new Error('활동을 찾을 수 없습니다.');
+  var user = buildManualUser([{ id: 'S1', block: testBlockFor_(act) }]);
+  return { prompt: promptFor_(act) + '\n\n' + user, limit: charsFor_(act) * 3, gem: buildGemText(promptFor_(act)) };
+}
+
+/** 키 없이 시험: 받아 온 답을 검사만 한다(시트에 쓰지 않음) */
+function onboardManualCheck(p) {
+  var txt = cleanResult_(parseManualAnswer(p.answer, ['S1']).map.S1 || '');
+  if (!txt) return { ok: false, message: '받은 답을 붙여 넣어 주세요.' };
+  var limit = Number(p.limit) || 1500;
+  var v = inspect_(txt, limit);
+  return { ok: true, text: txt, bytes: v.bytes, limit: limit,
+           issues: v.issues.map(function (i) { return (i.level === 'block' ? '[수정] ' : '[확인] ') + i.label + (i.hit ? ' → ' + i.hit : ''); }) };
+}
+
 /**
  * 시험 생성 — 학생 데이터를 건드리지 않고, 예시 시트의 1번 입력값으로
  * 실제 호출을 한 번 돌려 본다. 여기까지 결과가 나오면 설정이 끝난 것이다.
@@ -2007,24 +2646,28 @@ function onboardCreateActivity(p) {
 function onboardTestGenerate(activityKey) {
   var act = getActivity_(activityKey);
   if (!act) throw new Error('활동을 찾을 수 없습니다.');
-  var cols = parseColumns(act.columns);
-  var rows = readExampleRows_(act);
-  if (!rows.length) throw new Error('예시 시트가 비어 있어 시험할 자료가 없습니다. 활동을 다시 만들거나 예시를 한 줄 채워 주세요.');
-
-  var rec = findByKey(getRecordTypes_(), act.recordKey);
-  var user = buildStudentBlock(cols, rows[0].values, { grade: (rec && rec.useGrade) ? 3 : '' });
+  var user = testBlockFor_(act);
   var model = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
-  if (providerOf_(model) === 'subscription' || !modelUsable_(model)) {
+  if (providerOf_(model) === 'subscription' || providerOf_(model) === 'manual' || !modelUsable_(model)) {
     var withKey = PROVIDERS.filter(function (x) { return getKey_(x); })[0];
-    if (!withKey) throw new Error('API 키가 없어 스크립트로 바로 시험할 수 없습니다. 구독만 쓰신다면 [구독으로 시험하기]를 누르세요.');
+    if (!withKey) throw new Error('API 키가 없어 스크립트로 바로 시험할 수 없습니다. [키 없이] 시험이나 [구독으로 시험하기]를 쓰세요.');
     model = PROVIDER_DEFAULT_MODEL[withKey];
   }
 
-  var txt = cleanResult_(callAI_(promptFor_(act), user, model));
+  var system = promptFor_(act);
+  var txt = cleanResult_(callAI_(system, user, model));
   var limit = charsFor_(act) * 3;
-  var v = validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES);
+  var v = inspect_(txt, limit), fixed = false;
+  // 시험에서도 실제 생성과 같은 흐름: [수정]이 나오면 한 번 고쳐 쓰게 한다
+  if (needsRepair(v) && cfgBool_('자동 고쳐쓰기', true)) {
+    try {
+      var t2 = cleanResult_(callAI_(system, buildRepairUser(user, txt, v.issues.filter(function (x) { return x.level === 'block'; }), limit), model));
+      var v2 = inspect_(t2, limit);
+      if (t2 && betterResult(v, v2) === 'b') { txt = t2; v = v2; fixed = true; }
+    } catch (e) {}
+  }
   return {
-    text: txt, bytes: v.bytes, limit: limit, model: model,
+    text: txt, bytes: v.bytes, limit: limit, model: model, repaired: fixed,
     issues: v.issues.map(function (i) { return (i.level === 'block' ? '[수정] ' : '[확인] ') + i.label; })
   };
 }
@@ -2037,10 +2680,7 @@ function onboardTestGenerate(activityKey) {
 function onboardTestSubscription(activityKey) {
   var act = getActivity_(activityKey);
   if (!act) throw new Error('활동을 찾을 수 없습니다.');
-  var rows = readExampleRows_(act);
-  if (!rows.length) throw new Error('예시 시트가 비어 있어 시험할 자료가 없습니다. 예시를 한 줄 채워 주세요.');
-  var rec = findByKey(getRecordTypes_(), act.recordKey);
-  var user = buildStudentBlock(parseColumns(act.columns), rows[0].values, { grade: (rec && rec.useGrade) ? 3 : '' });
+  var user = testBlockFor_(act);
 
   var s = sh_(APP.SH.START) || buildStart();
   var r = s.getLastRow() + 2;
@@ -2065,7 +2705,7 @@ function onboardReadSubTest(p) {
   }
   var txt = cleanResult_(v);
   var limit = Number(p.limit) || 1500;
-  var res = validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES);
+  var res = inspect_(txt, limit);
   return { ok: true, text: txt, bytes: res.bytes, limit: limit,
            issues: res.issues.map(function (i) { return (i.level === 'block' ? '[수정] ' : '[확인] ') + i.label; }) };
 }
@@ -2089,6 +2729,14 @@ function onboardGoto(name) {
 }
 
 /* ------------------------------------------------------ 시작하기 시트 */
+/** [🚀 시작하기] 시트 위쪽 버튼 — 그림에 함수를 붙인다(휴대폰 앱에서는 동작하지 않아 메뉴 안내를 함께 둔다) */
+var START_BUTTONS = [
+  { img: 'start', fn: 'openOnboard', alt: '시작하기 (처음이면 여기)', row: 0, col: 0 },
+  { img: 'quick', fn: 'openQuickSheetDialog', alt: '바로 쓰기 시트 만들기', row: 0, col: 1 },
+  { img: 'check', fn: 'openCheckSidebar', alt: '맞춤법 · 금지어 검사', row: 1, col: 0 },
+  { img: 'ocr', fn: 'openOcrGuide', alt: '스캔 문서 → 엑셀 사용 설명서', row: 1, col: 1 }
+];
+
 function buildStart() {
   var s = shOrCreate_(APP.SH.START);
   s.clear();
@@ -2097,66 +2745,94 @@ function buildStart() {
   var P = function (t) { L.push(['', t]); };
 
   L.push(['#', '세특 작성 도우미 ' + APP.VERSION]);
-  P('학생부 특기사항을 활동 단위로 모으고, 프롬프트를 자동으로 조립해 AI에게 맡기는 도구입니다.');
-  P('과목별 세특뿐 아니라 자율·동아리·진로·행동특성 및 종합의견까지 같은 방식으로 씁니다.');
+  P('학생부 특기사항을 활동 단위로 모으고, 프롬프트를 자동으로 조립해 AI에게 맡기는 도구입니다. 과목별 세특 · 자율 · 동아리 · 진로 · 행발까지 같은 방식으로 씁니다.');
+  L.push(['btn', '']);
+  L.push(['btn', '']);
+  P('버튼이 안 눌리면 상단 메뉴 [' + APP.MENU + '] 에서 같은 이름을 누르세요. (휴대폰·태블릿 앱에서는 버튼이 동작하지 않습니다)');
+  L.push(['!', '⚠️ 2026학년도 기재요령: ' + AI_NOTICE_2026]);
   P('');
 
   H('1단계.  이 파일을 내 드라이브로 복사하세요');
-  P('지금 보고 계신 파일이 남의 원본이라면, 상단 [파일] > [사본 만들기] 를 먼저 누르세요.');
-  P('이미 내 사본이라면 다음으로 넘어가면 됩니다.');
+  P('지금 보고 계신 파일이 남의 원본이라면, 상단 [파일] > [사본 만들기] 를 먼저 누르세요. 이미 내 사본이라면 다음으로 넘어가면 됩니다.');
   P('');
 
-  H('2단계.  메뉴에서 [🚀 시작하기] 를 누르세요');
-  P('상단 메뉴  [' + APP.MENU + ']  >  [🚀 시작하기]');
-  P('나머지는 팝업이 순서대로 안내합니다. 중간에 닫아도 다시 누르면 이어서 진행됩니다.');
+  H('2단계.  위 초록 버튼 [▶ 시작하기] 를 누르세요');
+  P('또는 상단 메뉴  [' + APP.MENU + ']  >  [🚀 시작하기].  팝업이 순서대로 안내합니다. 중간에 닫아도 다시 누르면 이어서 진행됩니다.');
   P('');
 
   H('⚠️ 처음 한 번만 — 권한 승인 화면 넘는 법');
-  P('메뉴를 처음 누르면 구글이 승인을 요구합니다. 아래 순서대로 누르시면 됩니다.');
-  P('');
+  P('버튼이나 메뉴를 처음 누르면 구글이 승인을 요구합니다. 아래 순서대로 누르시면 됩니다.');
   P('   ①  [승인 필요] 창에서  [계속]  클릭');
   P('   ②  구글 계정 선택');
-  P('   ③  "Google에서 확인하지 않은 앱입니다" 화면이 나오면');
-  P('        →  왼쪽 아래  [고급]  클릭');
-  P('        →  [세특 작성 도우미(안전하지 않음)(으)로 이동]  클릭');
+  P('   ③  "Google에서 확인하지 않은 앱입니다" 화면이 나오면  →  왼쪽 아래  [고급]  →  [세특 작성 도우미(안전하지 않음)(으)로 이동]');
   P('   ④  [허용]  클릭');
-  P('');
-  P('이 경고는 개인이 만든 스크립트라서 뜨는 것입니다. 구글 심사를 받은 앱이 아니면 모두 이 화면이 나옵니다.');
-  P('코드는 이 파일 안에 그대로 들어 있고, [확장 프로그램] > [Apps Script] 에서 직접 확인할 수 있습니다.');
+  P('이 경고는 개인이 만든 스크립트라서 뜨는 것입니다. 코드는 이 파일 안에 그대로 있고 [확장 프로그램] > [Apps Script] 에서 볼 수 있습니다.');
   P('');
 
-  H('무엇이 필요한가요');
-  P('· AI 키 하나.  Gemini 키가 가장 부담이 적습니다(무료 등급 있음). aistudio.google.com 에서 발급.');
-  P('· 학교 계정에 Google AI Pro for Education 이 있거나, 개인 Google AI Pro·Ultra 를 구독 중이면 키 없이도 쓸 수 있습니다.');
-  P('   시작하기 2단계에서 [Gemini 구독으로] 를 고르면 키 넣는 단계를 건너뜁니다. (AI Plus 요금제, 무료 학교 계정은 아직 안 됨)');
-  P('   확인법: 빈 셀에  =AI("안녕")  을 넣고 셀을 눌러 [생성 및 삽입] → 답이 나오면 됩니다.');
-  P('· 학생 명단(반·번호·이름, 동아리면 학년까지). 엑셀 양식을 내려받아 채워 올리거나, 복사해 붙여넣으면 됩니다.');
+  H('API 키가 없어도 됩니다 — 세 가지 방법 중 하나');
+  P('①  키 없이 (복사·붙여넣기) — 처음이라면 이것부터.  시트가 요청문을 만들어 주면 Gemini 앱(gemini.google.com)에 붙여 넣고, 받은 답을 다시 붙여 넣습니다.');
+  P('     학교 구글 계정으로 Gemini 앱에 들어가면 무료이고 입력 내용이 AI 학습에 쓰이지 않습니다(학교에서 Gemini를 켜 두었을 때). 학생 이름은 보내지 않습니다.');
+  P('②  Gemini API 키 — 생성 · 검사가 버튼 한 번.  aistudio.google.com/apikey 에서 무료 발급. 무료 등급은 보낸 내용이 서비스 개선에 쓰일 수 있어, 학생 자료는 결제를 켠 키를 권합니다.');
+  P('③  Gemini 구독(=AI 함수) — 학교에 Google AI Pro for Education 이 있거나 개인 Google AI Pro·Ultra 일 때.  무료 학교 계정(Education Fundamentals)에는 아직 없습니다.');
+  P('     확인법: 시작하기 2단계 [구독으로]에서 [구독 확인하기] — 시험 셀을 만들어 [생성 및 삽입]이 되는지 봅니다.');
+  P('');
+
+  H('이 도구로 할 수 있는 것');
+  P('· 활동별 세특·창체·행발 초안 — 메뉴 ④ 활동 만들기 (입력 항목은 직접 적거나 AI에게 맡김)');
+  P('· ✍️ 바로 쓰기 — 입력 항목을 정하지 않고 학생마다 메모만 적어 초안 받기, 또는 직접 쓴 글을 바로 검사하기');
+  P('· 🔍 맞춤법 · 금지어 검사 — 2026 기재요령 금지어, 어미 · 특수문자, 맞춤법 · 띄어쓰기, 나이스 바이트');
+  P('· 생성 직후 자동 검사 → [수정]이 나온 학생만 걸린 점을 짚어 한 번 더 고쳐 쓰기, 원하면 근거 확인(학생 자료에 없는 내용 찾기)');
+  P('· 📏 기재요령 규칙판은 해마다 저절로 업데이트 — 직접 고친 칸은 그대로 둡니다');
   P('');
 
   H('꼭 알아 두실 것');
   P('· AI 키는 이 파일이 아니라 각자의 구글 계정에 저장됩니다. 사본을 나눠 줘도 키는 넘어가지 않습니다.');
-  P('· 학생 이름은 기본적으로 AI에 전송되지 않습니다.');
-  P('· 주민등록번호, 가정환경, 건강 정보 같은 민감정보는 입력하지 마세요.');
-  P('· AI가 쓴 문장을 그대로 기재하지 마세요. 반드시 읽고 고쳐서 쓰는 것이 원칙이며,');
-  P('   최종 문장에 대한 책임은 작성한 교사에게 있습니다.');
+  P('· 학생 이름은 기본적으로 AI에 전송되지 않습니다. 주민등록번호, 가정환경, 건강 정보 같은 민감정보는 입력하지 마세요.');
+  P('· AI가 쓴 문장을 그대로 기재하지 마세요. 교사가 직접 관찰·평가한 내용을 바탕으로 고쳐 쓰고, 최종 문장의 책임은 작성한 교사에게 있습니다.');
   P('· 학교·교육청의 생성형 AI 활용 지침을 먼저 확인하세요. 시도교육청마다 다릅니다.');
+  P('');
+
+  H('함께 쓰면 좋은 도구');
+  P('📄 스캔 문서 → 엑셀 (업무 인수인계 대시보드) — 손글씨 활동지 · 신청서를 글자 그대로 표로 읽어 엑셀로. 위 파란 버튼을 누르면 설치 · 사용법이 열립니다.');
   P('');
   P('설정이 끝나면 이 탭은 닫아 두셔도 됩니다. 자세한 사용법은 [📖 사용법] 탭에 있습니다.');
 
   var rows = L.map(function (r) { return [r[1]]; });
   s.getRange(1, 1, rows.length, 1).setValues(rows);
+  var btnRows = [];
   for (var i = 0; i < L.length; i++) {
     var c = s.getRange(i + 1, 1);
     if (L[i][0] === '#') c.setFontSize(18).setFontWeight('bold').setFontColor('#1b3a2a');
     else if (L[i][0] === '§') {
       c.setFontWeight('bold').setFontSize(13).setBackground('#e3ece4').setFontColor('#1b3a2a');
       s.setRowHeight(i + 1, 32);
+    } else if (L[i][0] === '!') {
+      c.setBackground('#fdecea').setFontColor('#7f1d1d').setFontWeight('bold').setFontSize(10);
+      s.setRowHeight(i + 1, 50);
+    } else if (L[i][0] === 'btn') {
+      s.setRowHeight(i + 1, 62);
+      btnRows.push(i + 1);
     }
   }
   s.setColumnWidth(1, 820);
   s.getRange(1, 1, rows.length, 1).setWrap(true).setVerticalAlignment('middle');
   s.setHiddenGridlines(true);
+  try { placeStartButtons_(s, btnRows); } catch (e) {}   // 그림을 못 넣어도 시트는 그대로 쓴다
   return s;
+}
+
+/** 버튼 그림을 지우고 다시 붙인다 (여러 번 만들어도 겹치지 않게) */
+function placeStartButtons_(s, btnRows) {
+  s.getImages().forEach(function (img) { img.remove(); });
+  START_BUTTONS.forEach(function (b) {
+    var row = btnRows[b.row];
+    if (!row || !BUTTON_PNG[b.img]) return;
+    var blob = Utilities.newBlob(Utilities.base64Decode(BUTTON_PNG[b.img]), 'image/png', b.img + '.png');
+    var img = s.insertImage(blob, 1, row, 6 + b.col * 400, 5);
+    img.setWidth(380).setHeight(52);
+    img.assignScript(b.fn);
+    try { img.setAltTextTitle(b.alt).setAltTextDescription('누르면 ' + b.alt + ' 창이 열립니다'); } catch (e) {}
+  });
 }
 
 
@@ -2178,7 +2854,16 @@ function buildHelp() {
   L.push(['', '세특 작성 도우미 ' + APP.VERSION]);
   P('학생부 특기사항을 활동 단위로 모으고, 프롬프트를 자동으로 조립해 AI에게 맡기는 도구입니다.');
   P('교과 세특뿐 아니라 자율·동아리·진로·행동특성 및 종합의견까지 같은 방식으로 씁니다.');
-  P('결과는 반드시 선생님이 읽고 고쳐서 쓰세요. AI 결과를 그대로 기재하지 않는 것이 원칙입니다.');
+  P('⚠️ ' + AI_NOTICE_2026);
+
+  H('메뉴 한눈에 보기 (v3.6 — 화면이 작아도 잘리지 않게 묶었습니다)');
+  P('  맨 위: 🚀 시작하기 · ✍️ 바로 쓰기 시트 추가 · 🔍 맞춤법·금지어 검사 · ⑥ 체크된 행 생성 · ⑦ 최종취합');
+  P('  ①②③ 준비 — 처음 설치 / AI 연결 · 모델 설정 / 학생 명단');
+  P('  ④⑤ 활동 · 예시 — 활동 만들기 · 복제 · 삭제 / 예시 더 만들기 · 늘리기 · 검증');
+  P('  ⑥ 생성 더 보기 — 📋 키 없이(복사·붙여넣기) · 선택한 행만 · 자동 생성 켜기/끄기 · 최종 압축본');
+  P('  ⑧ 점검 · 기재요령 2026 — 검사 · 근거 확인 · 재검증 · 프롬프트 미리보기 · AI 앱용 지침 내보내기 · 📏 기재요령 규칙 · 업데이트 확인');
+  P('  도움말 · 부가 기능 — 📄 스캔 문서 → 엑셀 사용 설명서 · 사용법 · 구글폼 · 수업관찰 · 구조 복구 · 버전');
+  P('  [🚀 시작하기] 시트 위쪽 버튼 4개로도 같은 창을 엽니다.');
 
   H('0. 이 도구의 핵심 — 프롬프트를 직접 쓰지 않습니다');
   P('프롬프트는 네 개의 시트에서 자동으로 조립됩니다.');
@@ -2191,7 +2876,7 @@ function buildHelp() {
 
   H('1. 처음 준비 — 메뉴 [🚀 시작하기] 하나면 됩니다');
   P('상단 메뉴 [' + APP.MENU + '] > [🚀 시작하기] 를 누르면 팝업이 순서대로 안내합니다.');
-  P('구조 설치 → AI 키 → 학생 명단 → 첫 활동 만들기 → 시험 생성까지 한 번에 끝납니다.');
+  P('구조 설치 → AI 연결(키가 없어도 됨) → 학생 명단 → 첫 활동 만들기 → 시험 생성까지 한 번에 끝납니다.');
   P('중간에 닫아도 다시 열면 끝난 단계는 완료로 표시되고 그다음부터 이어집니다.');
   P('');
   P('손으로 하고 싶다면 메뉴를 하나씩 눌러도 됩니다.');
@@ -2207,6 +2892,16 @@ function buildHelp() {
   P('※ 사본을 남에게 나눠 줄 때: 공유 링크 끝의 /edit... 을 /copy 로 바꾸면');
   P('   링크를 연 순간 [사본 만들기] 창이 바로 떠서, 코드까지 통째로 복사됩니다.');
   P('   단, 자동 생성 트리거와 수업관찰 웹앱 배포는 사본마다 각자 한 번씩 눌러야 합니다.');
+
+  H('1-1. API 키가 없어도 됩니다 — 키 없이(복사·붙여넣기)');
+  P('모든 [모델] 드롭다운 맨 끝에 [' + MANUAL_MODEL + '] 이 늘 있습니다. 키가 하나도 없으면 생성할 때 저절로 이 방식이 됩니다.');
+  P('  ① [생성] 체크 → 메뉴 ⑥ 체크된 행 생성 → 창이 열립니다');
+  P('  ② [📋 전체 복사] → Gemini(gemini.google.com, 학교 계정 권장)·ChatGPT·Claude 대화창에 붙여 넣기');
+  P('  ③ 받은 답을 통째로 복사해 창에 붙여 넣고 [시트에 넣고 검사] → [S1] [S2] 표시를 보고 학생별 [AI 결과]에 들어가고 바로 검사됩니다');
+  P('  · 학생 이름은 요청문에 들어가지 않습니다(S1, S2 … 로 바뀜). 한 번에 5~10명씩 묶어 줍니다.');
+  P('  · 창의 [Gem(지침)으로 만들어 두기] 탭: 규칙을 Gemini Gem 에 한 번 저장하면 다음부터 [학생 자료만 복사]로 짧게 붙여 넣습니다.');
+  P('  · 학교 구글 계정으로 Gemini 앱에 들어가면 무료이고 입력 내용이 AI 학습에 쓰이지 않습니다(학교 관리자가 켜 두었을 때). 개인 무료 계정은 학습·검토에 쓰일 수 있습니다.');
+  P('  · 메뉴 ② 창 맨 위에 지금 로그인한 계정이 보입니다. Gemini 구독(=AI 함수)이 있는지는 [지금 계정에 구독이 있는지 확인]으로 시험 셀을 만들어 봅니다.');
 
   H('2. 활동 만들기 — 입력 항목은 직접 적어도, AI에게 맡겨도 됩니다');
   P('메뉴 ④ 활동 만들기 · 입력 항목 바꾸기 를 엽니다. 두 가지 길이 있습니다.');
@@ -2228,6 +2923,12 @@ function buildHelp() {
   P('  · AI 결과·최종본·예시는 그대로 남습니다.');
   P('[프롬프트 미리보기]를 누르면 실제로 AI에게 갈 문장을 확인할 수 있습니다.');
 
+  H('2-1. ✍️ 바로 쓰기 시트 — 입력 항목을 정하지 않고 바로');
+  P('메뉴 맨 위 [✍️ 바로 쓰기 시트 추가] 또는 [🚀 시작하기] 시트의 버튼. 시트 이름 · 기록 항목 · 교과만 고르면 됩니다. 몇 개든 만들 수 있습니다.');
+  P('  · 학생마다 [관찰 메모] 한 칸에 자유롭게 적고 [생성] → AI 초안 (키가 없으면 복사·붙여넣기 창)');
+  P('  · 또는 [최종본]에 직접 쓰면 [검증] 칸이 바로 금지어·어미·맞춤법·바이트를 검사합니다(AI를 부르지 않음).');
+  P('  · 최종취합·검토는 보통 활동과 똑같이 됩니다. 학생 명단이 없으면 반·번호·이름을 직접 적어도 되고, 나중에 명단을 넣어도 적어 둔 줄은 지워지지 않습니다.');
+
   H('3. 예시 채우기 — 품질을 가장 크게 좌우합니다');
   P('「활동명 ▸예시」 시트에 모범 예시를 채웁니다. 예시가 한 개라도 있으면 결과의 톤과 구조가 눈에 띄게 안정됩니다.');
   P('· 칸이 모자라면 메뉴 ⑤ 예시 칸 늘리기');
@@ -2244,7 +2945,13 @@ function buildHelp() {
   P('② [모델]을 고르고 [생성]을 체크한 뒤, 메뉴 ⑥ 체크된 행 생성 을 누릅니다.');
   P('   체크하자마자 생성되게 하려면 메뉴 ⑥ 자동 생성 켜기 를 한 번 실행하세요.');
   P('③ [AI 결과]를 읽고 고쳐서 파란 [최종본] 칸에 붙여넣습니다. 여기 있는 글이 최종본입니다.');
-  P('④ [검증] 칸에 분량 초과 · 기재 금지사항 · 어미 위반이 자동으로 표시됩니다.');
+  P('④ [검증] 칸에 분량 초과 · 기재 금지사항 · 어미 위반 · 맞춤법이 자동으로 표시됩니다. [최종본]을 고치면 바로 다시 검사합니다.');
+  P('');
+  P('생성 한 번에 이렇게 돕니다 (하네스)');
+  P('  규칙 조립(그 기록 항목에 필요한 것만) → 생성 → 자동 검사 → [수정]이 나온 학생만 걸린 점을 짚어 한 번 더 고쳐 쓰기 → (켜 두면) 근거 확인');
+  P('  · [⚙️ 설정] 자동 고쳐쓰기(기본 TRUE): 분량 초과·기재 금지어·어미가 걸리면 그 학생만 한 번 더 부릅니다. 고친 글이 더 나을 때만 바꿉니다. [검증]에 "(자동 고쳐쓰기 1회)".');
+  P('  · [⚙️ 설정] 근거 자동 확인(기본 FALSE): AI 결과에 학생 자료에 없는 활동·수치·과장이 들어갔는지 한 번 더 봅니다. 메뉴 ⑧ [근거 확인]으로 고른 행만 해도 됩니다.');
+  P('  · 2026 기재요령은 AI 도움을 받았으면 입력 전에 허위·과장 여부를 확인하라고 합니다. 근거 확인은 그 확인을 돕는 도구일 뿐, 판단은 교사가 합니다.');
 
   H('5. 최종취합 — 기록종류별로 따로 모입니다');
   P('메뉴 ⑦ 최종취합 시트 생성/갱신 을 누르면 기록종류별로 취합 시트가 생깁니다.');
@@ -2253,12 +2960,26 @@ function buildHelp() {
   P('합본이 글자수를 넘는 학생만 [압축]을 체크하고 메뉴 ⑦ 최종 압축본 생성 을 누르세요.');
   P('활동 결과를 고친 뒤에는 [최종취합 시트 생성/갱신]을 다시 눌러야 반영됩니다.');
 
-  H('6. 검증이 잡아 주는 것');
+  H('6. 검증 · 🔍 맞춤법 · 금지어 검사');
   P('· 분량 : 글자수(바이트) 초과 또는 지나친 부족');
-  P('· 기재 금지 : 수상, 자격증, 공인어학시험, 논문·특허, 모의고사, 해외활동, 학원·기관명, 부모 정보');
+  P('· 기재 금지(2026) : 대회·수상, 교외상, 자격증·인증시험, 공인어학시험, 논문·특허·출판, 모의고사·석차, K-MOOC, 방과후학교, 해외활동, 학원·기관명, 부모 정보');
+  P('· 눈으로 볼 것 : 대학·학과·기관명, 대회 언급, 청소년단체·학교스포츠클럽·자율동아리, 봉사 시간, 도서명 표기');
   P('· 형식 : 존댓말·평서형 어미, "학생은" 주어, 금지 특수문자');
-  P('[수정]은 반드시 고쳐야 하는 것, [확인]은 오탐일 수 있으니 눈으로 볼 것입니다.');
+  P('· 맞춤법 : 자주 틀리는 표기(역활→역할 등), 할수 있다·한것·있슴·안된다 같은 띄어쓰기·어미');
+  P('[수정]은 반드시 고쳐야 하는 것, [확인]은 오탐일 수 있으니 눈으로 볼 것입니다. 검사 창에는 이유와 기재요령 쪽수가 함께 나옵니다.');
+  P('');
+  P('🔍 검사 창(메뉴 맨 위 또는 시작하기 버튼) — 오른쪽에 열립니다');
+  P('  · 셀을 고르고 [선택한 셀 가져오기] → 검사 → 고친 뒤 [그 셀에 다시 넣기]. 아무 글이나 붙여 넣어도 됩니다.');
+  P('  · 키가 있으면 [AI 맞춤법 검사](고칠 곳을 골라서 고침)와 [근거 확인], 없으면 Gemini 앱에 붙여 넣을 요청문을 복사해 줍니다.');
+  P('  · 셀 함수: 어느 칸에서든 =SAETEUK_CHECK(A2) 또는 =SAETEUK_CHECK(A2, 300) (300 = 최대 글자 수). [✅ 검토] 시트에도 들어 있습니다.');
   P('검증은 보조 장치일 뿐입니다. 최종 책임은 작성자에게 있습니다.');
+
+  H('6-1. 📏 기재요령 규칙 — 해마다 저절로 바뀝니다');
+  P('[📏 기재요령] 시트의 표가 모든 검사 규칙입니다. 찾을 말은 정규식(| 는 "또는")이고, [사용] 체크를 풀면 그 줄은 쓰지 않습니다.');
+  P('  · 우리 학교 규칙을 더하려면 맨 아래 줄에 적고 [출처]에 "내 학교"라고 쓰세요. 업데이트 때도 남습니다.');
+  P('  · 기록 항목마다 프롬프트에 붙는 주의점은 [🧩 기록종류]의 [기재 주의] 칸에 있습니다(예: 동아리 — 자율동아리·학교스포츠클럽 특기사항 미입력).');
+  P('  · 만든이가 새 학년도 규칙판을 올리면 7일 안에 저절로 받아, 선생님이 손대지 않은 칸(금지어 표·NEIS_RULES·기재 주의·글자수)만 바꿉니다. 직접 고친 칸은 그대로 두고 알려 줍니다.');
+  P('  · 바로 확인: 메뉴 ⑧ [기재요령 규칙 업데이트 확인]. 지금 판은 메뉴 [버전 정보]에서도 보입니다.');
 
   H('7. 우리 학교 방식으로 바꾸기');
   P('· 어미를 "~하였음"으로 : 📐 공통규칙 > WRITING_RULES 내용 수정');
@@ -2275,14 +2996,15 @@ function buildHelp() {
 
   H('9. AI 모델 — 직접 적고, 시험하고, 고르기');
   P('모델 목록은 [⚙️ 설정] 시트 아래 [🤖 모델 목록] 표에 있습니다. 여기 적힌 이름이 모든 [모델] 드롭다운의 선택지입니다.');
-  P('단, 드롭다운과 메뉴 ② 창에는 내가 API 키를 넣은 회사의 모델만, 그리고 구독을 켰을 때만 Gemini(구독)이 나옵니다.');
+  P('단, 드롭다운과 메뉴 ② 창에는 내가 API 키를 넣은 회사의 모델만, 구독을 켰을 때만 Gemini(구독)이, 그리고 늘 [' + MANUAL_MODEL + '] 이 나옵니다.');
+  P('예) Claude 키를 넣지 않았으면 Claude 모델은 드롭다운에 아예 없습니다. 키는 계정마다 따로라, 같은 사본을 여러 선생님이 함께 쓰면 마지막에 드롭다운을 새로 입힌 사람의 키 기준으로 보입니다.');
   P('메뉴 ② AI 연결 · 모델 설정 > [② 모델] 탭에서 이름을 적고 [시험]을 누르면 ✓/✗ 와 걸린 시간이 표에 남습니다.');
   P('메뉴 ② 아래 [모델 연결 테스트]는 목록 전체를 한 번에 확인합니다. 학기 초에 한 번 눌러 두세요.');
   P('');
   P('어느 수준이면 충분할까?');
   P('  ★ 충분(기본) : ' + PROVIDER_DEFAULT_MODEL.gemini + ' · ' + PROVIDER_DEFAULT_MODEL.openai + ' · ' + PROVIDER_DEFAULT_MODEL.anthropic + '  → 과세특·창체·행발 거의 모든 경우');
   P('  가볍게       : gemini-flash-lite-latest  → 행발처럼 짧은 글, 한 번에 많은 학생');
-  P('  고급         : gemini-pro-latest · gpt-5.6-terra · claude-sonnet-5  → 합본 압축이 글자수를 자꾸 넘길 때만 (느리고 몇 배 비쌈)');
+  P('  고급         : gemini-pro-latest · gpt-6-sol · claude-sonnet-5-5  → 합본 압축이 글자수를 자꾸 넘길 때만 (느리고 몇 배 비쌈)');
   P('  결과 품질은 모델 등급보다 예시와 학생 자료가 훨씬 크게 좌우합니다. 상위 모델부터 쓰지 마세요.');
   P('');
   P('최신 모델명은 어디서?');
@@ -2308,7 +3030,10 @@ function buildHelp() {
   P('  · 생각 줄이기: [⚙️ 설정] 생각 줄이기(기본 TRUE). 모델의 "생각" 토큰은 출력 요금으로 청구되는데, 세특 글쓰기에는 깊은 추론이 필요 없습니다.');
   P('  · 자동 캐시 할인: 규칙 부분이 늘 앞에 같은 모양으로 가서, 같은 활동을 연달아 만들면 그 부분은 약 1/10 가격이 됩니다(조건이 맞을 때 회사가 자동 적용).');
   P('생성이 끝나면 알림에 실제로 쓴 토큰 수가 나옵니다. ⑧ 프롬프트 미리보기에서 규칙 부분의 길이도 볼 수 있습니다.');
-  P('※ "스킬(Skills)"은 Claude 앱 안에서 필요한 지침만 꺼내 읽는 기능이라, 시트에서 API를 부르는 이 도구에는 쓸 수 없습니다. 위 방법이 같은 효과를 냅니다.');
+  P('· 자동 고쳐쓰기는 [수정]이 나온 학생만 한 번 더 부르므로, 모든 학생을 두 번 부르는 것보다 훨씬 쌉니다.');
+  P('');
+  P('※ 스킬(Skills)·하네스와의 관계: 이 도구는 같은 생각을 시트 안에서 씁니다 — 필요한 규칙만 꺼내 조립하고(기록 항목별 기재 주의),');
+  P('   생성 뒤 정해진 검사 → 걸린 것만 고쳐 쓰기를 돌립니다. 규칙을 Claude 스킬(zip)·Gemini Gem 으로 옮기려면 메뉴 ⑧ [AI 앱용 지침 내보내기].');
 
   H('11. 자주 막히는 곳');
   P('Q. 호출이 실패해요 → 메뉴 ② 아래 [모델 연결 테스트]. ✗ 옆에 이유가 나옵니다(모델명 오류 · 무료 등급 불가 · 한도 초과 · 키 오류).');
@@ -2322,6 +3047,14 @@ function buildHelp() {
   P('Q. 새 활동이 취합에 없어요 → 메뉴 ⑦ 최종취합 시트 생성/갱신 을 다시 누르세요.');
   P('Q. 예시 시트에 [바이트]·[검증] 칸이 없어요 → 부가 기능 > 예시 시트 구조 복구 (예시 내용은 보존됩니다).');
   P('Q. 시트를 실수로 지웠어요 → 메뉴 ① 처음 설치 / 구조 복구 (기존 데이터는 보존됩니다).');
+  P('Q. 메뉴가 화면 아래로 잘려요 → v3.6 부터 하위 메뉴로 묶었습니다. 예전 사본이면 이 판으로 다시 받아 주세요.');
+  P('Q. 시작하기 시트의 버튼이 안 눌려요 → 휴대폰·태블릿 앱에서는 버튼이 동작하지 않습니다. 컴퓨터 브라우저에서 쓰거나 같은 이름의 메뉴를 누르세요. 버튼이 사라졌으면 [도움말 · 부가 기능] > [시작하기 시트 다시 만들기].');
+  P('Q. 복사·붙여넣기 창에서 "빠진 학생"이 나와요 → 대화창 답에 [S번호] 표시가 없거나 비었습니다. 그 학생만 다시 요청하거나, 답을 고쳐 붙여 넣으세요.');
+  P('Q. 기재요령이 바뀌었는데 규칙이 그대로예요 → 메뉴 ⑧ [기재요령 규칙 업데이트 확인]. 직접 고친 칸은 그대로 두므로 [📏 기재요령] 2행 문구와 비교해 보세요.');
+
+  H('12. 함께 쓰면 좋은 도구 — 📄 스캔 문서 → 엑셀');
+  P('업무 인수인계 대시보드(윈도우 프로그램, 같은 만든이)의 기능입니다. 손글씨 활동지·신청서를 스캔하면 AI가 글자 그대로 표로 읽어 엑셀로 저장합니다.');
+  P('표를 복사해 이 시트의 ▸입력 노란 칸(또는 바로 쓰기의 [관찰 메모])에 붙여 넣으면 됩니다. 설치·사용법: 메뉴 [도움말 · 부가 기능] > [📄 스캔 문서 → 엑셀 사용 설명서].');
 
   var rows = L.map(function (r) { return [r[0] === '§' ? r[1] : r[1]]; });
   s.getRange(1, 1, rows.length, 1).setValues(rows);
@@ -2493,32 +3226,41 @@ function syncRosterInto_(sheet, roster) {
   var lastRow = sheet.getLastRow();
   if (lastCol < 4) return;
 
-  var existing = {}, byName = {}, nameCount = {};
+  var existing = {}, byName = {}, nameCount = {}, all = [];
   if (lastRow >= first) {
     var vals = sheet.getRange(first, 1, lastRow - first + 1, lastCol).getValues();
     var forms = sheet.getRange(first, 1, lastRow - first + 1, lastCol).getFormulas();
     for (var i = 0; i < vals.length; i++) {
       var id = String(vals[i][0]).trim() + '-' + String(vals[i][1]).trim();
-      if (id === '-') continue;
+      if (id === '-' && !String(vals[i][2]).trim()) continue;
       var row = [];
       for (var c = 0; c < lastCol; c++) row.push(forms[i][c] ? forms[i][c] : vals[i][c]);
-      existing[id] = row;
+      all.push(row);
+      if (id !== '-') existing[id] = row;
       var nm = String(vals[i][2]).trim();
       if (nm) { nameCount[nm] = (nameCount[nm] || 0) + 1; byName[nm] = row; }
     }
   }
 
-  var out = [], used = {};
+  var out = [], used = {}, taken = [];
   roster.forEach(function (st) {
     var row = existing[st.id];
     // 명단 방식을 바꿨거나 반이 바뀌어 id 가 달라져도, 이름이 한 명뿐이면 그 학생 자료를 따라 옮긴다
     var nm = String(st.name).trim();
     if (!row && nm && nameCount[nm] === 1 && !used[nm]) row = byName[nm];
-    if (row) used[nm] = true;
+    if (row) { used[nm] = true; taken.push(row); }
     row = row ? row.slice() : [];
     while (row.length < lastCol) row.push('');
     row[0] = st.cls; row[1] = st.no; row[2] = st.name; row[3] = st.grade;
     out.push(row);
+  });
+  // 명단에 없지만 학생 자료가 적힌 줄(직접 적은 줄, 명단에서 빠진 학생)은 지우지 않고 맨 아래에 남긴다
+  all.forEach(function (row) {
+    if (taken.indexOf(row) >= 0) return;
+    var hasData = row.slice(4).some(function (v) {
+      return v !== '' && v !== false && v !== null && !(typeof v === 'string' && v.charAt(0) === '=');
+    });
+    if (hasData) out.push(row);
   });
   sheet.getRange(head, 1).setValue(classHead_());
 
@@ -2567,6 +3309,311 @@ function applyRowFormat_(sheet, nRows) {
 
 
 /* ==========================================================================
+   45_Rules.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — [📏 기재요령] 시트 · 규칙판 업데이트
+ *
+ * 검사(금지어·형식·맞춤법)는 이 시트의 표를 읽는다. 표가 없으면 코드에 든 2026 규칙판을 쓴다.
+ * 새 학년도 규칙판은 RULES_URL(만든이의 GitHub)에서 받는다. 7일에 한 번 저절로 확인하고,
+ * 메뉴 ⑧ [기재요령 규칙 업데이트 확인]으로 바로 확인할 수도 있다.
+ * 업데이트는 "선생님이 손대지 않은 칸"만 바꾼다 — 고친 칸은 그대로 두고 무엇을 남겼는지 알린다.
+ */
+
+var RULES_HEAD = ['사용', '수준', '분류', '찾을 말(정규식)', '바르게(맞춤법)', '이유 · 근거', '출처'];
+var RULES_PROP_ID = 'RULES_ID';
+var RULES_PROP_AT = 'RULES_CHECKED_AT';
+var __rulesCache = null;
+
+/* ------------------------------------------------------------ 시트 */
+/** 설치·복구: 표가 없으면 규칙판으로 채우고, 있으면 머리말만 새로 */
+function buildRulesSheet() {
+  var s = shOrCreate_(APP.SH.RULES);
+  var n = RULES_HEAD.length;
+  var hasRows = s.getLastRow() >= APP.DATA_ROW;
+  if (!hasRows) {
+    s.clear();
+    writeRuleRows_(s, packRuleRows(RULES_2026));
+    try { PropertiesService.getDocumentProperties().setProperty(RULES_PROP_ID, RULES_2026.id); } catch (e) {}
+  }
+  rulesBanner_(s, currentPackInfo_());
+  s.getRange(APP.HEAD_ROW, 1, 1, n).setValues([RULES_HEAD]);
+  styleHeader_(s, APP.HEAD_ROW, n, '#5d4037');
+  s.setFrozenRows(APP.HEAD_ROW);
+  [56, 60, 120, 300, 120, 420, 120].forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
+  __rulesCache = null;
+  return s;
+}
+
+function rulesBanner_(s, info) {
+  var n = RULES_HEAD.length;
+  banner_(s, n, '📏 기재요령 규칙 — ' + info.year + '학년도 (규칙판 ' + info.id + ')',
+    '맞춤법·금지어 검사, 생성 직후 [검증], 자동 고쳐쓰기가 이 표를 씁니다. 찾을 말은 정규식입니다(| 는 "또는"). ' +
+    '[출처]가 "기재요령"·"맞춤법(기본)"인 줄은 새 학년도 규칙판이 나오면 저절로 바뀌고, [출처]에 "내 학교"라고 적어 더한 줄은 그대로 남습니다. ' +
+    '줄을 끄려면 [사용] 체크를 푸세요. 확인: ' + (info.checked || '-') + ' · 출처: ' + (info.source || ''));
+  ensureCols_(s, n);
+  unmergeRow_(s, 2);
+  s.getRange(2, 1, 1, n).merge().setValue('⚠️ ' + (info.aiNotice || AI_NOTICE_2026))
+    .setBackground('#fdecea').setFontColor('#7f1d1d').setFontSize(10).setWrap(true).setVerticalAlignment('middle');
+  s.setRowHeight(2, 46);
+}
+
+/** 표 쓰기 — 규칙판 줄 + (있으면) 선생님이 더한 줄 */
+function writeRuleRows_(s, rows) {
+  var n = RULES_HEAD.length;
+  var last = s.getLastRow();
+  if (last >= APP.DATA_ROW) s.getRange(APP.DATA_ROW, 1, last - APP.DATA_ROW + 1, n).clearContent().clearDataValidations();
+  ensureRows_(s, APP.DATA_ROW + rows.length + 20);
+  if (rows.length) s.getRange(APP.DATA_ROW, 1, rows.length, n).setValues(rows);
+  var body = rows.length + 20;
+  s.getRange(APP.DATA_ROW, 1, body, 1).insertCheckboxes();
+  s.getRange(APP.DATA_ROW, 2, body, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(['수정', '확인'], true).build());
+  s.getRange(APP.DATA_ROW, 1, body, n).setWrap(true).setVerticalAlignment('top').setFontSize(10);
+  s.getRange(APP.DATA_ROW, 4, body, 1).setBackground(APP.COLORS.input);
+  __rulesCache = null;
+}
+
+/** 지금 표의 줄 [[...7칸]] (빈 줄 제외) */
+function readRuleRows_(s) {
+  var last = s.getLastRow();
+  if (last < APP.DATA_ROW) return [];
+  return s.getRange(APP.DATA_ROW, 1, last - APP.DATA_ROW + 1, RULES_HEAD.length).getValues()
+    .filter(function (r) { return String(r[3]).trim() !== '' || String(r[2]).trim() !== ''; });
+}
+
+/** 검사에 쓸 규칙 전부 (실행 한 번 동안 기억) */
+function rulesAll_() {
+  if (__rulesCache) return __rulesCache;
+  var list = [];
+  try {
+    var s = sh_(APP.SH.RULES);
+    if (s) list = readRuleRows_(s).map(ruleFromRow).filter(function (r) { return r; });
+  } catch (e) { list = []; }
+  __rulesCache = list.length ? list : RULES_2026.rules;
+  return __rulesCache;
+}
+
+/** 모든 검증이 부르는 한 곳 — 금지어·형식·맞춤법(+띄어쓰기) */
+function inspect_(text, limitBytes) {
+  return validateResult(text, limitBytes, rulesAll_(), []);
+}
+
+/** 지금 반영된 규칙판 정보 */
+function currentPackInfo_() {
+  var id = '';
+  try { id = PropertiesService.getDocumentProperties().getProperty(RULES_PROP_ID) || ''; } catch (e) {}
+  var p = RULES_2026;
+  try {
+    var saved = PropertiesService.getDocumentProperties().getProperty('RULES_INFO');
+    if (saved) { var j = JSON.parse(saved); if (j && j.id) p = j; }
+  } catch (e) {}
+  return { id: id || p.id, year: p.year, checked: p.checked, source: p.source, aiNotice: p.aiNotice };
+}
+
+/** 메뉴: [📏 기재요령] 시트 열기 */
+function openRulesSheet() {
+  var s = sh_(APP.SH.RULES) || buildRulesSheet();
+  ss_().setActiveSheet(s);
+}
+
+/* ------------------------------------------------------- 처음 설치 · 옛 사본 */
+/**
+ * v3.5 이전 사본을 2026 규칙으로 올린다 (처음 설치 / 구조 복구에서 부른다).
+ *   · [📐 공통규칙] NEIS_RULES 가 예전 기본 문구 그대로면 2026 문구로
+ *   · [🧩 기록종류]에 [기재 주의] 칸이 없으면 만들고 2026 주의를 채운다
+ */
+function migrateRules_() {
+  var info = currentPackInfo_();
+  var pack = RULES_2026;
+  if (info.id !== RULES_2026.id) {
+    try { var saved = JSON.parse(PropertiesService.getDocumentProperties().getProperty('RULES_PACK') || 'null'); if (saved && saved.id) pack = saved; } catch (e) {}
+  }
+  return {
+    neis: syncNeisRules_(pack),
+    records: syncRecordRules_(pack),
+    chars: syncRecordChars_(pack)
+  };
+}
+
+/** NEIS_RULES 칸: 'same' | 'updated' | 'kept' */
+function syncNeisRules_(pack) {
+  var s = sh_(APP.SH.COMMON);
+  if (!s || !pack.neisRules) return 'same';
+  var v = s.getRange(1, 1, Math.max(s.getLastRow(), 1), 3).getValues();
+  for (var i = 0; i < v.length; i++) {
+    if (String(v[i][0]).trim() !== 'NEIS_RULES') continue;
+    var cur = normText(v[i][2]);
+    if (cur === normText(pack.neisRules)) return 'same';
+    if (!cur || knownOldTexts(pack, 'neisRules').indexOf(cur) >= 0) {
+      s.getRange(i + 1, 3).setValue(pack.neisRules);
+      return 'updated';
+    }
+    return 'kept';
+  }
+  return 'same';
+}
+
+/** [🧩 기록종류]의 [기재 주의] 칸 — 없으면 만들고, 손대지 않은 칸만 새 문구로. {updated:[], kept:[]} */
+function syncRecordRules_(pack) {
+  var out = { updated: [], kept: [] };
+  var s = sh_(APP.SH.RECORD);
+  if (!s || s.getLastRow() < 2) return out;
+  var c = colOf_(s, 2, '기재 주의');
+  if (!c) {
+    c = s.getLastColumn() + 1;
+    ensureCols_(s, c);
+    s.getRange(2, c).setValue('기재 주의');
+    styleHeader_(s, 2, c);
+    s.setColumnWidth(c, 380);
+    try { banner_(s, c, RECORD_BANNER_TITLE, RECORD_BANNER_NOTE); } catch (e) {}
+  }
+  var last = s.getLastRow();
+  if (last < 3) return out;
+  var keys = s.getRange(3, 1, last - 2, 1).getValues();
+  var cells = s.getRange(3, c, last - 2, 1).getValues();
+  for (var i = 0; i < keys.length; i++) {
+    var k = String(keys[i][0]).trim();
+    if (!k || !pack.byRecord || pack.byRecord[k] === undefined) continue;
+    var cur = normText(cells[i][0]), want = normText(pack.byRecord[k]);
+    if (cur === want) continue;
+    if (!cur || knownOldTexts(pack, 'byRecord', k).indexOf(cur) >= 0) {
+      s.getRange(3 + i, c).setValue(pack.byRecord[k]).setWrap(true).setVerticalAlignment('top');
+      out.updated.push(k);
+    } else out.kept.push(k);
+  }
+  return out;
+}
+
+/** [🧩 기록종류]의 글자수 — 예전 기본값 그대로인 칸만 새 학년도 값으로. {updated:['진로 700→500'], kept:[]} */
+function syncRecordChars_(pack) {
+  var out = { updated: [], kept: [] };
+  var s = sh_(APP.SH.RECORD);
+  if (!s || s.getLastRow() < 3 || !pack.chars) return out;
+  var cK = 1, cC = colOf_(s, 2, '글자수');
+  if (!cC) return out;
+  var last = s.getLastRow();
+  var keys = s.getRange(3, cK, last - 2, 1).getValues();
+  var vals = s.getRange(3, cC, last - 2, 1).getValues();
+  for (var i = 0; i < keys.length; i++) {
+    var k = String(keys[i][0]).trim(), want = pack.chars[k];
+    if (!k || !want) continue;
+    var cur = Number(vals[i][0]) || 0;
+    if (cur === want) continue;
+    var known = [RULES_2026.chars[k]];
+    PRESET_RECORD_TYPES.forEach(function (r) { if (r.key === k) known.push(r.chars); });
+    (pack.history || []).forEach(function (h) { if (h && h.chars && h.chars[k]) known.push(Number(h.chars[k])); });
+    if (known.indexOf(cur) >= 0) { s.getRange(3 + i, cC).setValue(want); out.updated.push(k + ' ' + cur + '→' + want + '자'); }
+    else out.kept.push(k + ' ' + cur + '자(새 기준 ' + want + '자)');
+  }
+  return out;
+}
+
+/* ------------------------------------------------------- 원격 규칙판 */
+function fetchRulePack_() {
+  try {
+    var res = UrlFetchApp.fetch(RULES_URL, { muteHttpExceptions: true, followRedirects: true });
+    var code = res.getResponseCode();
+    if (code === 404) return { ok: false, error: '업데이트 서버에 아직 규칙판이 없습니다' };
+    if (code < 200 || code >= 300) return { ok: false, error: '업데이트 서버 응답 ' + code };
+    var v = validatePack(res.getContentText());
+    if (!v.ok) return { ok: false, error: '규칙판이 올바르지 않습니다: ' + v.errors.join(', ') };
+    return { ok: true, pack: v.pack, warnings: v.errors };
+  } catch (e) {
+    return { ok: false, error: '업데이트 서버에 연결하지 못했습니다(' + String(e.message || e).slice(0, 80) + ')' };
+  }
+}
+
+/**
+ * 규칙판 반영 — 표의 기본 줄은 바꾸고 '내 학교' 줄은 남긴다. 손대지 않은 칸만 바꾼다.
+ * @return {{id, rules:number, mine:number, neis:string, records:Object, chars:Object}}
+ */
+function applyRulePack_(pack) {
+  var s = sh_(APP.SH.RULES) || buildRulesSheet();
+  var mine = readRuleRows_(s).filter(function (r) { return !isPackRow(r[6]); });
+  var rows = packRuleRows(pack).concat(mine);
+  writeRuleRows_(s, rows);
+  var dp = PropertiesService.getDocumentProperties();
+  dp.setProperty(RULES_PROP_ID, pack.id);
+  dp.setProperty('RULES_INFO', JSON.stringify({ id: pack.id, year: pack.year, checked: pack.checked, source: pack.source, aiNotice: pack.aiNotice }));
+  try { dp.setProperty('RULES_PACK', JSON.stringify({ id: pack.id, neisRules: pack.neisRules, byRecord: pack.byRecord, chars: pack.chars, history: pack.history || [] })); } catch (e) {}
+  rulesBanner_(s, currentPackInfo_());
+  var rep = { id: pack.id, rules: rows.length - mine.length, mine: mine.length,
+              neis: syncNeisRules_(pack), records: syncRecordRules_(pack), chars: syncRecordChars_(pack) };
+  __rulesCache = null;
+  return rep;
+}
+
+function packReportText_(rep) {
+  var L = ['규칙판 ' + rep.id + ' 을(를) 반영했습니다.', '',
+           '· 검사 규칙 ' + rep.rules + '줄' + (rep.mine ? ' (선생님이 더한 줄 ' + rep.mine + '개는 그대로)' : '')];
+  L.push('· 기재 금지사항(공통규칙): ' + ({ updated: '새 문구로 바꿈', kept: '직접 고친 내용이 있어 그대로 둠 — [📏 기재요령] 2행과 비교해 보세요', same: '이미 같음' }[rep.neis] || rep.neis));
+  if (rep.records.updated.length) L.push('· 기재 주의 바꿈: ' + rep.records.updated.join(', '));
+  if (rep.records.kept.length) L.push('· 기재 주의 직접 고친 것 그대로: ' + rep.records.kept.join(', '));
+  if (rep.chars.updated.length) L.push('· 글자수 바꿈: ' + rep.chars.updated.join(', '));
+  if (rep.chars.kept.length) L.push('· 글자수 직접 바꾼 것 그대로: ' + rep.chars.kept.join(', ') + ' — 확인해 주세요');
+  return L.join('\n');
+}
+
+/** 메뉴: 기재요령 규칙 업데이트 확인 */
+function checkRulesUpdate() {
+  var info = currentPackInfo_();
+  var r = fetchRulePack_();
+  try { PropertiesService.getDocumentProperties().setProperty(RULES_PROP_AT, String(Date.now())); } catch (e) {}
+  if (!r.ok) {
+    ui_().alert(APP.MENU, r.error + '\n\n지금 규칙판(' + info.id + ', ' + info.year + '학년도)을 그대로 씁니다.', ui_().ButtonSet.OK);
+    return;
+  }
+  if (!packNewer(r.pack.id, info.id)) {
+    ui_().alert(APP.MENU, '최신 규칙판을 쓰고 있습니다.\n\n규칙판 ' + info.id + ' · ' + info.year + '학년도 · 확인 ' + (info.checked || '-') +
+      '\n\n7일마다 저절로 확인합니다.', ui_().ButtonSet.OK);
+    return;
+  }
+  var go = ui_().alert(APP.MENU, '새 규칙판이 있습니다: ' + r.pack.id + ' (' + r.pack.year + '학년도, ' + r.pack.checked + ')\n' + r.pack.source +
+    '\n\n지금 반영할까요? 선생님이 직접 고친 칸과 "내 학교" 규칙은 그대로 둡니다.', ui_().ButtonSet.YES_NO);
+  if (go !== ui_().Button.YES) return;
+  ui_().alert(APP.MENU, packReportText_(applyRulePack_(r.pack)), ui_().ButtonSet.OK);
+}
+
+/**
+ * 7일에 한 번 저절로 확인 (생성·검사·시작하기에서 부른다). 실패해도 조용히 넘어간다.
+ * 새 판이면 손대지 않은 칸만 바꾸고 알림을 띄운다.
+ */
+function autoRulesCheck_() {
+  try {
+    var dp = PropertiesService.getDocumentProperties();
+    var at = Number(dp.getProperty(RULES_PROP_AT) || 0);
+    if (Date.now() - at < RULES_CHECK_DAYS * 86400000) return null;
+    dp.setProperty(RULES_PROP_AT, String(Date.now()));
+    var r = fetchRulePack_();
+    if (!r.ok || !packNewer(r.pack.id, currentPackInfo_().id)) return null;
+    var rep = applyRulePack_(r.pack);
+    toast_('기재요령 규칙판이 ' + rep.id + '(으)로 바뀌었습니다. [📏 기재요령] 시트를 확인하세요.', APP.MENU);
+    return rep;
+  } catch (e) { return null; }
+}
+
+/* ------------------------------------------------------- 셀 함수 */
+/**
+ * 시트 어디서나: =SAETEUK_CHECK(A2) 또는 =SAETEUK_CHECK(A2, 300)
+ * 바이트 · 기재 금지 · 형식 · 맞춤법을 한 칸에 요약한다. AI 를 부르지 않는다.
+ * @param {string} text  검사할 글
+ * @param {number} chars 최대 글자 수(비우면 500)
+ * @customfunction
+ */
+function SAETEUK_CHECK(text, chars) {
+  var one = function (t) {
+    t = String(t === null || t === undefined ? '' : t).trim();
+    if (!t) return '';
+    return formatIssues(inspect_(t, (Number(chars) || 500) * 3));
+  };
+  if (Array.isArray(text)) return text.map(function (r) { return r.map(one); });
+  return one(text);
+}
+
+
+/* ==========================================================================
    50_Activity.gs
    ========================================================================== */
 
@@ -2591,7 +3638,9 @@ var RESERVED_NAMES = ['반', '번호', '이름', '성취수준', '생성', '모�
 
 /**
  * 활동 생성 (마법사·직접추가 공용)
- * def = {key, name, recordKey, subjectKey, chars, columns, desc, examples:[{values:[],result:''}]}
+ * def = {key, name, recordKey, subjectKey, chars, columns, desc, examples:[{values:[],result:''}],
+ *        mode?:'자동'|'바로쓰기', noExamples?:boolean}
+ *   바로쓰기: 입력 항목을 정하지 않고 [관찰 메모] 한 칸에 자유롭게 적는 시트 (예시 시트 없이)
  */
 function createActivity_(def) {
   var key = safeKey_(def.key || def.name);
@@ -2612,26 +3661,28 @@ function createActivity_(def) {
   var rec = findByKey(recs, def.recordKey) || recs[0];
   var chars = Number(def.chars || 0) || rec.chars;
 
-  var inSheet = buildActivityInputSheet_(key, name, cols, rec);
-  var exSheet = buildActivityExampleSheet_(key, name, cols, def.examples || []);
+  var mode = def.mode === '바로쓰기' ? '바로쓰기' : '자동';
+  var inSheet = buildActivityInputSheet_(key, name, cols, rec, mode);
+  var exSheet = def.noExamples ? null : buildActivityExampleSheet_(key, name, cols, def.examples || []);
 
   var s = shRequire_(APP.SH.ACTIVITY);
   var row = [key, name, rec.key, def.subjectKey || cfg_('기본 교과영역', '공통'),
-             chars, cols.join('|'), def.desc || '', '자동', '',
-             inSheet.getName(), exSheet.getName()];
+             chars, cols.join('|'), def.desc || '', mode, '',
+             inSheet.getName(), exSheet ? exSheet.getName() : ''];
   s.appendRow(row);
   refreshActivityValidation_();
 
   try { syncRosterInto_(inSheet, getRoster_()); } catch (e) {}
-  return { key: key, inSheet: inSheet.getName(), exSheet: exSheet.getName() };
+  return { key: key, inSheet: inSheet.getName(), exSheet: exSheet ? exSheet.getName() : '' };
 }
 
-function buildActivityInputSheet_(key, name, cols, rec) {
-  return layoutInputSheet_(ss_().insertSheet(sheetNameIn_(key)), name, cols, rec);
+function buildActivityInputSheet_(key, name, cols, rec, mode) {
+  return layoutInputSheet_(ss_().insertSheet(sheetNameIn_(key)), name, cols, rec, mode);
 }
 
 /** 입력 시트의 머리말·헤더·폭·서식 (활동 만들 때와 입력 항목 바꿀 때 함께 씀) */
-function layoutInputSheet_(s, name, cols, rec) {
+function layoutInputSheet_(s, name, cols, rec, mode) {
+  var quick = mode === '바로쓰기';
   var head = ['반', '번호', '이름', '성취수준']
     .concat(cols)
     .concat(['생성', '모델', 'AI 결과', '최종본', '바이트', '검증']);
@@ -2639,9 +3690,12 @@ function layoutInputSheet_(s, name, cols, rec) {
   var n = head.length;
 
   splitBanner_(s, 3, n,
-    '▶ ' + name + '\n' + rec.name + ' · ' + rec.chars + '자',
-    '① 노란 칸에 학생 자료 입력  →  ② [모델] 선택  →  ③ [생성] 체크 또는 메뉴 ⑥ 체크된 행 생성  →  ' +
-    '④ AI 결과를 확인하고 [최종본] 칸에 붙여넣어 다듬기  →  ⑤ 체크 해제(재호출·비용 방지)');
+    (quick ? '✍️ ' : '▶ ') + name + '\n' + rec.name + ' · ' + rec.chars + '자',
+    quick
+      ? '바로 쓰기 — 입력 항목을 정하지 않고 [관찰 메모]에 자유롭게 적습니다.  AI 초안: [생성] 체크 → 메뉴 ⑥ (키가 없으면 복사·붙여넣기 창)  ·  ' +
+        '직접 쓰기: [최종본]에 바로 쓰면 [검증]이 즉시 금지어·맞춤법을 검사합니다.  학생 줄은 명단에서 채워지고, 명단이 없으면 반·번호·이름을 직접 적어도 됩니다.'
+      : '① 노란 칸에 학생 자료 입력  →  ② [모델] 선택  →  ③ [생성] 체크 또는 메뉴 ⑥ 체크된 행 생성  →  ' +
+        '④ AI 결과를 확인하고 [최종본] 칸에 붙여넣어 다듬기(고치면 [검증]이 바로 다시 검사)  →  ⑤ 체크 해제(재호출·비용 방지)');
   s.getRange(2, 1).setValue('').setFontSize(8);
   s.setRowHeight(2, 8);
 
@@ -2652,7 +3706,7 @@ function layoutInputSheet_(s, name, cols, rec) {
 
   // 폭
   s.setColumnWidth(1, 55); s.setColumnWidth(2, 55); s.setColumnWidth(3, 90); s.setColumnWidth(4, 80);
-  for (var i = 0; i < cols.length; i++) s.setColumnWidth(5 + i, 230);
+  for (var i = 0; i < cols.length; i++) s.setColumnWidth(5 + i, quick ? 420 : 230);
   var base = 4 + cols.length;
   s.setColumnWidth(base + 1, 60);   // 생성
   s.setColumnWidth(base + 2, 150);  // 모델
@@ -2714,7 +3768,7 @@ function updateActivity_(key, p) {
     rows = out.length;
 
     inS.clear();
-    layoutInputSheet_(inS, name, cols, rec);
+    layoutInputSheet_(inS, name, cols, rec, act.mode);
     if (out.length) {
       var n = 4 + cols.length + 6;
       ensureRows_(inS, first + out.length - 1);
@@ -3037,7 +4091,7 @@ function validateExamples() {
 
   var bad = 0, warn = 0;
   rows.forEach(function (e) {
-    var v = validateResult(e.result, limit, PRESET_BANNED, PRESET_FORMAT_RULES);
+    var v = inspect_(e.result, limit);
     s.getRange(e.row, cValid).setValue(formatIssues(v));
     if (!v.ok) bad++;
     else if (v.issues.length) warn++;
@@ -3131,7 +4185,7 @@ function validateExamplesQuiet_(act) {
   if (!cValid) return;
   var limit = charsFor_(act) * 3;
   readExampleRows_(act).forEach(function (e) {
-    s.getRange(e.row, cValid).setValue(formatIssues(validateResult(e.result, limit, PRESET_BANNED, PRESET_FORMAT_RULES)));
+    s.getRange(e.row, cValid).setValue(formatIssues(inspect_(e.result, limit)));
   });
 }
 
@@ -3425,6 +4479,11 @@ function wizardCreate(def) {
  */
 
 var SUBSCRIPTION_MODEL = 'Gemini(구독)';
+/**
+ * 키 없이 쓰기 — 시트가 프롬프트를 만들어 주면 선생님이 Gemini 앱(학교 계정)·ChatGPT·Claude 대화창에
+ * 붙여 넣고, 받은 답을 다시 창에 붙여 넣는다. 키·비용·구독이 필요 없어 모든 계정에서 늘 고를 수 있다.
+ */
+var MANUAL_MODEL = '키 없이(복사·붙여넣기)';
 var PROVIDERS = ['gemini', 'openai', 'anthropic'];
 // [⚙️ 설정]의 항목|값|설명 열 폭에 맞춰 순서를 정했다 (C열이 넓은 설명 칸)
 var MODEL_HEAD = ['모델명', '수준', '언제 쓰나', '회사', '연결 확인'];
@@ -3534,7 +4593,9 @@ function modelChoices_() {
   readModelTable_().forEach(function (r) { add(r.model); });
   add(cfg_('활동용 모델', DEFAULT_MODEL));
   add(cfg_('합본용 모델', DEFAULT_MODEL));
-  return usableModels(out, keyStatus_(), providerOf_);
+  var list = usableModels(out.filter(function (m) { return m !== MANUAL_MODEL; }), keyStatus_(), providerOf_);
+  list.push(MANUAL_MODEL);          // 키가 없어도 늘 쓸 수 있는 길 — 맨 끝에
+  return list;
 }
 
 /** 모델 칸의 드롭다운. 쓸 수 있는 모델이 하나도 없으면 null (드롭다운을 걷어 낸다) */
@@ -3544,7 +4605,7 @@ function modelValidation_() {
   return SpreadsheetApp.newDataValidation()
     .requireValueInList(list, true)
     .setAllowInvalid(true)          // 목록에 없는 이름도 직접 적을 수 있게
-    .setHelpText('API 키를 넣은 회사의 모델(구독을 켰으면 Gemini(구독)도)만 목록에 나옵니다. 메뉴 ② [AI 연결 · 모델 설정]에서 키를 넣거나 구독을 켜세요.')
+    .setHelpText('API 키를 넣은 회사의 모델(구독을 켰으면 Gemini(구독)도)과 [키 없이(복사·붙여넣기)]만 나옵니다. 메뉴 ② [AI 연결 · 모델 설정]에서 키를 넣거나 구독을 켜세요.')
     .build();
 }
 
@@ -3593,6 +4654,7 @@ function applyConfigModelDropdown_() {
 function providerOf_(model) {
   var m = normModel(model);
   if (!m || m === SUBSCRIPTION_MODEL) return 'subscription';
+  if (m === MANUAL_MODEL) return 'manual';
   return companyMap_()[m] || guessProvider(m);
 }
 
@@ -3608,8 +4670,27 @@ function keyStatus_() {
   var has = {};
   PROVIDERS.forEach(function (p) { has[p] = !!getKey_(p); });
   has.subscription = subOn_();
+  has.manual = true;
   return has;
 }
+
+/**
+ * 지금 이 시트를 쓰는 구글 계정 — 학교(기관) 계정인지 개인 계정인지.
+ * 학교 계정은 Gemini 앱(gemini.google.com)을 무료로 쓰고 입력 내용이 학습에 쓰이지 않는다(관리자가 켜 두었을 때).
+ * @return {{email:string, domain:string, kind:'school'|'personal'|''}}
+ */
+function accountInfo_() {
+  var email = '';
+  try { email = Session.getActiveUser().getEmail() || ''; } catch (e) {}
+  var domain = email.indexOf('@') > 0 ? email.split('@')[1].toLowerCase() : '';
+  var kind = !domain ? '' : (/^(gmail|googlemail)\.com$/.test(domain) ? 'personal' : 'school');
+  return { email: email, domain: domain, kind: kind };
+}
+
+/** 시작하기 2단계를 [키 없이]로 마쳤는지 (내 계정에 둔다) */
+var MANUAL_PROP = 'MANUAL_OK';
+function manualOn_() { try { return props_().getProperty(MANUAL_PROP) === '1'; } catch (e) { return false; } }
+function setManual_(on) { props_().setProperty(MANUAL_PROP, on ? '1' : '0'); }
 /** 이 모델을 지금 쓸 수 있는지(그 회사 키가 있는지, 구독이면 구독을 켰는지) */
 function modelUsable_(model) { return providerUsable(providerOf_(model), keyStatus_()); }
 
@@ -3641,6 +4722,36 @@ function saveSubscription(on) {
            message: on ? 'Gemini 구독을 켰습니다. 모델 목록에 Gemini(구독)이 나옵니다.' : 'Gemini 구독을 껐습니다.' };
 }
 
+/** 설정 창: 구독이 있는지 시험 셀(=AI("안녕"))을 만들어 데려간다 */
+function subProbeCreate() {
+  var s = sh_(APP.SH.START) || buildStart();
+  var r = s.getLastRow() + 2;
+  if (r + 1 > s.getMaxRows()) s.insertRowsAfter(s.getMaxRows(), r + 1 - s.getMaxRows());
+  s.getRange(r, 1).setValue('🧪 구독 확인 — 바로 아래 셀을 누르면 뜨는 [생성 및 삽입]을 누르세요. 답이 들어오면 설정 창에서 [결과 확인]. 확인 뒤 두 줄은 지워도 됩니다.')
+    .setFontWeight('bold').setBackground(APP.COLORS.input);
+  var cell = s.getRange(r + 1, 1);
+  cell.setFormula('=AI("한 단어로만 답하세요: 안녕")');
+  ss_().setActiveSheet(s);
+  cell.activate();
+  return { a1: cell.getA1Notation() };
+}
+
+/** 시험 셀을 읽어 답이 있으면 구독을 켠다 */
+function subProbeRead(p) {
+  var s = sh_(APP.SH.START);
+  var v = s && p && p.a1 ? String(s.getRange(p.a1).getDisplayValue() || '').trim() : '';
+  if (!v || /^(loading|로드 중)/i.test(v)) {
+    return { ok: false, message: '아직 답이 없습니다. 시험 셀을 누르고 [생성 및 삽입]을 누른 뒤 다시 확인하세요.' };
+  }
+  if (/^#/.test(v)) {
+    return { ok: false, message: '셀에 ' + v.slice(0, 20) + ' 이(가) 보입니다 — 지금 계정(' + (accountInfo_().email || '?') +
+      ')에서는 =AI 함수를 쓸 수 없습니다. [키 없이(복사·붙여넣기)]나 API 키를 쓰세요.' };
+  }
+  setSub_(true);
+  try { refreshModelDropdowns_(); } catch (e) {}
+  return { ok: true, has: keyStatus_(), message: '✓ 이 계정은 Gemini 구독(=AI)을 쓸 수 있습니다. 구독을 켰습니다. 답: ' + v.slice(0, 30) };
+}
+
 /* -------------------------------------------------------------- 설정 창 */
 function openApiDialog() {
   var html = HtmlService.createHtmlOutputFromFile('UI_ApiKey').setWidth(760).setHeight(640);
@@ -3662,7 +4773,9 @@ function getAiSettings() {
     presets: presetModelRows_(),
     links: MODEL_LINKS,
     defaults: PROVIDER_DEFAULT_MODEL,
-    fallback: DEFAULT_MODEL
+    fallback: DEFAULT_MODEL,
+    manual: MANUAL_MODEL,
+    account: accountInfo_()
   };
 }
 
@@ -3693,7 +4806,7 @@ function saveModelSettings(p) {
   var seen = {}, rows = [];
   (p.rows || []).forEach(function (r) {
     var m = normModel(r.model);
-    if (!m || m === SUBSCRIPTION_MODEL || seen[m]) return;
+    if (!m || m === SUBSCRIPTION_MODEL || m === MANUAL_MODEL || seen[m]) return;
     seen[m] = true;
     rows.push({ model: m, company: r.company || '자동', level: r.level || '', memo: r.memo || '', status: r.status || '' });
   });
@@ -3728,7 +4841,8 @@ function onEdit(e) {
   try {
     if (!e || !e.range) return;
     var s = e.range.getSheet();
-    if (s.getName() !== APP.SH.CONFIG) return;
+    if (s.getName() === APP.SH.RULES) { markBadRegex_(e); return; }
+    if (s.getName() !== APP.SH.CONFIG) { recheckOnEdit_(e); return; }
     var head = modelTableRow_(s);
     var r1 = e.range.getRow(), nr = e.range.getNumRows();
     if (!head || r1 + nr - 1 <= head) return;
@@ -3743,6 +4857,21 @@ function onEdit(e) {
 }
 var UNCHECKED_MARK = '⏳ 확인 전';
 
+/** [📏 기재요령]에서 찾을 말(정규식)을 고치면 깨진 식은 붉게 표시한다 */
+function markBadRegex_(e) {
+  var s = e.range.getSheet();
+  var r1 = Math.max(e.range.getRow(), APP.DATA_ROW), r2 = e.range.getRow() + e.range.getNumRows() - 1;
+  var c1 = e.range.getColumn(), c2 = c1 + e.range.getNumColumns() - 1;
+  if (c1 > 4 || c2 < 4) return;
+  for (var r = r1; r <= r2; r++) {
+    var cell = s.getRange(r, 4), re = String(cell.getValue() || '');
+    var bad = false;
+    try { if (re) new RegExp(re); } catch (err) { bad = true; }
+    cell.setBackground(bad ? APP.COLORS.warn : APP.COLORS.input);
+    if (bad) s.getRange(r, 6).setValue('⚠ 정규식 오류 — 이 줄은 검사에 쓰이지 않습니다. 괄호·| 를 확인하세요.');
+  }
+}
+
 /* ------------------------------------------------------------ 연결 확인 */
 /**
  * 모델 하나 시험 호출 (설정 창에서 한 줄씩 부른다)
@@ -3755,6 +4884,10 @@ function testModel(p) {
   if (m === SUBSCRIPTION_MODEL) {
     return { ok: null, model: m, provider: 'subscription',
       message: '스크립트로는 시험할 수 없습니다. 빈 셀에 =AI("안녕")을 넣어 답이 나오면 사용 가능합니다.' };
+  }
+  if (m === MANUAL_MODEL) {
+    return { ok: null, model: m, provider: 'manual',
+      message: '키가 필요 없습니다. 생성할 때 복사·붙여넣기 창이 열립니다.' };
   }
   var prov = companyToProvider(p.company) || providerOf_(m);
   if (!prov || prov === 'subscription') {
@@ -3784,7 +4917,7 @@ function stamp_() {
 function recordModelStatus_(res, extra) {
   var s = sh_(APP.SH.CONFIG);
   var head = modelTableRow_(s);
-  if (!head || !res || !res.model) return;
+  if (!head || !res || !res.model || res.model === MANUAL_MODEL || res.model === SUBSCRIPTION_MODEL) return;
   var rows = readModelRowsAt_(s, head);
   var text = modelStatusText(res, stamp_());
   for (var i = 0; i < rows.length; i++) {
@@ -3803,7 +4936,7 @@ function testAllModels() {
   var list = readModelTable_().slice();
   var cur = [normModel(cfg_('활동용 모델', DEFAULT_MODEL)), normModel(cfg_('합본용 모델', DEFAULT_MODEL))];
   cur.forEach(function (m) {
-    if (m && m !== SUBSCRIPTION_MODEL && !list.some(function (r) { return r.model === m; })) list.push({ model: m, company: '자동' });
+    if (m && m !== SUBSCRIPTION_MODEL && m !== MANUAL_MODEL && !list.some(function (r) { return r.model === m; })) list.push({ model: m, company: '자동' });
   });
   var lines = [], okN = 0, badN = 0, noKey = {};
   for (var i = 0; i < list.length; i++) {
@@ -3886,6 +5019,7 @@ function callAI_(system, user, model, provider, opts) {
   var m = normModel(model);
   var p = provider || providerOf_(m);
   if (p === 'subscription') throw new Error(SUBSCRIPTION_MODEL + ' 은(는) 셀 수식으로 동작합니다. 메뉴 ⑥ 대신 체크박스를 사용하세요.');
+  if (p === 'manual') throw new Error(MANUAL_MODEL + ' 은(는) 스크립트가 부르지 않습니다. 메뉴 ⑥ 을 누르면 복사·붙여넣기 창이 열립니다.');
   if (!p) {
     throw new Error('"' + m + '" 이(가) 어느 회사 모델인지 알 수 없습니다. [⚙️ 설정] 아래 모델 목록의 [회사] 칸을 골라 주세요.');
   }
@@ -3908,7 +5042,7 @@ function callWithBackup_(system, user, model, opts) {
     return { text: callAI_(system, user, model, null, opts), model: normModel(model), backup: false };
   } catch (e) {
     var bk = normModel(cfg_('예비 모델', ''));
-    if (!bk || bk === normModel(model) || bk === SUBSCRIPTION_MODEL) throw e;
+    if (!bk || bk === normModel(model) || bk === SUBSCRIPTION_MODEL || bk === MANUAL_MODEL) throw e;
     var bp = providerOf_(bk);
     if (!bp || !getKey_(bp)) throw e;
     var t = callAI_(system, user, bk, null, opts);
@@ -4087,6 +5221,13 @@ function cleanResult_(t) {
 
 /**
  * 세특 작성 도우미 v3 — 생성 실행
+ *
+ * 한 학생의 흐름 (하네스):
+ *   ① 규칙 조립(기록종류·교과·공통규칙·기재 주의 — 그 활동에 필요한 것만)
+ *   ② 생성 → ③ 자동 검사([📏 기재요령] 표 + 맞춤법)
+ *   ④ [수정]이 나오면 걸린 점만 짚어 한 번 더 고쳐 쓰게 한다(자동 고쳐쓰기)
+ *   ⑤ (켜 두었으면) 학생 자료에 없는 내용이 들어갔는지 근거 확인
+ * 키가 없거나 모델이 [키 없이(복사·붙여넣기)] 인 줄은 ②~⑤ 대신 복사·붙여넣기 창으로 넘긴다.
  */
 
 /** 한 번 실행에서 AI 호출에 쓸 시간 (Apps Script 한도 6분보다 여유 있게) */
@@ -4109,6 +5250,7 @@ function generateChecked() {
   }
   var rows = checkedRows_(sheet);
   if (!rows.length) { toast_('[생성] 체크된 행이 없습니다.'); return; }
+  autoRulesCheck_();
   runGeneration_(act, sheet, rows);
 }
 
@@ -4116,14 +5258,35 @@ function generateSelection() {
   var sheet = ss_().getActiveSheet();
   var act = activityOfSheet_(sheet.getName());
   if (!act) { ui_().alert(APP.MENU, '활동 입력 시트에서 실행하세요.', ui_().ButtonSet.OK); return; }
+  var rows = selectedRows_(sheet);
+  if (!rows.length) { toast_('데이터 행을 선택하세요.'); return; }
+  runGeneration_(act, sheet, rows);
+}
+
+/** 메뉴 ⑥: 모델과 상관없이 체크된 행을 복사·붙여넣기로 */
+function openManualForChecked() {
+  var sheet = ss_().getActiveSheet();
+  var act = activityOfSheet_(sheet.getName());
+  if (!act) {
+    if (recordKeyOfCompile_(sheet.getName())) { compileChecked({ manual: true }); return; }
+    ui_().alert(APP.MENU, '활동 입력 시트(○○ ▸입력)나 최종취합 시트에서 실행하세요.', ui_().ButtonSet.OK);
+    return;
+  }
+  var rows = checkedRows_(sheet);
+  if (!rows.length) rows = selectedRows_(sheet);
+  if (!rows.length) { toast_('[생성]을 체크하거나 행을 선택하세요.'); return; }
+  runGeneration_(act, sheet, rows, { manual: true });
+}
+
+function selectedRows_(sheet) {
   var r = sheet.getActiveRange();
   var rows = [];
+  if (!r) return rows;
   for (var i = 0; i < r.getNumRows(); i++) {
     var row = r.getRow() + i;
     if (row >= APP.DATA_ROW) rows.push(row);
   }
-  if (!rows.length) { toast_('데이터 행을 선택하세요.'); return; }
-  runGeneration_(act, sheet, rows);
+  return rows;
 }
 
 function checkedRows_(sheet) {
@@ -4137,13 +5300,30 @@ function checkedRows_(sheet) {
   return rows;
 }
 
-/** 실제 생성 루프 */
-function runGeneration_(act, sheet, rows) {
+/** 이 학생 줄의 AI 자료(이름은 마스킹 설정을 따름). 자료가 비었으면 null */
+function studentJob_(sheet, row, cols, rec, masked) {
+  var vals = sheet.getRange(row, 5, 1, cols.length).getValues()[0];
+  var filled = vals.some(function (v) { return String(v).trim() !== ''; });
+  if (!filled) return null;
+  var grade = sheet.getRange(row, 4).getValue();
+  var user = buildStudentBlock(cols, vals, { grade: (rec && rec.useGrade) ? grade : '' });
+  if (!masked) user = '학생 이름: ' + sheet.getRange(row, 3).getValue() + '\n' + user;
+  var who = sheet.getRange(row, 1, 1, 3).getValues()[0];
+  return { row: row, user: user, label: String(who[0]) + '반 ' + String(who[1]) + '번 ' + String(who[2]) };
+}
+
+/**
+ * 실제 생성 루프
+ * @param {{manual?:boolean}=} opt  manual: 모든 줄을 복사·붙여넣기로
+ */
+function runGeneration_(act, sheet, rows, opt) {
+  opt = opt || {};
   var lock = LockService.getDocumentLock();
   if (!lock.tryLock(5000)) { toast_('다른 생성 작업이 실행 중입니다.'); return; }
+  var manualJobs = [], manualNote = '';
   try {
     var maxN = Number(cfg_('1회 최대 생성 건수', 25));
-    if (rows.length > maxN) {
+    if (rows.length > maxN && !opt.manual) {
       ui_().alert(APP.MENU, '한 번에 ' + maxN + '건까지 처리합니다. 앞에서부터 ' + maxN + '건만 진행합니다.\n' +
         '(설정 시트에서 늘릴 수 있지만, 실행 시간 제한으로 실패할 수 있습니다.)', ui_().ButtonSet.OK);
       rows = rows.slice(0, maxN);
@@ -4159,33 +5339,45 @@ function runGeneration_(act, sheet, rows) {
     var system = promptFor_(act);
     var defModel = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
     var autoValidate = cfgBool_('결과 자동검증', true);
+    var autoRepair = cfgBool_('자동 고쳐쓰기', true);
+    var autoGround = cfgBool_('근거 자동 확인', false);
     var batchN = Math.max(1, Math.min(10, Number(cfg_('한 번에 묶을 학생 수', 5)) || 1));
     var rec = findByKey(getRecordTypes_(), act.recordKey);
     var masked = maskName_();
+    var has = keyStatus_();
+    var anyApi = has.gemini || has.openai || has.anthropic;
     usageReset_();
 
-    var okN = 0, skipN = 0, errN = 0, subN = 0, leftN = 0, backupN = 0;
+    var okN = 0, skipN = 0, errN = 0, subN = 0, leftN = 0, backupN = 0, fixN = 0;
     var t0 = Date.now();
 
     // 1) 행마다 학생 자료와 모델을 먼저 모은다
     var jobs = [];
     rows.forEach(function (row) {
-      var vals = sheet.getRange(row, 5, 1, cols.length).getValues()[0];
-      var filled = vals.some(function (v) { return String(v).trim() !== ''; });
-      if (!filled) { skipN++; if (cGen) sheet.getRange(row, cGen).setValue(false); return; }
-      var grade = sheet.getRange(row, 4).getValue();
-      var user = buildStudentBlock(cols, vals, { grade: (rec && rec.useGrade) ? grade : '' });
-      if (!masked) user = '학생 이름: ' + sheet.getRange(row, 3).getValue() + '\n' + user;
+      var job = studentJob_(sheet, row, cols, rec, masked);
+      if (!job) { skipN++; if (cGen) sheet.getRange(row, cGen).setValue(false); return; }
       var model = cModel ? normModel(sheet.getRange(row, cModel).getValue()) : '';
-      jobs.push({ row: row, user: user, model: model || defModel });
+      job.model = model || defModel;
+      var prov = providerOf_(job.model);
+      // 키 없이 쓰기: 고른 모델이 복사·붙여넣기이거나, API 키가 하나도 없는데 키가 필요한 모델이면
+      if (opt.manual || prov === 'manual' || (!anyApi && prov !== 'subscription' && !providerUsable(prov, has))) {
+        if (!opt.manual && prov !== 'manual') {
+          manualNote = 'API 키가 없어 [키 없이 — 복사·붙여넣기]로 진행합니다. 키를 넣으면 메뉴 ⑥ 한 번으로 자동 생성됩니다.';
+        }
+        manualJobs.push(job);
+        return;
+      }
+      jobs.push(job);
     });
 
-    var write = function (job, res) {
+    var finish = function (job, res, repaired) {
       var txt = cleanResult_(res.text);
       sheet.getRange(job.row, cAi).setValue(txt);
       if (autoValidate && cValid) {
-        var v = formatIssues(validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES));
+        var v = formatIssues(inspect_(txt, limit));
+        if (repaired) v += '\n(자동 고쳐쓰기 1회)';
         if (res.backup) v += '\n(예비 모델 ' + res.model + ' 로 생성)';
+        if (res.ground) v += '\n' + res.ground;
         sheet.getRange(job.row, cValid).setValue(v);
       }
       if (cGen) sheet.getRange(job.row, cGen).setValue(false);
@@ -4195,6 +5387,29 @@ function runGeneration_(act, sheet, rows) {
       sheet.getRange(job.row, cAi).setValue('⚠ 실패: ' + e.message);
       if (cGen) sheet.getRange(job.row, cGen).setValue(false);
       errN++;
+    };
+    /** ③~⑤ 검사 → 고쳐쓰기 → 근거 확인 */
+    var polish = function (job, res) {
+      var repaired = false;
+      if (autoRepair && Date.now() - t0 < RUN_BUDGET_MS) {
+        var draft = cleanResult_(res.text);
+        var v1 = inspect_(draft, limit);
+        if (needsRepair(v1)) {
+          try {
+            var fixList = v1.issues.filter(function (x) { return x.level === 'block'; });
+            var r2 = callWithBackup_(system, buildRepairUser(job.user, draft, fixList, limit), res.model || job.model);
+            var t2 = cleanResult_(r2.text);
+            if (t2 && betterResult(v1, inspect_(t2, limit)) === 'b') {
+              res = { text: t2, model: r2.model, backup: res.backup || r2.backup };
+              repaired = true; fixN++;
+            }
+          } catch (e) {}
+        }
+      }
+      if (autoGround && Date.now() - t0 < RUN_BUDGET_MS) {
+        try { res.ground = groundText_(groundCheck_(job.user, cleanResult_(res.text), res.model || job.model)); } catch (e) {}
+      }
+      finish(job, res, repaired);
     };
 
     // 2) 같은 모델끼리 batchN 명씩 묶어서 부른다
@@ -4217,13 +5432,14 @@ function runGeneration_(act, sheet, rows) {
       if (got.error) { chunk.forEach(function (job) { fail(job, got.error); }); SpreadsheetApp.flush(); continue; }
       chunk.forEach(function (job) {
         try {
-          write(job, got[job.row] || callWithBackup_(system, job.user, job.model));
+          polish(job, got[job.row] || callWithBackup_(system, job.user, job.model));
         } catch (e) { fail(job, e); }
       });
       SpreadsheetApp.flush();
     }
 
     var msg = '완료 ' + okN + '건';
+    if (fixN) msg += ' (그중 자동 고쳐쓰기 ' + fixN + '건)';
     if (subN) msg += ' / 구독수식 ' + subN + '건(AI 결과 칸을 선택하고 [생성 및 삽입]을 눌러 주세요)';
     if (skipN) msg += ' / 자료 없음 ' + skipN + '건';
     if (errN) msg += ' / 실패 ' + errN + '건';
@@ -4234,8 +5450,16 @@ function runGeneration_(act, sheet, rows) {
         '남은 행은 [생성] 체크가 그대로 있으니 메뉴 ⑥ 을 한 번 더 누르세요.\n' +
         '(자주 멈춘다면 [⚙️ 설정]의 1회 최대 생성 건수를 줄이거나 더 빠른 모델을 쓰세요)' +
         (used ? '\n\n' + used : ''), ui_().ButtonSet.OK);
-    } else toast_(msg + (used ? '\n' + used : ''), act.name);
+    } else if (jobs.length || skipN) toast_(msg + (used ? '\n' + used : ''), act.name);
   } finally { lock.releaseLock(); }
+
+  // 3) 키 없이 쓰는 줄 — 복사·붙여넣기 창 (잠금을 푼 뒤에 연다)
+  if (manualJobs.length) {
+    openManualDialog_({
+      kind: 'generate', sheet: sheet.getName(), target: 'AI 결과', check: '생성',
+      title: act.name, limit: charsFor_(act) * 3, system: promptFor_(act), jobs: manualJobs, note: manualNote
+    });
+  }
 }
 
 /**
@@ -4261,6 +5485,68 @@ function generateBatch_(system, chunk, model) {
   return out;
 }
 
+/* ------------------------------------------------------- 근거 확인 */
+/** 학생 자료 ↔ 초안 → 자료에 없는 구절 목록 */
+function groundCheck_(source, draft, model) {
+  var res = callWithBackup_(GROUND_SYSTEM, buildGroundUser(source, draft), model, { json: true });
+  return parseGroundResult(res.text);
+}
+
+function groundText_(list) {
+  if (!list || !list.length) return '[근거] 학생 자료에 없는 내용 못 찾음';
+  return list.slice(0, 4).map(function (x) {
+    return '[확인] 자료에 없는 내용 → "' + x.quote.slice(0, 40) + '"' + (x.why ? ' (' + x.why.slice(0, 40) + ')' : '');
+  }).join('\n');
+}
+
+/** 근거 확인·검사 창에 쓸 모델 — 활동용 모델의 키가 없으면 키가 있는 회사의 기본 모델. 없으면 '' */
+function apiModelForChecks_() {
+  var model = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
+  var p = providerOf_(model);
+  if (p !== 'subscription' && p !== 'manual' && modelUsable_(model)) return model;
+  var withKey = PROVIDERS.filter(function (x) { return getKey_(x); })[0];
+  return withKey ? PROVIDER_DEFAULT_MODEL[withKey] : '';
+}
+
+/** 메뉴 ⑧: 선택한 행의 AI 결과(또는 최종본)가 학생 자료에 있는 내용인지 */
+function groundCheckSelection() {
+  var sheet = ss_().getActiveSheet();
+  var act = activityOfSheet_(sheet.getName());
+  if (!act) { ui_().alert(APP.MENU, '활동 입력 시트(○○ ▸입력)에서 확인할 행을 선택한 뒤 실행하세요.', ui_().ButtonSet.OK); return; }
+  var rows = selectedRows_(sheet);
+  if (!rows.length) { toast_('확인할 학생 행을 선택하세요.'); return; }
+  var model = apiModelForChecks_();
+  if (!model) {
+    ui_().alert(APP.MENU, '근거 확인은 API 키가 있어야 자동으로 됩니다.\n\n키 없이 하려면 메뉴 [🔍 맞춤법 · 금지어 검사] 창에 글과 학생 자료를 넣고 ' +
+      '[Gemini 앱에서 근거 확인 — 요청 복사]를 누르세요.', ui_().ButtonSet.OK);
+    return;
+  }
+  var cols = parseColumns(act.columns);
+  var rec = findByKey(getRecordTypes_(), act.recordKey);
+  var cAi = colOf_(sheet, APP.HEAD_ROW, 'AI 결과'), cFi = colOf_(sheet, APP.HEAD_ROW, '최종본'), cV = colOf_(sheet, APP.HEAD_ROW, '검증');
+  var n = 0, found = 0, t0 = Date.now();
+  usageReset_();
+  for (var i = 0; i < rows.length; i++) {
+    if (Date.now() - t0 > RUN_BUDGET_MS) break;
+    var job = studentJob_(sheet, rows[i], cols, rec, true);
+    var draft = String(cFi ? sheet.getRange(rows[i], cFi).getValue() : '').trim() || String(sheet.getRange(rows[i], cAi).getValue()).trim();
+    if (!job || !draft || draft.indexOf('⚠') === 0) continue;
+    toast_((i + 1) + '/' + rows.length + ' 근거 확인 중…', APP.MENU);
+    try {
+      var list = groundCheck_(job.user, draft, model);
+      if (list.length) found++;
+      var prev = String(sheet.getRange(rows[i], cV).getValue()).split('\n')
+        .filter(function (l) { return !/^\[근거\]|자료에 없는 내용/.test(l); }).join('\n');
+      sheet.getRange(rows[i], cV).setValue((prev ? prev + '\n' : '') + groundText_(list));
+      n++;
+    } catch (e) {
+      sheet.getRange(rows[i], cV).setValue('근거 확인 실패: ' + e.message);
+    }
+  }
+  toast_('근거 확인 ' + n + '건 · 자료에 없는 내용이 보인 학생 ' + found + '명 — [검증] 칸을 보세요.' +
+         (usageText_() ? '\n' + usageText_() : ''), APP.MENU);
+}
+
 /* ------------------------------------------------------- 자동 생성 트리거 */
 function enableAutoTrigger() {
   disableAutoTrigger();
@@ -4268,7 +5554,8 @@ function enableAutoTrigger() {
     .forSpreadsheet(ss_()).onEdit().create();
   ui_().alert(APP.MENU,
     '자동 생성을 켰습니다.\n[생성] 체크박스를 체크하면 그 줄이 바로 생성됩니다.\n\n' +
-    '※ 여러 명을 한꺼번에 처리할 때는 메뉴 ⑥ [체크된 행 생성] 이 더 빠르고 안정적입니다.',
+    '※ 여러 명을 한꺼번에 처리할 때는 메뉴 ⑥ [체크된 행 생성] 이 더 빠르고 안정적입니다.\n' +
+    '※ 모델이 [키 없이(복사·붙여넣기)]인 줄은 자동으로 하지 않고, 메뉴 ⑥ 에서 창을 엽니다.',
     ui_().ButtonSet.OK);
 }
 
@@ -4288,6 +5575,11 @@ function onEditInstalled(e) {
     if (!cGen || e.range.getColumn() !== cGen) return;
     if (e.range.getRow() < APP.DATA_ROW) return;
     if (e.value !== 'TRUE' && e.range.getValue() !== true) return;
+    var cModel = colOf_(sheet, APP.HEAD_ROW, '모델');
+    var model = (cModel ? normModel(sheet.getRange(e.range.getRow(), cModel).getValue()) : '') ||
+                normModel(cfg_('활동용 모델', DEFAULT_MODEL));
+    // 복사·붙여넣기 창은 메뉴에서 연다 — 트리거에서는 창을 띄울 수 없다(키가 하나도 없을 때도 같음)
+    if (providerOf_(model) === 'manual' || !PROVIDERS.some(function (p) { return getKey_(p); })) return;
     runGeneration_(act, sheet, [e.range.getRow()]);
   } catch (err) {
     try { toast_('자동 생성 오류: ' + err.message); } catch (e2) {}
@@ -4298,7 +5590,6 @@ function onEditInstalled(e) {
 function revalidateAll() {
   var acts = getActivities_();
   var n = 0;
-  var banned = PRESET_BANNED, fmt = PRESET_FORMAT_RULES;
   acts.forEach(function (a) {
     var s = sh_(a.inSheet);
     if (!s) return;
@@ -4315,7 +5606,7 @@ function revalidateAll() {
     var out = [];
     for (var i = 0; i < cnt; i++) {
       var t = String(fin[i][0] || '').trim() || String(ai[i][0] || '').trim();
-      out.push([t ? formatIssues(validateResult(t, limit, banned, fmt)) : '']);
+      out.push([t ? formatIssues(inspect_(t, limit)) : '']);
       if (t) n++;
     }
     s.getRange(APP.DATA_ROW, cValid, cnt, 1).setValues(out);
@@ -4332,12 +5623,341 @@ function revalidateAll() {
     var o2 = [];
     for (var j = 0; j < cnt2; j++) {
       var t2 = String(f2[j][0] || '').trim();
-      o2.push([t2 ? formatIssues(validateResult(t2, lim2, banned, fmt)) : '']);
+      o2.push([t2 ? formatIssues(inspect_(t2, lim2)) : '']);
       if (t2) n++;
     }
     cp.getRange(APP.DATA_ROW, cV, cnt2, 1).setValues(o2);
   });
   toast_(n + '건 재검증 완료', APP.MENU);
+}
+
+/* ------------------------------------------------- 고쳐 쓰면 바로 검사 */
+/**
+ * 단순 트리거(onEdit)에서 부른다 — 입력·취합 시트의 [최종본]이나 [AI 결과]를 고치면
+ * [검증] 칸을 바로 새로 쓴다. AI 를 부르지 않으므로 권한 승인 없이도 돈다.
+ * @return {boolean} 이 편집을 처리했는지
+ */
+function recheckOnEdit_(e) {
+  var s = e.range.getSheet();
+  var name = s.getName();
+  var limit = 0, act = null;
+  if (name.indexOf(APP.SH.COMPILE_PREFIX) === 0) limit = compileLimitOf_(name);
+  else if (name.slice(-APP.SUFFIX.IN.length) === APP.SUFFIX.IN) { act = activityOfSheet_(name); if (act) limit = charsFor_(act) * 3; }
+  if (!limit) return false;
+  var r1 = e.range.getRow(), nr = e.range.getNumRows();
+  if (r1 + nr - 1 < APP.DATA_ROW) return false;
+  var cFi = colOf_(s, APP.HEAD_ROW, '최종본');
+  var cAi = colOf_(s, APP.HEAD_ROW, act ? 'AI 결과' : 'AI 압축결과');
+  var cV = colOf_(s, APP.HEAD_ROW, '검증');
+  var c1 = e.range.getColumn(), c2 = c1 + e.range.getNumColumns() - 1;
+  var hit = function (c) { return c && c1 <= c && c <= c2; };
+  if (!cV || (!hit(cFi) && !hit(cAi))) return false;
+  for (var r = Math.max(r1, APP.DATA_ROW); r < r1 + nr && r < APP.DATA_ROW + 500; r++) {
+    var fin = cFi ? String(s.getRange(r, cFi).getValue()).trim() : '';
+    var t = fin || (cAi ? String(s.getRange(r, cAi).getValue()).trim() : '');
+    if (t.indexOf('⚠') === 0) continue;
+    s.getRange(r, cV).setValue(t ? formatIssues(inspect_(t, limit)) + (fin ? '\n(최종본 기준)' : '') : '');
+  }
+  return true;
+}
+
+
+/* ==========================================================================
+   72_Manual.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 키 없이 쓰기 (복사 · 붙여넣기)
+ *
+ * API 키가 없는 선생님도 처음부터 끝까지 쓸 수 있게 하는 길.
+ *   ① 시트가 규칙(프롬프트)과 학생 자료를 한 덩어리로 만들어 준다 — 학생 이름은 보내지 않는다(마스킹)
+ *   ② 선생님이 Gemini 앱(학교 계정 권장)·ChatGPT·Claude 대화창에 붙여 넣는다
+ *   ③ 받은 답을 창에 붙여 넣으면 학생별로 나눠 [AI 결과]에 넣고 바로 검사한다
+ * 스크립트는 바깥으로 아무것도 보내지 않는다. 대화창에 무엇을 붙여 넣을지는 선생님이 본다.
+ */
+
+/**
+ * @param {{kind:string, sheet:string, target:string, check:string, title:string, limit:number,
+ *          system:string, jobs:Array<{row:number, user:string, label:string}>, note?:string, heading?:string}} p
+ */
+function openManualDialog_(p) {
+  var size = Math.min(10, Math.max(5, Number(cfg_('한 번에 묶을 학생 수', 5)) || 5));
+  var chunks = [];
+  for (var i = 0; i < p.jobs.length; i += size) {
+    var part = p.jobs.slice(i, i + size);
+    var items = part.map(function (j, n) { return { id: 'S' + (n + 1), block: j.user }; });
+    chunks.push({
+      rows: part.map(function (j) { return j.row; }),
+      ids: items.map(function (x) { return x.id; }),
+      labels: part.map(function (j) { return j.label; }),
+      user: buildManualUser(items, p.heading)
+    });
+  }
+  var data = {
+    kind: p.kind, sheet: p.sheet, target: p.target, check: p.check, title: p.title, limit: p.limit,
+    system: p.system, gem: buildGemText(p.system), chunks: chunks, note: p.note || '', aiNotice: AI_NOTICE_2026,
+    account: accountInfo_(), masked: maskName_()
+  };
+  var t = HtmlService.createTemplateFromFile('UI_Manual');
+  t.data = JSON.stringify(data).replace(/</g, '\\u003c');
+  ui_().showModalDialog(t.evaluate().setWidth(800).setHeight(690), '📋 키 없이 쓰기 — ' + p.title);
+}
+
+/**
+ * 대화창에서 복사해 온 답을 학생별로 나눠 시트에 넣는다.
+ * @param {{sheet:string, target:string, check:string, limit:number, rows:number[], ids:string[], labels:string[], answer:string}} p
+ * @return {{written:number, missing:string[], results:Array<{label, bytes, limit, ok, issues:string[]}>}}
+ */
+function manualApply(p) {
+  var s = sh_(p.sheet);
+  if (!s) throw new Error('시트를 찾을 수 없습니다: ' + p.sheet);
+  var cT = colOf_(s, APP.HEAD_ROW, p.target);
+  if (!cT) throw new Error('[' + p.target + '] 칸이 없습니다. 시트 구조를 확인하세요.');
+  var cV = colOf_(s, APP.HEAD_ROW, '검증');
+  var cC = p.check ? colOf_(s, APP.HEAD_ROW, p.check) : 0;
+  var parsed = parseManualAnswer(p.answer, p.ids || []);
+  var results = [], written = 0;
+  (p.ids || []).forEach(function (id, n) {
+    var row = p.rows[n];
+    var raw = parsed.map[id];
+    if (!raw || !row) return;
+    var txt = cleanResult_(raw);
+    var v = inspect_(txt, Number(p.limit) || 1500);
+    s.getRange(row, cT).setValue(txt);
+    if (cV) s.getRange(row, cV).setValue(formatIssues(v) + '\n(키 없이 · 복사·붙여넣기)');
+    if (cC) s.getRange(row, cC).setValue(false);
+    written++;
+    results.push({ label: (p.labels || [])[n] || id, bytes: v.bytes, limit: Number(p.limit) || 1500, ok: v.ok,
+                   issues: v.issues.map(function (x) { return (x.level === 'block' ? '[수정] ' : '[확인] ') + x.label + (x.hit ? ' → ' + x.hit : ''); }) });
+  });
+  SpreadsheetApp.flush();
+  var missing = parsed.missing.map(function (id) { var k = (p.ids || []).indexOf(id); return (p.labels || [])[k] || id; });
+  return { written: written, missing: missing, results: results };
+}
+
+/** 선택한 행을 시트에서 보여 주기(창에서 학생 이름을 누르면) */
+function manualGoto(p) {
+  var s = sh_(p.sheet);
+  if (!s) return false;
+  ss_().setActiveSheet(s);
+  var c = colOf_(s, APP.HEAD_ROW, p.target) || 1;
+  s.getRange(p.row, c).activate();
+  return true;
+}
+
+
+/* ==========================================================================
+   74_Check.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 맞춤법 · 금지어 검사 (사이드바)
+ *
+ * 선생님이 직접 쓴 글, 다듬은 최종본, 다른 데서 가져온 글을 붙여 넣고 바로 검사한다.
+ *   · 규칙 검사(늘): 바이트 · 2026 기재 금지어 · 어미·특수문자 · 맞춤법/띄어쓰기 — AI 를 부르지 않는다
+ *   · AI 맞춤법 검사 · 근거 확인(키가 있을 때): 고칠 곳을 목록으로 받아 골라서 고친다
+ *   · 키가 없으면: Gemini 앱에 붙여 넣을 검사 요청문을 복사해 준다
+ * 시트의 셀을 골라 [선택한 셀 가져오기] → 고친 뒤 [그 셀에 다시 넣기] 로 돌려놓을 수 있다.
+ */
+
+function openCheckSidebar() {
+  try { autoRulesCheck_(); } catch (e) {}
+  var html = HtmlService.createHtmlOutputFromFile('UI_Check').setTitle('🔍 맞춤법 · 금지어 검사');
+  ui_().showSidebar(html);
+}
+
+function checkContext() {
+  var recs = [];
+  try { recs = getRecordTypes_().map(function (r) { return { key: r.key, name: r.name, chars: r.chars }; }); } catch (e) {}
+  if (!recs.length) recs = PRESET_RECORD_TYPES.map(function (r) { return { key: r.key, name: r.name, chars: r.chars }; });
+  var model = '';
+  try { model = apiModelForChecks_(); } catch (e) {}
+  return {
+    records: recs, model: model, rules: currentPackInfo_(), aiNotice: AI_NOTICE_2026,
+    account: accountInfo_(), spellSystem: SPELL_SYSTEM, groundSystem: GROUND_SYSTEM
+  };
+}
+
+/** 규칙 검사 — @param {{text:string, chars?:number}} p */
+function checkTextNow(p) {
+  var chars = Number(p && p.chars) || 500;
+  var v = inspect_(String((p && p.text) || ''), chars * 3);
+  return { bytes: v.bytes, limit: chars * 3, chars: chars, ok: v.ok, issues: v.issues };
+}
+
+/** AI 맞춤법 검사 — 고칠 목록과 고친 글 */
+function aiSpellCheck(p) {
+  var model = apiModelForChecks_();
+  if (!model) throw new Error('API 키가 없어 AI 맞춤법 검사를 할 수 없습니다. 아래 [Gemini 앱에서 검사 — 요청 복사]를 쓰세요.');
+  var text = String((p && p.text) || '').trim();
+  if (!text) throw new Error('검사할 글이 없습니다.');
+  usageReset_();
+  var res = callWithBackup_(SPELL_SYSTEM, '# 글\n' + text, model, { json: true });
+  var changes = parseSpellResult(res.text, text);
+  return { changes: changes, fixed: applyChanges(text, changes), model: res.model, usage: usageText_() };
+}
+
+/** AI 근거 확인 — 학생 자료에 없는 구절 */
+function aiGroundCheck(p) {
+  var model = apiModelForChecks_();
+  if (!model) throw new Error('API 키가 없어 자동 근거 확인을 할 수 없습니다. [Gemini 앱에서 근거 확인 — 요청 복사]를 쓰세요.');
+  if (!String((p && p.source) || '').trim()) throw new Error('학생 자료(관찰 메모·입력 항목)를 함께 넣어 주세요.');
+  usageReset_();
+  var list = groundCheck_(p.source, p.text, model);
+  return { list: list, model: model, usage: usageText_() };
+}
+
+/** 지금 선택한 셀의 글 (+ 그 시트의 기록 항목을 짐작해 글자수를 맞춘다) */
+function readActiveCell() {
+  var r = SpreadsheetApp.getActiveRange();
+  if (!r) throw new Error('먼저 시트에서 셀 하나를 선택하세요.');
+  var s = r.getSheet();
+  var c = s.getRange(r.getRow(), r.getColumn());
+  var name = s.getName(), recordKey = '';
+  try {
+    var act = activityOfSheet_(name);
+    if (act) recordKey = act.recordKey;
+    else if (recordKeyOfCompile_(name)) recordKey = recordKeyOfCompile_(name);
+  } catch (e) {}
+  return { sheet: name, a1: c.getA1Notation(), text: String(c.getValue() === null ? '' : c.getValue()), recordKey: recordKey };
+}
+
+/** 가져왔던 바로 그 셀에 다시 넣는다 */
+function writeBackCell(p) {
+  var s = sh_(p.sheet);
+  if (!s) throw new Error('시트를 찾을 수 없습니다: ' + p.sheet);
+  var c = s.getRange(p.a1);
+  if (c.getFormula()) throw new Error('수식이 든 셀(' + p.a1 + ')에는 넣지 않습니다. [최종본] 칸에 넣어 주세요.');
+  c.setValue(String(p.text || ''));
+  try { recheckOnEdit_({ range: c }); } catch (e) {}   // 스크립트가 쓴 값은 onEdit 이 안 돌아서 직접 다시 검사
+  SpreadsheetApp.flush();
+  return '✓ ' + p.sheet + ' ' + p.a1 + ' 에 넣었습니다.';
+}
+
+
+/* ==========================================================================
+   76_Quick.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — ✍️ 바로 쓰기 시트
+ *
+ * 활동을 설계하지 않고(입력 항목·예시 없이) 바로 쓰고 싶을 때.
+ *   · 학생마다 [관찰 메모] 한 칸에 자유롭게 적고 → [생성] 하면 AI 초안 (키가 없으면 복사·붙여넣기)
+ *   · 또는 [최종본]에 직접 쓰면 → [검증]이 바로 금지어·형식·맞춤법을 검사
+ * 속은 보통 활동과 똑같아서 생성·검사·최종취합·검토가 모두 그대로 된다(프롬프트 모드 '바로쓰기').
+ * 기록종류·교과마다 몇 개든 만들 수 있다.
+ */
+
+var QUICK_COLUMN = '관찰 메모';
+
+/** 시험 생성·안내에 쓰는 보기 메모 (실제 학생 자료가 아님) */
+var SAMPLE_MEMO = {
+  '과세특': '이차함수 단원에서 그래프 이동을 모둠원에게 설명함. 처음에는 꼭짓점 좌표를 헷갈렸으나 표를 그려 비교한 뒤 스스로 규칙을 찾아냄. 발표 뒤 받은 질문에 예를 들어 다시 설명함.',
+  '개세특': '수업 중 모르는 낱말을 따로 적어 두고 쉬는 시간에 사전으로 찾아 정리하는 습관이 있음. 학기 말에는 정리한 낱말장을 친구들과 나누어 봄.',
+  '자율': '학급 환경 개선 회의에서 분리배출 표시판 만들기를 제안하고 역할을 나눔. 2주 동안 표시판을 고쳐 가며 붙였고 학급 분리배출이 눈에 띄게 나아짐.',
+  '동아리': '과학 실험 동아리에서 식물 성장과 빛의 색 관계를 실험함. 변인 통제가 어려워 실험을 두 번 다시 설계했고, 결과 발표에서 한계와 개선점을 말함.',
+  '진로': '진로 탐색 시간에 간호사 직업 인터뷰 자료를 읽고 하루 일과를 정리함. 관심 분야를 노인 돌봄으로 좁히고 필요한 역량을 스스로 표로 만듦.',
+  '행발': '맡은 청소 구역을 끝까지 책임지고 정리함. 친구가 어려워할 때 먼저 다가가 도와주는 모습이 자주 보임. 수업 시간 집중력이 학기 초보다 좋아짐.'
+};
+
+function openQuickSheetDialog() {
+  var html = HtmlService.createHtmlOutputFromFile('UI_Quick').setWidth(500).setHeight(560);
+  ui_().showModalDialog(html, '✍️ 바로 쓰기 시트 추가');
+}
+
+function quickContext() {
+  if (!sh_(APP.SH.RECORD) || !sh_(APP.SH.ACTIVITY)) installCore_();
+  var recs = getRecordTypes_(), subs = getSubjects_();
+  var n = 1;
+  while (getActivity_('바로쓰기' + n) || sh_(sheetNameIn_('바로쓰기' + n))) n++;
+  var roster = 0;
+  try { roster = getRoster_().length; } catch (e) {}
+  return {
+    records: recs.map(function (r) { return { key: r.key, name: r.name, chars: r.chars }; }),
+    subjects: subs.map(function (s) { return { key: s.key, name: s.name, kind: s.kind }; }),
+    defaultSubject: String(cfg_('기본 교과영역', '공통')),
+    suggestName: '바로쓰기' + n, rosterCount: roster
+  };
+}
+
+/**
+ * @param {{name:string, recordKey:string, subjectKey:string, chars?:number, desc?:string}} p
+ * @return {{inSheet:string, name:string}}
+ */
+function createQuickSheet(p) {
+  var name = safeKey_(p.name) || ('바로쓰기' + Date.now() % 1000);
+  var recs = getRecordTypes_();
+  var rec = findByKey(recs, p.recordKey) || recs[0];
+  var made = createActivity_({
+    key: name, name: name, recordKey: rec.key,
+    subjectKey: p.subjectKey || (rec.key === '과세특' ? cfg_('기본 교과영역', '공통') : '공통'),
+    chars: Number(p.chars) || 0, columns: [QUICK_COLUMN], desc: String(p.desc || '').trim(),
+    mode: '바로쓰기', noExamples: true
+  });
+  var s = sh_(made.inSheet);
+  if (s) ss_().setActiveSheet(s);
+  try { if (compileSheets_().length) buildCompileCore_(); } catch (e) {}
+  return { inSheet: made.inSheet, name: name };
+}
+
+/** 이 활동이 바로 쓰기 시트인지 */
+function isQuickActivity_(act) { return !!act && act.mode === '바로쓰기'; }
+
+
+/* ==========================================================================
+   78_Export.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — AI 앱용 지침 내보내기
+ *
+ * 시트가 조립한 규칙(프롬프트)을 다른 AI 앱에 "한 번 저장해 두는" 형태로 내보낸다.
+ *   · Gemini Gem / ChatGPT GPT·프로젝트 / Claude 프로젝트 지침 — 붙여 넣을 글
+ *   · Claude 스킬 — SKILL.md 를 담은 zip (claude.ai 설정 › 기능 › 스킬 에서 올림)
+ * 학생 자료는 들어가지 않는다. 규칙(기록종류·교과·공통규칙·기재요령·예시)만 담는다.
+ * 예시 시트에 실제 학생 글을 넣었다면 내보내기 전에 지우거나 [예시 넣지 않기]를 고른다.
+ */
+
+function openExportDialog() {
+  var html = HtmlService.createHtmlOutputFromFile('UI_Export').setWidth(760).setHeight(640);
+  ui_().showModalDialog(html, 'AI 앱용 지침 내보내기 — Gem · 프로젝트 · 스킬');
+}
+
+function exportContext() {
+  var acts = getActivities_();
+  var cur = ss_().getActiveSheet().getName(), pick = '';
+  acts.forEach(function (a) { if (a.inSheet === cur || a.exSheet === cur) pick = a.key; });
+  return {
+    activities: acts.map(function (a) { return { key: a.key, name: a.name, recordKey: a.recordKey }; }),
+    pick: pick || (acts[0] ? acts[0].key : '')
+  };
+}
+
+/** @param {{key:string, examples?:boolean}} p */
+function exportFor(p) {
+  var acts = getActivities_();
+  var idx = -1;
+  acts.forEach(function (a, i) { if (a.key === p.key) idx = i; });
+  if (idx < 0) throw new Error('활동을 찾을 수 없습니다.');
+  var act = acts[idx];
+  var rec = findByKey(getRecordTypes_(), act.recordKey) || {};
+  var system = promptFor_(act, p.examples === false ? '' : undefined);
+  var name = skillName(act.recordKey, idx + 1);
+  return {
+    gem: buildGemText(system), name: name,
+    skill: buildSkillMd({ name: name, activity: act.name, record: rec.name || act.recordKey, system: system,
+                          notice: AI_NOTICE_2026, rulesId: currentPackInfo_().id }),
+    examples: readExampleRows_(act).length
+  };
+}
+
+/** Claude 스킬 zip (폴더/SKILL.md) — 화면에서 내려받을 수 있게 base64 로 */
+function exportSkillZip(p) {
+  var r = exportFor(p);
+  var blob = Utilities.newBlob(r.skill, 'text/markdown', r.name + '/SKILL.md');
+  var zip = Utilities.zip([blob], r.name + '.zip');
+  return { file: r.name + '.zip', b64: Utilities.base64Encode(zip.getBytes()) };
 }
 
 
@@ -4526,7 +6146,9 @@ function pullResults_(act) {
 }
 
 /* ----------------------------------------------------------- 압축 생성 */
-function compileChecked() {
+/** @param {{manual?:boolean}=} opt  manual: 체크된 행을 모두 복사·붙여넣기로 */
+function compileChecked(opt) {
+  opt = (opt && typeof opt === 'object' && !opt.authMode) ? opt : {};
   var s = ss_().getActiveSheet();
   var recKey = recordKeyOfCompile_(s.getName());
   if (!recKey) {
@@ -4555,6 +6177,7 @@ function compileChecked() {
   var defModel = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
   var system = compressPrompt_(rec);
   var okN = 0, errN = 0, leftN = 0, backupN = 0, t0 = Date.now();
+  var has = keyStatus_(), anyApi = has.gemini || has.openai || has.anthropic, manualJobs = [];
   usageReset_();
 
   for (var k = 0; k < rows.length; k++) {
@@ -4564,6 +6187,12 @@ function compileChecked() {
     if (!merged) { s.getRange(row, cChk).setValue(false); continue; }
     var model = cModel ? String(s.getRange(row, cModel).getValue()).trim() : '';
     if (!model) model = defModel;
+    var prov = providerOf_(model);
+    if (opt.manual || prov === 'manual' || (!anyApi && prov !== 'subscription' && !providerUsable(prov, has))) {
+      var who = s.getRange(row, 1, 1, 3).getValues()[0];
+      manualJobs.push({ row: row, user: merged, label: String(who[0]) + '반 ' + String(who[1]) + '번 ' + String(who[2]) });
+      continue;
+    }
     toast_((k + 1) + '/' + rows.length + ' 압축 중…', APP.MENU);
     try {
       if (providerOf_(model) === 'subscription') {
@@ -4574,7 +6203,7 @@ function compileChecked() {
       var txt = cleanResult_(res.text);
       if (byteLen(txt) > limit) txt = trimToBytes(txt, limit);
       s.getRange(row, cAi).setValue(txt);
-      if (cValid) s.getRange(row, cValid).setValue(formatIssues(validateResult(txt, limit, PRESET_BANNED, PRESET_FORMAT_RULES)) +
+      if (cValid) s.getRange(row, cValid).setValue(formatIssues(inspect_(txt, limit)) +
         (res.backup ? '\n(예비 모델 ' + res.model + ' 로 생성)' : ''));
       if (res.backup) backupN++;
       s.getRange(row, cChk).setValue(false);
@@ -4585,6 +6214,12 @@ function compileChecked() {
       errN++;
     }
     SpreadsheetApp.flush();
+  }
+  if (manualJobs.length) {
+    openManualDialog_({ kind: 'compile', sheet: s.getName(), target: 'AI 압축결과', check: '압축',
+      title: (rec ? rec.name : recKey) + ' 압축', limit: limit, system: system, jobs: manualJobs, heading: '통합할 문장들',
+      note: opt.manual ? '' : (anyApi ? '' : 'API 키가 없어 [키 없이 — 복사·붙여넣기]로 진행합니다.') });
+    if (!okN && !errN) return;
   }
   var done = '압축 완료 ' + okN + '건' + (errN ? ' / 실패 ' + errN + '건' : '') + (backupN ? ' / 예비 모델 ' + backupN + '건' : '');
   var used = usageText_();
@@ -4814,4 +6449,45 @@ function observeDeployHelp() {
     '※ 배포는 사본마다 한 번씩 직접 해야 하며, 사본을 복사해도 배포는 따라오지 않습니다.',
     ui_().ButtonSet.OK);
 }
+
+
+/* ==========================================================================
+   96_Guide.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 함께 쓰면 좋은 도구 안내
+ *
+ * 업무 인수인계 대시보드(같은 만든이의 윈도우 프로그램)의 [스캔 문서 → 엑셀] 사용 설명서.
+ * 손글씨 활동지·신청서를 스캔해 표로 만든 뒤 이 시트의 입력 칸에 붙여 넣는 흐름을 안내한다.
+ * [🚀 시작하기] 시트의 버튼과 메뉴 [도움말 · 부가 기능]에서 연다.
+ */
+
+var DASHBOARD = {
+  repo: 'https://github.com/sced9120/work-dashboard',
+  latest: 'https://github.com/sced9120/work-dashboard/releases/latest',
+  since: 'v3.3.0'
+};
+
+function openOcrGuide() {
+  var t = HtmlService.createTemplateFromFile('UI_OcrGuide');
+  t.links = JSON.stringify(DASHBOARD);
+  ui_().showModalDialog(t.evaluate().setWidth(780).setHeight(660), '📄 스캔 문서 → 엑셀 사용 설명서 (업무 인수인계 대시보드)');
+}
+
+
+/* ==========================================================================
+   98_Assets.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 그림 자료 ([🚀 시작하기] 시트의 버튼)
+ * PNG 를 base64 로 넣어 두었다(760x104, 시트에는 절반 크기로 붙음). 바꾸려면 tools/make-buttons.py 로 다시 만든다.
+ */
+var BUTTON_PNG = {
+  start: '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',
+  quick: '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',
+  check: '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',
+  ocr: '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'
+};
 

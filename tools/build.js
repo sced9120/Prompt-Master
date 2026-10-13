@@ -63,6 +63,17 @@ function build() {
   html.forEach(f => fs.copyFileSync(path.join(SRC, f), path.join(OUT, f)));
   if (fs.existsSync(manifest)) fs.copyFileSync(manifest, path.join(OUT, 'appsscript.json'));
 
+  // 원격 규칙판 rules/latest.json — 코드에 든 규칙판(RULES_2026)을 그대로 내보낸다.
+  // 사본들은 이 파일을 RULES_URL 에서 받아 [📏 기재요령]을 갱신한다. 새 학년도에는 16_Rules.gs 를 고치고 다시 빌드한다.
+  const vm = require('vm');
+  const ctx = vm.createContext({ module: { exports: {} } });
+  ['00_Presets.gs', '16_Rules.gs'].forEach(f => vm.runInContext(fs.readFileSync(path.join(SRC, f), 'utf8'), ctx, { filename: f }));
+  const pack = vm.runInContext('RULES_2026', ctx);
+  const rulesDir = path.join(__dirname, '..', 'rules');
+  if (!fs.existsSync(rulesDir)) fs.mkdirSync(rulesDir, { recursive: true });
+  fs.writeFileSync(path.join(rulesDir, 'latest.json'), JSON.stringify(pack, null, 2) + '\n', 'utf8');
+  console.log('rules/latest.json  규칙판 ' + pack.id + ' · 규칙 ' + pack.rules.length + '줄');
+
   const bytes = fs.statSync(path.join(OUT, 'Code.gs')).size;
   const lines = fs.readFileSync(path.join(OUT, 'Code.gs'), 'utf8').split('\n').length;
 

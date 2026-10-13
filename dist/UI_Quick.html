@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root { --line:#dde3dd; --muted:#6b7280; --accent:#35583f; --accent-soft:#e3ece4; --warn:#8f2f20; --ok:#2c6340; --bg:#f6f8f6; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; padding:16px 18px; color:#16202a; font:13.5px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
+  .lead { font-size:12.5px; color:#374151; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:9px 11px; }
+  label { display:block; font-weight:600; font-size:12px; margin:11px 0 4px; }
+  input, select, textarea { width:100%; padding:7px 9px; border:1px solid #c9d1c9; border-radius:6px; font:inherit; background:#fff; }
+  .row { display:flex; gap:8px; } .row > div { flex:1; }
+  .note { font-size:11.5px; color:var(--muted); margin-top:4px; line-height:1.5; }
+  button { font:inherit; font-size:13px; font-weight:600; cursor:pointer; padding:8px 15px; border:1px solid #c9d1c9; border-radius:6px; background:#fff; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.55; }
+  .actions { display:flex; gap:7px; margin-top:14px; align-items:center; }
+  .msg { font-size:12.5px; margin-top:8px; min-height:16px; }
+  .msg.ok { color:var(--ok); } .msg.err { color:var(--warn); }
+</style>
+</head>
+<body>
+<div class="lead"><b>입력 항목을 정하지 않고 바로 쓰는 시트</b>입니다. 학생마다 <b>[관찰 메모]</b> 한 칸에 자유롭게 적고 AI 초안을 받거나,
+  <b>[최종본]</b>에 직접 써서 금지어·맞춤법 검사만 받을 수도 있습니다. 최종취합·검토도 그대로 됩니다.</div>
+
+<label>시트 이름</label>
+<input id="name" maxlength="20">
+<div class="note">예) 1학기 수학 메모, 2반 행발, 진로 상담 메모 — 시트 이름은 "이름 ▸입력"이 됩니다.</div>
+
+<div class="row">
+  <div><label>기록 항목</label><select id="rec"></select></div>
+  <div><label>교과 · 영역</label><select id="sub"></select></div>
+</div>
+<div class="note" id="recNote"></div>
+
+<label>한 줄 설명 <span style="font-weight:400;color:var(--muted)">(선택 — AI가 맥락을 잡는 데 씀)</span></label>
+<input id="desc" placeholder="예) 2학기 수업 시간 관찰 메모. 모둠 활동과 발표 위주.">
+
+<div class="note" id="rosterNote" style="margin-top:10px"></div>
+<div class="actions"><button class="primary" id="bMake">만들기</button><button id="bClose">닫기</button></div>
+<div class="msg" id="msg"></div>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var C = null;
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+function say(t, cls) { $('msg').className = 'msg ' + (cls || ''); $('msg').textContent = t || ''; }
+function recNote() {
+  var r = C.records.filter(function (x) { return x.key === $('rec').value; })[0];
+  $('recNote').textContent = r ? r.name + ' · 최대 ' + r.chars + '자. 창체·행발이면 교과는 "공통".' : '';
+  if (r && r.key !== '과세특' && r.key !== '개세특') $('sub').value = '공통';
+}
+google.script.run.withSuccessHandler(function (c) {
+  C = c;
+  $('name').value = c.suggestName;
+  $('rec').innerHTML = c.records.map(function (r) { return '<option value="' + esc(r.key) + '">' + esc(r.key + ' — ' + r.name) + '</option>'; }).join('');
+  $('sub').innerHTML = c.subjects.map(function (s) { return '<option value="' + esc(s.key) + '"' + (s.key === c.defaultSubject ? ' selected' : '') + '>' + esc(s.key + ' — ' + s.name) + '</option>'; }).join('');
+  $('rosterNote').textContent = c.rosterCount
+    ? '학생 명단 ' + c.rosterCount + '명이 자동으로 채워집니다.'
+    : '아직 학생 명단이 없습니다. 시트에 반·번호·이름을 직접 적어도 되고, 나중에 명단을 넣으면 그 순서로 정리됩니다(적어 둔 줄은 지워지지 않음).';
+  recNote();
+}).withFailureHandler(function (e) { say(e.message, 'err'); }).quickContext();
+$('rec').onchange = recNote;
+$('bClose').onclick = function () { google.script.host.close(); };
+$('bMake').onclick = function () {
+  var name = $('name').value.trim();
+  if (!name) { say('시트 이름을 적어 주세요.', 'err'); return; }
+  var btn = this; btn.disabled = true; say('만드는 중…');
+  google.script.run.withSuccessHandler(function (r) {
+    say('✓ [' + r.inSheet + '] 시트를 만들었습니다. 관찰 메모를 적어 보세요.', 'ok');
+    setTimeout(function () { google.script.host.close(); }, 1400);
+  }).withFailureHandler(function (e) { btn.disabled = false; say(e.message, 'err'); })
+    .createQuickSheet({ name: name, recordKey: $('rec').value, subjectKey: $('sub').value, desc: $('desc').value });
+};
+</script>
+</body>
+</html>

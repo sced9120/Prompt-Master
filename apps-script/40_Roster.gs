@@ -148,32 +148,41 @@ function syncRosterInto_(sheet, roster) {
   var lastRow = sheet.getLastRow();
   if (lastCol < 4) return;
 
-  var existing = {}, byName = {}, nameCount = {};
+  var existing = {}, byName = {}, nameCount = {}, all = [];
   if (lastRow >= first) {
     var vals = sheet.getRange(first, 1, lastRow - first + 1, lastCol).getValues();
     var forms = sheet.getRange(first, 1, lastRow - first + 1, lastCol).getFormulas();
     for (var i = 0; i < vals.length; i++) {
       var id = String(vals[i][0]).trim() + '-' + String(vals[i][1]).trim();
-      if (id === '-') continue;
+      if (id === '-' && !String(vals[i][2]).trim()) continue;
       var row = [];
       for (var c = 0; c < lastCol; c++) row.push(forms[i][c] ? forms[i][c] : vals[i][c]);
-      existing[id] = row;
+      all.push(row);
+      if (id !== '-') existing[id] = row;
       var nm = String(vals[i][2]).trim();
       if (nm) { nameCount[nm] = (nameCount[nm] || 0) + 1; byName[nm] = row; }
     }
   }
 
-  var out = [], used = {};
+  var out = [], used = {}, taken = [];
   roster.forEach(function (st) {
     var row = existing[st.id];
     // 명단 방식을 바꿨거나 반이 바뀌어 id 가 달라져도, 이름이 한 명뿐이면 그 학생 자료를 따라 옮긴다
     var nm = String(st.name).trim();
     if (!row && nm && nameCount[nm] === 1 && !used[nm]) row = byName[nm];
-    if (row) used[nm] = true;
+    if (row) { used[nm] = true; taken.push(row); }
     row = row ? row.slice() : [];
     while (row.length < lastCol) row.push('');
     row[0] = st.cls; row[1] = st.no; row[2] = st.name; row[3] = st.grade;
     out.push(row);
+  });
+  // 명단에 없지만 학생 자료가 적힌 줄(직접 적은 줄, 명단에서 빠진 학생)은 지우지 않고 맨 아래에 남긴다
+  all.forEach(function (row) {
+    if (taken.indexOf(row) >= 0) return;
+    var hasData = row.slice(4).some(function (v) {
+      return v !== '' && v !== false && v !== null && !(typeof v === 'string' && v.charAt(0) === '=');
+    });
+    if (hasData) out.push(row);
   });
   sheet.getRange(head, 1).setValue(classHead_());
 

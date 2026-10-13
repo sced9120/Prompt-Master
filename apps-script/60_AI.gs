@@ -8,6 +8,11 @@
  */
 
 var SUBSCRIPTION_MODEL = 'Gemini(구독)';
+/**
+ * 키 없이 쓰기 — 시트가 프롬프트를 만들어 주면 선생님이 Gemini 앱(학교 계정)·ChatGPT·Claude 대화창에
+ * 붙여 넣고, 받은 답을 다시 창에 붙여 넣는다. 키·비용·구독이 필요 없어 모든 계정에서 늘 고를 수 있다.
+ */
+var MANUAL_MODEL = '키 없이(복사·붙여넣기)';
 var PROVIDERS = ['gemini', 'openai', 'anthropic'];
 // [⚙️ 설정]의 항목|값|설명 열 폭에 맞춰 순서를 정했다 (C열이 넓은 설명 칸)
 var MODEL_HEAD = ['모델명', '수준', '언제 쓰나', '회사', '연결 확인'];
@@ -117,7 +122,9 @@ function modelChoices_() {
   readModelTable_().forEach(function (r) { add(r.model); });
   add(cfg_('활동용 모델', DEFAULT_MODEL));
   add(cfg_('합본용 모델', DEFAULT_MODEL));
-  return usableModels(out, keyStatus_(), providerOf_);
+  var list = usableModels(out.filter(function (m) { return m !== MANUAL_MODEL; }), keyStatus_(), providerOf_);
+  list.push(MANUAL_MODEL);          // 키가 없어도 늘 쓸 수 있는 길 — 맨 끝에
+  return list;
 }
 
 /** 모델 칸의 드롭다운. 쓸 수 있는 모델이 하나도 없으면 null (드롭다운을 걷어 낸다) */
@@ -127,7 +134,7 @@ function modelValidation_() {
   return SpreadsheetApp.newDataValidation()
     .requireValueInList(list, true)
     .setAllowInvalid(true)          // 목록에 없는 이름도 직접 적을 수 있게
-    .setHelpText('API 키를 넣은 회사의 모델(구독을 켰으면 Gemini(구독)도)만 목록에 나옵니다. 메뉴 ② [AI 연결 · 모델 설정]에서 키를 넣거나 구독을 켜세요.')
+    .setHelpText('API 키를 넣은 회사의 모델(구독을 켰으면 Gemini(구독)도)과 [키 없이(복사·붙여넣기)]만 나옵니다. 메뉴 ② [AI 연결 · 모델 설정]에서 키를 넣거나 구독을 켜세요.')
     .build();
 }
 
@@ -176,6 +183,7 @@ function applyConfigModelDropdown_() {
 function providerOf_(model) {
   var m = normModel(model);
   if (!m || m === SUBSCRIPTION_MODEL) return 'subscription';
+  if (m === MANUAL_MODEL) return 'manual';
   return companyMap_()[m] || guessProvider(m);
 }
 
@@ -191,8 +199,27 @@ function keyStatus_() {
   var has = {};
   PROVIDERS.forEach(function (p) { has[p] = !!getKey_(p); });
   has.subscription = subOn_();
+  has.manual = true;
   return has;
 }
+
+/**
+ * 지금 이 시트를 쓰는 구글 계정 — 학교(기관) 계정인지 개인 계정인지.
+ * 학교 계정은 Gemini 앱(gemini.google.com)을 무료로 쓰고 입력 내용이 학습에 쓰이지 않는다(관리자가 켜 두었을 때).
+ * @return {{email:string, domain:string, kind:'school'|'personal'|''}}
+ */
+function accountInfo_() {
+  var email = '';
+  try { email = Session.getActiveUser().getEmail() || ''; } catch (e) {}
+  var domain = email.indexOf('@') > 0 ? email.split('@')[1].toLowerCase() : '';
+  var kind = !domain ? '' : (/^(gmail|googlemail)\.com$/.test(domain) ? 'personal' : 'school');
+  return { email: email, domain: domain, kind: kind };
+}
+
+/** 시작하기 2단계를 [키 없이]로 마쳤는지 (내 계정에 둔다) */
+var MANUAL_PROP = 'MANUAL_OK';
+function manualOn_() { try { return props_().getProperty(MANUAL_PROP) === '1'; } catch (e) { return false; } }
+function setManual_(on) { props_().setProperty(MANUAL_PROP, on ? '1' : '0'); }
 /** 이 모델을 지금 쓸 수 있는지(그 회사 키가 있는지, 구독이면 구독을 켰는지) */
 function modelUsable_(model) { return providerUsable(providerOf_(model), keyStatus_()); }
 
@@ -224,6 +251,36 @@ function saveSubscription(on) {
            message: on ? 'Gemini 구독을 켰습니다. 모델 목록에 Gemini(구독)이 나옵니다.' : 'Gemini 구독을 껐습니다.' };
 }
 
+/** 설정 창: 구독이 있는지 시험 셀(=AI("안녕"))을 만들어 데려간다 */
+function subProbeCreate() {
+  var s = sh_(APP.SH.START) || buildStart();
+  var r = s.getLastRow() + 2;
+  if (r + 1 > s.getMaxRows()) s.insertRowsAfter(s.getMaxRows(), r + 1 - s.getMaxRows());
+  s.getRange(r, 1).setValue('🧪 구독 확인 — 바로 아래 셀을 누르면 뜨는 [생성 및 삽입]을 누르세요. 답이 들어오면 설정 창에서 [결과 확인]. 확인 뒤 두 줄은 지워도 됩니다.')
+    .setFontWeight('bold').setBackground(APP.COLORS.input);
+  var cell = s.getRange(r + 1, 1);
+  cell.setFormula('=AI("한 단어로만 답하세요: 안녕")');
+  ss_().setActiveSheet(s);
+  cell.activate();
+  return { a1: cell.getA1Notation() };
+}
+
+/** 시험 셀을 읽어 답이 있으면 구독을 켠다 */
+function subProbeRead(p) {
+  var s = sh_(APP.SH.START);
+  var v = s && p && p.a1 ? String(s.getRange(p.a1).getDisplayValue() || '').trim() : '';
+  if (!v || /^(loading|로드 중)/i.test(v)) {
+    return { ok: false, message: '아직 답이 없습니다. 시험 셀을 누르고 [생성 및 삽입]을 누른 뒤 다시 확인하세요.' };
+  }
+  if (/^#/.test(v)) {
+    return { ok: false, message: '셀에 ' + v.slice(0, 20) + ' 이(가) 보입니다 — 지금 계정(' + (accountInfo_().email || '?') +
+      ')에서는 =AI 함수를 쓸 수 없습니다. [키 없이(복사·붙여넣기)]나 API 키를 쓰세요.' };
+  }
+  setSub_(true);
+  try { refreshModelDropdowns_(); } catch (e) {}
+  return { ok: true, has: keyStatus_(), message: '✓ 이 계정은 Gemini 구독(=AI)을 쓸 수 있습니다. 구독을 켰습니다. 답: ' + v.slice(0, 30) };
+}
+
 /* -------------------------------------------------------------- 설정 창 */
 function openApiDialog() {
   var html = HtmlService.createHtmlOutputFromFile('UI_ApiKey').setWidth(760).setHeight(640);
@@ -245,7 +302,9 @@ function getAiSettings() {
     presets: presetModelRows_(),
     links: MODEL_LINKS,
     defaults: PROVIDER_DEFAULT_MODEL,
-    fallback: DEFAULT_MODEL
+    fallback: DEFAULT_MODEL,
+    manual: MANUAL_MODEL,
+    account: accountInfo_()
   };
 }
 
@@ -276,7 +335,7 @@ function saveModelSettings(p) {
   var seen = {}, rows = [];
   (p.rows || []).forEach(function (r) {
     var m = normModel(r.model);
-    if (!m || m === SUBSCRIPTION_MODEL || seen[m]) return;
+    if (!m || m === SUBSCRIPTION_MODEL || m === MANUAL_MODEL || seen[m]) return;
     seen[m] = true;
     rows.push({ model: m, company: r.company || '자동', level: r.level || '', memo: r.memo || '', status: r.status || '' });
   });
@@ -311,7 +370,8 @@ function onEdit(e) {
   try {
     if (!e || !e.range) return;
     var s = e.range.getSheet();
-    if (s.getName() !== APP.SH.CONFIG) return;
+    if (s.getName() === APP.SH.RULES) { markBadRegex_(e); return; }
+    if (s.getName() !== APP.SH.CONFIG) { recheckOnEdit_(e); return; }
     var head = modelTableRow_(s);
     var r1 = e.range.getRow(), nr = e.range.getNumRows();
     if (!head || r1 + nr - 1 <= head) return;
@@ -326,6 +386,21 @@ function onEdit(e) {
 }
 var UNCHECKED_MARK = '⏳ 확인 전';
 
+/** [📏 기재요령]에서 찾을 말(정규식)을 고치면 깨진 식은 붉게 표시한다 */
+function markBadRegex_(e) {
+  var s = e.range.getSheet();
+  var r1 = Math.max(e.range.getRow(), APP.DATA_ROW), r2 = e.range.getRow() + e.range.getNumRows() - 1;
+  var c1 = e.range.getColumn(), c2 = c1 + e.range.getNumColumns() - 1;
+  if (c1 > 4 || c2 < 4) return;
+  for (var r = r1; r <= r2; r++) {
+    var cell = s.getRange(r, 4), re = String(cell.getValue() || '');
+    var bad = false;
+    try { if (re) new RegExp(re); } catch (err) { bad = true; }
+    cell.setBackground(bad ? APP.COLORS.warn : APP.COLORS.input);
+    if (bad) s.getRange(r, 6).setValue('⚠ 정규식 오류 — 이 줄은 검사에 쓰이지 않습니다. 괄호·| 를 확인하세요.');
+  }
+}
+
 /* ------------------------------------------------------------ 연결 확인 */
 /**
  * 모델 하나 시험 호출 (설정 창에서 한 줄씩 부른다)
@@ -338,6 +413,10 @@ function testModel(p) {
   if (m === SUBSCRIPTION_MODEL) {
     return { ok: null, model: m, provider: 'subscription',
       message: '스크립트로는 시험할 수 없습니다. 빈 셀에 =AI("안녕")을 넣어 답이 나오면 사용 가능합니다.' };
+  }
+  if (m === MANUAL_MODEL) {
+    return { ok: null, model: m, provider: 'manual',
+      message: '키가 필요 없습니다. 생성할 때 복사·붙여넣기 창이 열립니다.' };
   }
   var prov = companyToProvider(p.company) || providerOf_(m);
   if (!prov || prov === 'subscription') {
@@ -367,7 +446,7 @@ function stamp_() {
 function recordModelStatus_(res, extra) {
   var s = sh_(APP.SH.CONFIG);
   var head = modelTableRow_(s);
-  if (!head || !res || !res.model) return;
+  if (!head || !res || !res.model || res.model === MANUAL_MODEL || res.model === SUBSCRIPTION_MODEL) return;
   var rows = readModelRowsAt_(s, head);
   var text = modelStatusText(res, stamp_());
   for (var i = 0; i < rows.length; i++) {
@@ -386,7 +465,7 @@ function testAllModels() {
   var list = readModelTable_().slice();
   var cur = [normModel(cfg_('활동용 모델', DEFAULT_MODEL)), normModel(cfg_('합본용 모델', DEFAULT_MODEL))];
   cur.forEach(function (m) {
-    if (m && m !== SUBSCRIPTION_MODEL && !list.some(function (r) { return r.model === m; })) list.push({ model: m, company: '자동' });
+    if (m && m !== SUBSCRIPTION_MODEL && m !== MANUAL_MODEL && !list.some(function (r) { return r.model === m; })) list.push({ model: m, company: '자동' });
   });
   var lines = [], okN = 0, badN = 0, noKey = {};
   for (var i = 0; i < list.length; i++) {
@@ -469,6 +548,7 @@ function callAI_(system, user, model, provider, opts) {
   var m = normModel(model);
   var p = provider || providerOf_(m);
   if (p === 'subscription') throw new Error(SUBSCRIPTION_MODEL + ' 은(는) 셀 수식으로 동작합니다. 메뉴 ⑥ 대신 체크박스를 사용하세요.');
+  if (p === 'manual') throw new Error(MANUAL_MODEL + ' 은(는) 스크립트가 부르지 않습니다. 메뉴 ⑥ 을 누르면 복사·붙여넣기 창이 열립니다.');
   if (!p) {
     throw new Error('"' + m + '" 이(가) 어느 회사 모델인지 알 수 없습니다. [⚙️ 설정] 아래 모델 목록의 [회사] 칸을 골라 주세요.');
   }
@@ -491,7 +571,7 @@ function callWithBackup_(system, user, model, opts) {
     return { text: callAI_(system, user, model, null, opts), model: normModel(model), backup: false };
   } catch (e) {
     var bk = normModel(cfg_('예비 모델', ''));
-    if (!bk || bk === normModel(model) || bk === SUBSCRIPTION_MODEL) throw e;
+    if (!bk || bk === normModel(model) || bk === SUBSCRIPTION_MODEL || bk === MANUAL_MODEL) throw e;
     var bp = providerOf_(bk);
     if (!bp || !getKey_(bp)) throw e;
     var t = callAI_(system, user, bk, null, opts);

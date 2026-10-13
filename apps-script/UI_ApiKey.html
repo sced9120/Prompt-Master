@@ -108,11 +108,17 @@
 
 <!-- ─────────────────────────────── ① API 키 -->
 <div class="pane on" id="p-keys">
+  <div class="hint" id="acct" style="margin:0 0 8px"></div>
+  <div class="box" style="margin:0 0 10px;background:#eef4fb;border-color:#cbd9ee">
+    <b class="t">키가 없어도 됩니다 — [키 없이(복사·붙여넣기)]</b>
+    모델 목록에 늘 있습니다. 생성하면 요청문을 만들어 주고, Gemini 앱(학교 계정 권장)·ChatGPT·Claude 대화창에 붙여 넣은 뒤 답을 다시 붙여 넣으면 학생별로 들어가고 검사됩니다.
+  </div>
   <div class="box subbox" style="margin-top:0">
     <label class="inline" style="margin:0"><input type="checkbox" id="subOn"> <b>Gemini 구독으로 쓰기</b> — API 키 없이 시트의 <code>=AI()</code> 함수로</label>
     <div class="hint">학교 계정에 <b>Google AI Pro for Education</b>이 있거나, 개인 <b>Google AI Pro·Ultra</b>를 구독 중이면 켜세요. 켜면 아래 API 키는 넣지 않아도 됩니다.<br>
       확인법: 빈 셀에 <code>=AI("안녕")</code>을 넣고 셀을 눌러 <b>[생성 및 삽입]</b>이 뜨고 답이 나오면 쓸 수 있습니다. 무료 학교 계정(Education Fundamentals)과 AI Plus 요금제는 아직 안 됩니다.<br>
-      구독만 쓰면: 결과는 AI 결과 칸을 선택하고 [생성 및 삽입]을 눌러야 나오고(한 번에 350칸), 여러 학생 묶음 생성·활동 만들기 AI 초안·예시 자동 만들기는 API 키가 있어야 합니다.</div>
+      구독만 쓰면: 결과는 AI 결과 칸을 선택하고 [생성 및 삽입]을 눌러야 나오고(한 번에 350칸), 여러 학생 묶음 생성·활동 만들기 AI 초안·예시 자동 만들기·자동 고쳐쓰기는 API 키가 있어야 합니다.</div>
+    <div class="actions" style="margin-top:6px"><button class="small" id="bProbe">지금 계정에 구독이 있는지 확인</button><button class="small" id="bProbeRead" disabled>결과 확인</button></div>
     <div class="msg" id="mSub"></div>
   </div>
 
@@ -168,7 +174,7 @@
       <select id="backup"></select>
     </div>
     <div class="hint">활동용·합본용 모델이 호출 한도 초과·서버 오류 등으로 실패하면 이 모델로 한 번 더 시도합니다.
-      예) 주 모델 <code>gemini-flash-latest</code> + 예비 <code>gpt-5.6-luna</code>. 입력 시트의 [모델] 칸에서 학생마다 다른 모델을 골라도 됩니다.</div>
+      예) 주 모델 <code>gemini-flash-latest</code> + 예비 <code>gpt-6-luna</code>. 입력 시트의 [모델] 칸에서 학생마다 다른 모델을 골라도 됩니다.</div>
   </div>
 
   <div class="box">
@@ -195,11 +201,11 @@
   <h3>어느 수준의 모델이면 충분할까?</h3>
   <table class="g">
     <tr><th style="width:96px">수준</th><th style="width:190px">예</th><th>이럴 때</th></tr>
-    <tr><td><b>★ 충분 (기본)</b></td><td><code>gemini-flash-latest</code><br><code>gpt-5.6-luna</code><br><code>claude-haiku-4-5</code></td>
+    <tr><td><b>★ 충분 (기본)</b></td><td><code>gemini-flash-latest</code><br><code>gpt-6-luna</code><br><code>claude-haiku-5-5</code></td>
         <td>과세특·창체·행발 거의 모든 경우. 500자 안팎의 글을 규칙대로 쓰는 일은 이 급으로 충분합니다.</td></tr>
     <tr><td><b>가볍게</b></td><td><code>gemini-flash-lite-latest</code></td>
         <td>행발처럼 짧은 글, 한 번에 30명 이상 돌릴 때. 더 빠르고 싸지만 문장이 조금 단조로울 수 있습니다.</td></tr>
-    <tr><td><b>고급</b></td><td><code>gemini-pro-latest</code><br><code>gpt-5.6-terra</code><br><code>claude-sonnet-5</code></td>
+    <tr><td><b>고급</b></td><td><code>gemini-pro-latest</code><br><code>gpt-6-sol</code><br><code>claude-sonnet-5-5</code></td>
         <td>여러 활동을 합친 압축본이 글자수를 자꾸 넘기거나 내용을 빠뜨릴 때만. 느리고 몇 배 비쌉니다. Gemini Pro는 무료 등급에서 막힐 수 있습니다.</td></tr>
     <tr><td><b>필요 없음</b></td><td>각 회사의 최상위 모델</td>
         <td>세특 작성에서는 비용 대비 차이가 거의 없습니다.</td></tr>
@@ -218,7 +224,8 @@
       OpenAI는 1,024토큰 이상이면 자동, Gemini는 프롬프트가 4,096토큰(3.x Flash 기준) 이상일 때 자동, Claude는 이 도구가 캐시 표시를 붙입니다.</td></tr>
   </table>
   <div class="hint">생성이 끝나면 알림에 실제로 쓴 토큰 수(입력·출력·캐시 할인)가 나옵니다. [⑧ 프롬프트 미리보기]에서 프롬프트 길이도 볼 수 있습니다.<br>
-    ※ "스킬(Skills)"은 Claude 앱 안에서 필요한 지침만 꺼내 읽는 기능이라, 시트에서 Gemini·ChatGPT API를 부르는 방식에는 쓸 수 없습니다. 위 방법들이 같은 효과를 냅니다.</div>
+    ※ "스킬(Skills)"·하네스의 생각을 이 도구도 씁니다 — 기록 항목마다 필요한 규칙만 조립하고([🧩 기록종류]의 기재 주의), 생성 뒤 자동 검사 → [수정]이 나오면 걸린 점만 짚어 고쳐 쓰기를 돌립니다.
+    이 규칙을 Claude 스킬·Gemini Gem 으로 그대로 옮기려면 메뉴 ⑧ [AI 앱용 지침 내보내기].</div>
 
   <h3>최신 모델명은 어디서 보나요?</h3>
   <ul>
@@ -258,6 +265,7 @@
 <script>
 var $ = function (id) { return document.getElementById(id); };
 var SUB = 'Gemini(구독)';
+var MANUAL = '키 없이(복사·붙여넣기)';
 var S = null, ROWS = [], ACT = '', CMP = '', BK = '', THINK = true, BATCH = 5, AVAIL = {};
 var SHOWALL = false;    // 키 없는 회사 모델도 펼쳐 보기
 var SAVE_T = null, SAVING = false, PENDING = false, CLOSING = false;
@@ -279,11 +287,15 @@ $('toHelp').onclick = $('toHelp2').onclick = function (e) { e.preventDefault(); 
 /* ---------- 불러오기 */
 google.script.run.withSuccessHandler(function (s) {
   S = s;
+  if (s.manual) MANUAL = s.manual;
+  var a = s.account || {};
+  $('acct').innerHTML = a.email ? '지금 로그인한 계정: <b>' + esc(a.email) + '</b> (' + (a.kind === 'school' ? '학교·기관 계정' : '개인 계정') +
+    ') — 키와 구독 설정은 이 계정에만 저장됩니다. 구독은 계정마다 다르니, 학교 계정으로 쓸 때는 학교 계정으로 로그인한 창에서 켜세요.' : '';
   ROWS = s.rows.map(function (r) { return { model: r.model, company: r.company || '자동', level: r.level, memo: r.memo, status: r.status }; });
   ACT = s.activity || s.fallback; CMP = s.compile || ACT; BK = s.backup || '';
   THINK = s.thinkingLow !== false; BATCH = s.batch || 1;
   [ACT, CMP, BK].forEach(function (m) {
-    if (m && m !== SUB && !ROWS.some(function (r) { return r.model === m; }))
+    if (m && m !== SUB && m !== MANUAL && !ROWS.some(function (r) { return r.model === m; }))
       ROWS.push({ model: m, company: '자동', level: '', memo: '[⚙️ 설정]에 적혀 있던 모델', status: '' });
   });
   $('think').checked = THINK;
@@ -294,7 +306,7 @@ google.script.run.withSuccessHandler(function (s) {
   if (fixed) { noteFix(fixed); scheduleSave(); }
   $('lg').href = s.links.gemini; $('lo').href = s.links.openai; $('la').href = s.links.anthropic;
   if (!hasAnyKey()) {
-    if (!s.has.subscription) { say('mKeys', 'API 키를 하나 넣거나, 맨 위의 [Gemini 구독으로 쓰기]를 켜세요. 키라면 Gemini를 권합니다.'); return; }
+    if (!s.has.subscription) { say('mKeys', '키 없이도 [키 없이(복사·붙여넣기)]로 쓸 수 있습니다. 자동으로 쓰려면 API 키(Gemini 권장)를 넣거나 [Gemini 구독으로 쓰기]를 켜세요.'); return; }
     showTab('models'); return;           // 구독만 쓰는 경우: 키 단계를 건너뛴다
   }
   showTab('models');
@@ -322,6 +334,21 @@ function drawKeys() {
 function hasAnyKey() { return !!(S && (S.has.gemini || S.has.openai || S.has.anthropic)); }
 
 /* ---------- 구독 스위치 */
+var PROBE = null;
+$('bProbe').onclick = function () {
+  var b = this; b.disabled = true; say('mSub', '<span class="spin"></span>시험 셀을 만드는 중…');
+  google.script.run.withSuccessHandler(function (r) {
+    b.disabled = false; PROBE = r; $('bProbeRead').disabled = false;
+    say('mSub', '[🚀 시작하기] 시트 ' + esc(r.a1) + ' 셀을 누르고 <b>[생성 및 삽입]</b>을 누른 뒤, 답이 들어오면 [결과 확인]을 누르세요. 이 창은 닫지 않아도 됩니다.', 'ok');
+  }).withFailureHandler(function (e) { b.disabled = false; say('mSub', esc(e.message), 'err'); }).subProbeCreate();
+};
+$('bProbeRead').onclick = function () {
+  var b = this; b.disabled = true;
+  google.script.run.withSuccessHandler(function (r) {
+    b.disabled = false; say('mSub', esc(r.message), r.ok ? 'ok' : 'err');
+    if (r.ok) { S.has = r.has; $('subOn').checked = true; drawKeys(); drawRows(); fillDatalist(); }
+  }).withFailureHandler(function (e) { b.disabled = false; say('mSub', esc(e.message), 'err'); }).subProbeRead(PROBE);
+};
 $('subOn').onchange = function () {
   var box = this, on = box.checked;
   box.disabled = true; say('mSub', '<span class="spin"></span>저장 중…');
@@ -372,6 +399,7 @@ function usable(r) { var p = provOf(r); return !!(p && S && S.has[p]); }
 function usableName(m) {
   if (!m) return false;
   if (m === SUB) return !!(S && S.has.subscription);    // 구독은 키 대신 [구독으로 쓰기]를 켜야
+  if (m === MANUAL) return true;                        // 키 없이는 늘 쓸 수 있다
   var r = ROWS.filter(function (x) { return norm(x.model) === m; })[0];
   return usable(r || { model: m, company: '자동' });
 }
@@ -383,7 +411,7 @@ function firstUsable() {
   var good = ok.filter(function (r) { return (r.status || '').charAt(0) === '✓'; });
   var r = good[0] || ok[0];
   if (r) return norm(r.model);
-  return S && S.has.subscription ? SUB : '';
+  return S && S.has.subscription ? SUB : MANUAL;
 }
 /** 고른 모델을 못 쓰게 됐으면 쓸 수 있는 모델로 바꾼다. 바꾼 내용을 한 줄로 돌려준다 */
 function fixSelections() {
@@ -419,6 +447,11 @@ function drawRows() {
          '<label class="radio">합본<input type="radio" name="cmp" value="' + SUB + '"' + (CMP === SUB ? ' checked' : '') + '></label>' +
          '<span style="width:34px"></span></div></div>';
   }
+  h += '<div class="mrow fixed"><div class="line1">' +
+       '<div class="name" style="padding:6px 2px">' + esc(MANUAL) + ' <span class="hint">— 키 없이, 요청문 복사 → 대화창 → 답 붙여넣기</span></div>' +
+       '<label class="radio">활동<input type="radio" name="act" value="' + esc(MANUAL) + '"' + (ACT === MANUAL ? ' checked' : '') + '></label>' +
+       '<label class="radio">합본<input type="radio" name="cmp" value="' + esc(MANUAL) + '"' + (CMP === MANUAL ? ' checked' : '') + '></label>' +
+       '<span style="width:34px"></span></div></div>';
   var shown = 0, hidden = 0;
   ROWS.forEach(function (r, i) {
     if (!visible(r)) { hidden++; return; }
@@ -444,7 +477,7 @@ function drawRows() {
       (counts[m] > 1 ? '<span class="s-bad">· 같은 이름이 두 번 있습니다</span>' : '') + '</div></div>';
   });
   if (!shown && !(S && S.has.subscription)) {
-    h += '<div class="empty">아직 쓸 수 있는 모델이 없습니다.<br>[① 키 · 구독]에서 API 키를 넣거나 Gemini 구독을 켜면 그 모델이 여기 나옵니다.</div>';
+    h += '<div class="empty">API 키를 넣은 회사가 아직 없어 위의 [키 없이]만 고를 수 있습니다.<br>[① 키 · 구독]에서 API 키를 넣거나 Gemini 구독을 켜면 그 모델이 여기 나옵니다.</div>';
   }
   box.innerHTML = h;
   $('hiddenNote').innerHTML = SHOWALL
@@ -570,8 +603,8 @@ function save() {
   if (dup) { say('mFoot', '같은 이름이 두 번 있습니다: ' + esc(dup) + ' — 하나를 지우면 저장됩니다.', 'err'); return; }
   if (!rows.length) { say('mFoot', '모델을 한 개 이상 적어 주세요.', 'err'); return; }
   var fb = firstUsable() || rows[0].model;
-  var act = ACT && (ACT === SUB || seen[ACT]) ? ACT : fb;
-  var cmp = CMP && (CMP === SUB || seen[CMP]) ? CMP : act;
+  var act = ACT && (ACT === SUB || ACT === MANUAL || seen[ACT]) ? ACT : fb;
+  var cmp = CMP && (CMP === SUB || CMP === MANUAL || seen[CMP]) ? CMP : act;
   var bk = BK && seen[BK] && usableName(BK) ? BK : '';
   SAVING = true;
   if (!TESTING) say('mFoot', '<span class="spin"></span>저장 중…');

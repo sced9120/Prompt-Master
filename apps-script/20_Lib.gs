@@ -78,7 +78,8 @@ function getRecordTypes_() {
       role: String(r['역할'] || ''),
       goal: String(r['목표'] || ''),
       view: String(r['서술 관점'] || ''),
-      note: String(r['비고'] || '')
+      note: String(r['비고'] || ''),
+      rules: String(r['기재 주의'] || '')
     };
   }).filter(function (r) { return r.key; });
 }

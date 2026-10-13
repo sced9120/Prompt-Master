@@ -69,7 +69,7 @@ function validateExamples() {
 
   var bad = 0, warn = 0;
   rows.forEach(function (e) {
-    var v = validateResult(e.result, limit, PRESET_BANNED, PRESET_FORMAT_RULES);
+    var v = inspect_(e.result, limit);
     s.getRange(e.row, cValid).setValue(formatIssues(v));
     if (!v.ok) bad++;
     else if (v.issues.length) warn++;
@@ -163,7 +163,7 @@ function validateExamplesQuiet_(act) {
   if (!cValid) return;
   var limit = charsFor_(act) * 3;
   readExampleRows_(act).forEach(function (e) {
-    s.getRange(e.row, cValid).setValue(formatIssues(validateResult(e.result, limit, PRESET_BANNED, PRESET_FORMAT_RULES)));
+    s.getRange(e.row, cValid).setValue(formatIssues(inspect_(e.result, limit)));
   });
 }
 

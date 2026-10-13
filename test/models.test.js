@@ -13,6 +13,8 @@ function boot() {
   const g = makeGlobals();
   const ctx = vm.createContext(Object.assign({ module: { exports: {} } }, g));
   files.forEach(f => vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f }));
+  // 규칙판 원격 확인은 rules.test.js 에서 따로 본다 — 여기서는 "방금 확인함"으로 두어 호출 수를 세는 시험이 흔들리지 않게
+  g.__docProps.setProperty('RULES_CHECKED_AT', String(Date.now()));
   return ctx;
 }
 
@@ -136,28 +138,29 @@ t('모델 목록 표가 기본 8개로 채워짐', () => {
   eq(rows[0].model, 'gemini-flash-latest', '첫 줄');
   ok(rows.every(r => r.level && r.memo), '수준·설명 빈칸 있음');
 });
-t('키도 구독도 없으면 드롭다운이 비고, 검증 규칙은 걷어 냄(빈 목록은 구글이 거절)', () => {
-  eq(A.modelChoices_().join(','), '');
-  eq(A.modelValidation_(), null);
+t('키도 구독도 없으면 [키 없이(복사·붙여넣기)]만 나옴 — 드롭다운이 비지 않음', () => {
+  eq(A.modelChoices_().join(','), A.MANUAL_MODEL);
+  ok(A.modelValidation_() !== null, '드롭다운 규칙이 있어야 함');
 });
 t('Gemini 키만 있으면 Gemini 모델만 (구독은 안 나옴)', () => {
   A.setKey_('gemini', 'AIza-x');
   const c = A.modelChoices_();
   ok(c.indexOf('gemini-flash-latest') >= 0, 'Gemini 모델 누락: ' + c.join(','));
-  ok(c.every(m => /^gemini/.test(m)), '다른 회사 모델·구독이 섞임: ' + c.join(','));
+  ok(c.every(m => /^gemini/.test(m) || m === A.MANUAL_MODEL), '다른 회사 모델·구독이 섞임: ' + c.join(','));
+  eq(c[c.length - 1], A.MANUAL_MODEL, '키 없이는 맨 끝');
 });
 t('키를 더 넣으면 그 회사 모델도 나옴', () => {
   A.setKey_('anthropic', 'sk-ant');
   const c = A.modelChoices_();
-  ok(c.indexOf('claude-haiku-4-5') >= 0, 'Claude 모델 누락');
+  ok(c.indexOf('claude-haiku-5-5') >= 0, 'Claude 모델 누락');
   ok(!c.some(m => /^gpt/.test(m)), 'OpenAI 키가 없는데 gpt 모델이 나옴');
   A.setKey_('gemini', ''); A.setKey_('anthropic', '');
 });
 t('구독을 켜면 Gemini(구독)이 맨 앞에, 끄면 사라짐', () => {
   A.saveSubscription(true);
-  eq(A.modelChoices_().join(','), 'Gemini(구독)');
+  eq(A.modelChoices_().join(','), 'Gemini(구독),' + A.MANUAL_MODEL);
   A.saveSubscription(false);
-  eq(A.modelChoices_().join(','), '');
+  eq(A.modelChoices_().join(','), A.MANUAL_MODEL);
 });
 t('모델 표가 다른 설정 읽기를 방해하지 않음', () => {
   eq(Number(A.cfg_('1회 최대 생성 건수', 0)), 25);
@@ -414,7 +417,7 @@ function genSetup(n) {
 const batchReply = (payload) => {
   const user = payload.contents[0].parts[0].text;
   const ids = [...user.matchAll(/## (S\d+)/g)].map(m => m[1]);
-  return { code: 200, body: { candidates: [{ content: { parts: [{ text: JSON.stringify({ results: ids.map(id => ({ id, text: id + ' 학생의 특기사항 문장.' })) }) }] } }],
+  return { code: 200, body: { candidates: [{ content: { parts: [{ text: JSON.stringify({ results: ids.map(id => ({ id, text: id + ' 특기사항 문장.' })) }) }] } }],
                                usageMetadata: { promptTokenCount: 3000, candidatesTokenCount: 900, thoughtsTokenCount: 100, cachedContentTokenCount: 2000 } } };
 };
 t('7명 · 5명씩 묶기 → 호출 2번, 모두 채워짐', () => {
@@ -535,7 +538,7 @@ t('시작하기에서 두 번째 키를 넣으면 주 모델은 두고 예비로
   eq(C.onboardSaveKey({ provider: 'gemini', key: 'AIza', model: '' }).ok, true);
   const r = C.onboardSaveKey({ provider: 'openai', key: 'sk', model: '' });
   eq(r.ok, true); eq(r.kept, true);
-  eq(C.cfg_('활동용 모델', ''), 'gemini-flash-latest'); eq(C.cfg_('예비 모델', ''), 'gpt-5.6-luna');
+  eq(C.cfg_('활동용 모델', ''), 'gemini-flash-latest'); eq(C.cfg_('예비 모델', ''), 'gpt-6-luna');
   ok(C.getKey_('gemini') && C.getKey_('openai'), '두 키 모두 보관');
 });
 t('설정 창 저장: 예비·생각 줄이기·묶음 수', () => {
@@ -571,7 +574,7 @@ t('마법사 모델 목록도 키 있는 모델만', () => {
   const C = boot(); C.installCore_();
   C.setKey_('openai', 'sk');
   const ms = C.wizardContext().models;
-  ok(ms.indexOf('gpt-5.6-luna') >= 0, 'gpt 누락: ' + ms.join(','));
+  ok(ms.indexOf('gpt-6-luna') >= 0, 'gpt 누락: ' + ms.join(','));
   ok(!ms.some(m => /^(gemini|claude)/.test(m)), '키 없는 회사 모델이 섞임: ' + ms.join(','));
 });
 t('시작하기 시험 생성: 활동용 모델 키가 없으면 키 있는 회사의 기본 모델로', () => {
