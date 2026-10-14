@@ -8,7 +8,8 @@ function onOpen() {
   // 항목 이름의 ①~⑧ 번호는 안내문·오류 메시지가 가리키는 이름이라 그대로 둔다.
   var m = ui.createMenu(APP.MENU);
   m.addItem('🚀 시작하기 (처음이면 여기)', 'openOnboard');
-  m.addItem('✍️ 바로 쓰기 시트 추가 (항목 정하지 않고)', 'openQuickSheetDialog');
+  m.addItem('✍️ 바로 쓰기 · 📄 보고서 시트 추가', 'openQuickSheetDialog');
+  m.addItem('📝 구글 설문지 연결 (응답 → 시트, 파일 업로드 포함)', 'openFormDialog');
   m.addItem('🔍 맞춤법 · 금지어 검사', 'openCheckSidebar');
   m.addSeparator();
   m.addItem('⑥ 체크된 행 생성', 'generateChecked');
@@ -20,7 +21,7 @@ function onOpen() {
     .addItem('   모델 연결 테스트', 'testAllModels')
     .addItem('③ 학생 명단 불러오기 (엑셀·붙여넣기)', 'openRosterDialog')
     .addItem('   학생 명단 동기화', 'syncRoster'));
-  m.addSubMenu(ui.createMenu('④⑤ 활동 · 예시')
+  m.addSubMenu(ui.createMenu('④⑤ 활동 · 예시 · 보고서')
     .addItem('④ 활동 만들기 · 입력 항목 바꾸기 ★', 'openWizard')
     .addItem('   활동 직접 추가 (질문에 답하기)', 'addActivityDialog')
     .addItem('   활동 복제', 'duplicateActivityDialog')
@@ -28,7 +29,11 @@ function onOpen() {
     .addSeparator()
     .addItem('⑤ 예시 더 만들기 (AI)', 'generateMoreExamples')
     .addItem('   예시 칸 늘리기', 'addExampleRows')
-    .addItem('   예시 검증', 'validateExamples'));
+    .addItem('   예시 검증', 'validateExamples')
+    .addItem('⭐ 선택한 학생 글을 예시로 등록', 'promoteToExample')
+    .addSeparator()
+    .addItem('📄 보고서 요점 뽑기 (선택한 행)', 'extractReportPoints')
+    .addItem('   보고서 폴더에서 파일 가져오기 (파일 이름으로 학생 찾기)', 'importReportFolder'));
   m.addSubMenu(ui.createMenu('⑥ 생성 더 보기')
     .addItem('📋 키 없이 — 프롬프트 복사 · 답 붙여넣기 (체크된 행)', 'openManualForChecked')
     .addItem('   선택한 행만 생성', 'generateSelection')
@@ -43,13 +48,16 @@ function onOpen() {
     .addItem('⑧ 프롬프트 미리보기', 'previewPrompt')
     .addItem('   AI 앱용 지침 내보내기 (Gemini Gem · Claude 스킬)', 'openExportDialog')
     .addSeparator()
+    .addItem('✒️ 내 문체 카드 만들기', 'openStyleDialog')
+    .addItem('   ✒️ 내 문체 시트 열기 (예전 세특 붙여 넣기)', 'openStyleSheet')
+    .addSeparator()
     .addItem('📏 기재요령 규칙 보기 · 고치기', 'openRulesSheet')
     .addItem('   기재요령 규칙 업데이트 확인', 'checkRulesUpdate'));
   m.addSubMenu(ui.createMenu('도움말 · 부가 기능')
     .addItem('📄 스캔 문서 → 엑셀 사용 설명서 (업무 대시보드)', 'openOcrGuide')
     .addItem('📖 사용법 시트 열기', 'openHelpSheet')
     .addSeparator()
-    .addItem('구글폼 응답 동기화', 'syncFormResponses')
+    .addItem('구글 설문지 응답 지금 받아 오기 (연결해 둔 것 모두)', 'syncFormResponses')
     .addItem('수업관찰 기록 열기', 'openObserve')
     .addItem('수업관찰 웹앱 배포 안내', 'observeDeployHelp')
     .addItem('예시 시트 구조 복구', 'repairExampleSheet')
@@ -115,7 +123,8 @@ function installCore_() {
   var steps = [
     ['🚀 시작하기', buildStart], ['⚙️ 설정', buildConfig], ['🧩 기록종류', buildRecordTypes],
     ['📚 교과영역', buildSubjects], ['📐 공통규칙', buildCommonRules], ['📏 기재요령', buildRulesSheet],
-    ['2026 기재요령 반영', migrateRules_], ['🗂 활동목록', buildActivityList],
+    ['2026 기재요령 반영', migrateRules_], ['✒️ 내 문체', buildStyleSheet], ['내 문체 카드 칸', ensureStyleCardRow_],
+    ['🗂 활동목록', buildActivityList],
     ['👤 학생명단', buildRoster], ['✅ 검토', buildReview], ['📖 사용법', buildHelp],
     ['시트 순서 정리', orderSheets_]
   ];
@@ -133,7 +142,7 @@ function installCore_() {
 
 function orderSheets_() {
   var order = [APP.SH.START, APP.SH.HELP, APP.SH.CONFIG, APP.SH.ROSTER, APP.SH.ACTIVITY,
-               APP.SH.RECORD, APP.SH.SUBJECT, APP.SH.COMMON, APP.SH.RULES];
+               APP.SH.RECORD, APP.SH.SUBJECT, APP.SH.COMMON, APP.SH.RULES, APP.SH.STYLE];
   var i = 1;
   order.forEach(function (n) {
     var s = sh_(n);
@@ -193,7 +202,8 @@ function buildConfig() {
     ['생각 줄이기', true, 'TRUE면 모델의 생각(추론) 단계를 줄여 더 빠르고 싸게 씁니다. 생각 토큰은 출력 요금으로 청구됩니다. 세특 품질에는 거의 영향이 없습니다.'],
     ['한 번에 묶을 학생 수', 5, '여러 학생을 한 번의 호출로 생성합니다. 규칙 부분을 한 번만 보내 비용과 호출 횟수가 줄어듭니다. 1이면 한 명씩(가장 꼼꼼, 가장 비쌈). 최대 10.'],
     ['자동 고쳐쓰기', true, 'TRUE면 생성 직후 검사에서 [수정]이 나온 학생만 걸린 점을 짚어 한 번 더 고쳐 쓰게 합니다(분량 초과·기재 금지어·어미). 그 학생만 호출이 한 번 늘어납니다.'],
-    ['근거 자동 확인', false, 'TRUE면 생성할 때마다 AI 결과가 학생 자료에 있는 내용인지 한 번 더 확인합니다(호출이 학생마다 한 번 늘어남). FALSE여도 메뉴 ⑧ [근거 확인]으로 골라서 할 수 있습니다.']
+    ['근거 자동 확인', false, 'TRUE면 생성할 때마다 AI 결과가 학생 자료에 있는 내용인지 한 번 더 확인합니다(호출이 학생마다 한 번 늘어남). FALSE여도 메뉴 ⑧ [근거 확인]으로 골라서 할 수 있습니다.'],
+    ['내 문체 적용', true, 'TRUE면 [✒️ 내 문체] 시트의 예전 세특(앞 3편)과 [📐 공통규칙]의 내 문체 카드를 모든 생성에 함께 보냅니다. 카드는 학생 자료 바로 뒤에도 한 번 더 붙어 몇 번째 학생이든 같은 문체로 씁니다.']
   ];
   rows.forEach(function (r) { if (existing.hasOwnProperty(r[0])) r[1] = existing[r[0]]; });
   s.getRange(4, 1, rows.length, 3).setValues(rows);
@@ -319,7 +329,7 @@ function refreshActivityValidation_() {
   if (subKeys.length) s.getRange(3, 4, n, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(subKeys, true).build());
   s.getRange(3, 8, n, 1).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList(['자동', '직접작성', '바로쓰기'], true).build());
+    SpreadsheetApp.newDataValidation().requireValueInList(['자동', '직접작성', '바로쓰기', '보고서'], true).build());
 }
 
 /* -------------------------------------------------------------- 학생명단 */

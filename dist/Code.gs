@@ -1,16 +1,16 @@
 /******************************************************************************
- * 세특 작성 도우미 v3.6.0 — 설치용 합본
+ * 세특 작성 도우미 v3.7.0 — 설치용 합본
  *
  * 이 파일 하나에 모든 스크립트가 들어 있습니다.
  * Apps Script 편집기에서 Code.gs 의 내용을 전부 지우고 이 파일을 통째로 붙여넣으세요.
- * HTML 파일 10개는 각각 같은 이름으로 따로 만들어야 합니다:
- *   UI_ApiKey, UI_Check, UI_Export, UI_Manual, UI_Observe, UI_OcrGuide, UI_Onboard, UI_Quick, UI_Roster, UI_Wizard
+ * HTML 파일 12개는 각각 같은 이름으로 따로 만들어야 합니다:
+ *   UI_ApiKey, UI_Check, UI_Export, UI_Form, UI_Manual, UI_Observe, UI_OcrGuide, UI_Onboard, UI_Quick, UI_Roster, UI_Style, UI_Wizard
  *
  * 원본은 모듈별로 나뉘어 있습니다: github.com/sced9120/Prompt-Master
  * 고칠 때는 apps-script/ 의 해당 파일을 고치고 node tools/build.js 를 다시 돌리세요.
  * 이 파일을 직접 고치면 다음 빌드 때 덮어써집니다.
  *
- * 빌드: 2026-10-13  ·  원본 25개 파일
+ * 빌드: 2026-10-14  ·  원본 27개 파일
  *****************************************************************************/
 
 /* ==========================================================================
@@ -27,7 +27,7 @@
  */
 
 var APP = {
-  VERSION: 'v3.6.0',
+  VERSION: 'v3.7.0',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -42,6 +42,7 @@ var APP = {
     COMPILE_PREFIX: '📦 취합 ▸',
     REVIEW: '✅ 검토',
     RULES: '📏 기재요령',
+    STYLE: '✒️ 내 문체',
     FORM_RAW: '📥 폼응답원본'
   },
   SUFFIX: { IN: ' ▸입력', EX: ' ▸예시' },
@@ -332,6 +333,12 @@ var PRESET_COMMON = [
       '- 성취수준 자체나 등급, 석차를 결과물에 직접 언급하지 않는다.'
   },
   {
+    key: 'STYLE_CARD',
+    title: '내 문체 카드',
+    // 비워 두면 쓰지 않는다. 메뉴 ⑧ [✒️ 내 문체 카드 만들기]가 [✒️ 내 문체] 시트의 예전 세특에서 만들어 채운다
+    body: ''
+  },
+  {
     key: 'INSTRUCTION',
     title: '마무리 지시문',
     body:
@@ -565,6 +572,8 @@ function fillTokens(tpl, map) {
  *   o.years     교직 경력 표기 (기본 15)
  *   record.rules 이 기록 항목에만 붙는 기재 주의([🧩 기록종류]의 [기재 주의] — 기재요령 규칙판에서 옴)
  *   activity.mode '바로쓰기' 면 입력 자료가 교사의 자유 메모 한 칸이다
+ *   activity.mode '보고서' 면 입력 자료가 [보고서 요점](교사가 확인한 것)과 [교사 관찰 메모]다
+ *   o.styleSamples 예전에 쓴 세특 몇 편(쓰는 방식만 참고) · common.STYLE_CARD 내 문체 카드
  * @return {string}
  */
 function buildPrompt(o) {
@@ -588,6 +597,7 @@ function buildPrompt(o) {
       COMPETENCY: sub.comp || '',
       VIEW: rec.view || '',
       RECORD_RULES: rec.rules || '',
+      STYLE_CARD: com.STYLE_CARD || '',
       EXAMPLES: o.examples || '',
       CHARS: chars,
       BYTES: bytes,
@@ -637,11 +647,21 @@ function buildPrompt(o) {
   if (String(act.mode || '') === '바로쓰기') {
     P.push('# 입력 자료 형식\n아래 학생 자료는 교사가 수업·활동 중에 관찰하고 자유롭게 적은 메모다. ' +
            '메모에 있는 사실만 근거로 문장을 다듬어 쓴다. 메모가 짧으면 짧게 쓴다.');
+  } else if (String(act.mode || '') === '보고서') {
+    P.push('# 입력 자료 형식\n아래 학생 자료는 학생이 수업 중에 쓴 보고서에서 뽑아 교사가 확인한 [보고서 요점]과, ' +
+           '교사가 수업에서 직접 본 [교사 관찰 메모]다.\n' +
+           '- 보고서 요점은 학생이 쓴 내용이다. 그대로 옮기지 말고, 교사가 수업과 평가에서 관찰한 탐구 과정과 사고의 변화로 서술한다.\n' +
+           '- 교사 관찰 메모가 있으면 그것을 가장 앞세운다. 요점과 메모가 다르면 메모를 따른다.\n' +
+           '- 보고서 제목, 참고문헌, 연구보고서 실적(제목·주제·참여 인원·소요 시간)은 쓰지 않는다.');
   } else if (cols.length) {
     P.push('# 입력 자료 형식\n아래 학생 자료는 다음 항목이 | 로 구분되어 제공된다.\n' + cols.join('|'));
   }
 
-  // ⑦-2 예시
+  // ⑦-2 예시 (문체 예시 → 활동 예시 순)
+  if (o.styleSamples && String(o.styleSamples).trim()) {
+    P.push('# 문체 예시 — 선생님이 예전에 쓴 세특\n내용·소재는 따르지 말고 문장 길이, 여는 방식, 끝맺음, 이음말 같은 쓰는 방식만 따른다.\n\n' +
+           String(o.styleSamples).trim());
+  }
   if (o.examples && String(o.examples).trim()) {
     P.push('# 예시\n표현 방식과 서술 흐름을 참고한다. 문장을 그대로 베끼지 않는다.\n\n' + String(o.examples).trim());
   }
@@ -651,7 +671,12 @@ function buildPrompt(o) {
     P.push('# 성취수준 반영\n' + com.GRADE_RULE);
   }
 
-  // ⑦-4 마무리 지시문
+  // ⑦-4 내 문체 카드 — 규칙 맨 끝(출력 바로 앞)에 두고, 학생 자료 뒤에도 한 번 더 붙인다(styleTail)
+  if (com.STYLE_CARD && String(com.STYLE_CARD).trim()) {
+    P.push('# 내 문체 (예시와 함께 가장 우선해서 따른다)\n' + String(com.STYLE_CARD).trim());
+  }
+
+  // ⑦-5 마무리 지시문
   P.push('# 출력\n' + (com.INSTRUCTION || '특기사항 본문만 한 문단으로 출력한다.'));
 
   return P.join('\n\n');
@@ -1689,6 +1714,318 @@ if (typeof module !== 'undefined' && module.exports) {
 
 
 /* ==========================================================================
+   18_Reports.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 보고서 · 내 문체 · 설문지 (순수 로직)
+ * ---------------------------------------------------------------
+ * 📄 보고서 세특: 완성된 보고서를 곧바로 세특으로 바꾸지 않고 두 단계로 나눈다.
+ *   ① 보고서 → [보고서 요점] (AI 가 정해진 칸에 뽑고, 교사가 확인·수정)
+ *   ② [보고서 요점] + [교사 관찰 메모] + 예시 → 세특 (원래 생성 흐름 그대로)
+ *   긴 보고서를 통째로 넣으면 예시가 묻혀 덜 따르게 되므로, ②에는 요점만 보낸다.
+ * ✒️ 내 문체: 예전에 쓴 세특에서 "쓰는 방식"만 뽑은 문체 카드 + 문체 예시 몇 편.
+ *   카드는 규칙 끝과 학생 자료 바로 뒤에 한 번 더 붙여, 몇 번째 학생이든 똑같이 따르게 한다.
+ * 📝 구글 설문지: 응답 시트의 머리글을 이름으로 읽고(순서·이메일 칸에 흔들리지 않게) 학생과 맞춘다.
+ *
+ * Apps Script와 Node 양쪽에서 동작한다(테스트: test/reports.test.js).
+ * ---------------------------------------------------------------
+ */
+
+/** 보고서 시트의 입력 항목 — 이름이 곧 열 머리글 */
+var REPORT_COL = '보고서', POINTS_COL = '보고서 요점', TEACHER_COL = '교사 관찰 메모';
+var REPORT_COLUMNS = [REPORT_COL, POINTS_COL, TEACHER_COL];
+
+/** 보고서에서 뽑을 요점 칸 (교사가 확인하기 쉬운 순서) */
+var REPORT_POINTS = ['탐구 주제와 동기', '탐구 과정과 방법', '결과와 해석', '한계와 개선점', '활용한 교과 개념', '학생의 생각과 질문'];
+
+var EXTRACT_SYSTEM =
+  '# 역할\n당신은 고등학교 교사의 학교생활기록부 작성을 돕는 조교다. 학생이 수업 중에 쓴 보고서를 읽고, 세특의 근거가 될 요점만 정리한다.\n\n' +
+  '# 지킬 것\n' +
+  '- 보고서에 실제로 쓰여 있는 내용만 쓴다. 추측, 평가, 칭찬을 덧붙이지 않는다.\n' +
+  '- 항목마다 1~3문장으로 짧게. 보고서에 없으면 "없음".\n' +
+  '- 보고서 제목, 참고문헌 목록, 참여 인원·소요 시간, 대학·기관·인물 이름, 수상·점수는 옮기지 않는다.\n' +
+  '- 사진·그림·손글씨도 읽어 내용에 넣는다. 읽기 어려운 곳은 [판독 어려움]이라고 쓴다.\n\n' +
+  '# 출력 (아래 형식 그대로, 다른 말 없이)\n' +
+  REPORT_POINTS.map(function (p) { return p + ': '; }).join('\n');
+
+/** 요점 뽑기 요청문 — 보고서 글(있으면)과 첨부 파일 설명 */
+function buildExtractUser(text, notes) {
+  var L = ['# 학생 보고서'];
+  var t = String(text || '').trim();
+  if (t) L.push(t.length > 30000 ? t.slice(0, 30000) + '\n…(뒷부분 생략)' : t);
+  if (notes && notes.length) L.push('', '(첨부: ' + notes.join(', ') + ')');
+  if (!t && !(notes && notes.length)) L.push('(내용 없음)');
+  return L.join('\n');
+}
+
+/** 요점 답 정리 — 코드 울타리·머리말을 걷고 항목 줄만 남긴다 */
+function cleanPoints(text) {
+  var t = String(text || '').replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
+  var lines = t.split(/\r?\n/).map(function (l) { return l.replace(/^\s*[-*•]\s*/, '').replace(/\*\*/g, '').trimEnd(); });
+  var first = -1;
+  for (var i = 0; i < lines.length; i++) {
+    if (REPORT_POINTS.some(function (p) { return lines[i].indexOf(p) === 0; })) { first = i; break; }
+  }
+  return (first >= 0 ? lines.slice(first) : lines).join('\n').trim();
+}
+
+/** 셀 글 안의 구글 드라이브 파일 ID 들 (설문지 파일 업로드 · 공유 링크 · 문서 링크) */
+function driveIdsIn(text) {
+  var s = String(text || ''), out = [];
+  var add = function (id) { if (id && id.length >= 20 && out.indexOf(id) < 0) out.push(id); };
+  var m, re = /(?:drive|docs)\.google\.com\/(?:open\?id=|file\/d\/|document\/d\/|presentation\/d\/|spreadsheets\/d\/|uc\?(?:export=\w+&)?id=)([A-Za-z0-9_-]{20,})/g;
+  while ((m = re.exec(s))) add(m[1]);
+  return out;
+}
+
+/** 드라이브 폴더 ID */
+function driveFolderIdIn(text) {
+  var m = String(text || '').match(/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([A-Za-z0-9_-]{20,})/);
+  return m ? m[1] : '';
+}
+
+/** 셀 글에서 링크를 뺀 나머지(학생이 함께 적은 설명 등) */
+function textWithoutLinks(text) {
+  return String(text || '').replace(/https?:\/\/\S+/g, '').replace(/[,\s]+$/g, '').trim();
+}
+
+/** XML 에서 글자만 — docx(w:t)·hwpx(hp:t)·pptx(a:t). 문단 끝은 줄바꿈 */
+function xmlText(xml, kind) {
+  var s = String(xml || '');
+  var para = kind === 'hwpx' ? /<\/hp:p>/g : kind === 'pptx' ? /<\/a:p>/g : /<\/w:p>/g;
+  var run = kind === 'hwpx' ? /<hp:t(?:\s[^>]*)?>([\s\S]*?)<\/hp:t>/g : kind === 'pptx' ? /<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g
+                            : /<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g;
+  s = s.replace(para, '\u0001');
+  var out = [], m;
+  var chunks = s.split('\u0001');
+  chunks.forEach(function (c) {
+    var line = '';
+    run.lastIndex = 0;
+    while ((m = run.exec(c))) line += m[1];
+    line = line.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+               .replace(/&apos;/g, "'").replace(/&amp;/g, '&').trim();
+    if (line) out.push(line);
+  });
+  return out.join('\n');
+}
+
+/** 파일 종류 → 읽는 방법: 'gdoc'·'text'·'docx'·'hwpx'·'pptx'·'pdf'·'image'·'hwp'·'' */
+function fileKind(mime, name) {
+  var m = String(mime || ''), n = String(name || '').toLowerCase();
+  if (/application\/vnd\.google-apps\.(document|presentation)/.test(m)) return 'gdoc';
+  if (/^text\//.test(m) || /\.(txt|md)$/.test(n)) return 'text';
+  if (/wordprocessingml/.test(m) || /\.docx$/.test(n)) return 'docx';
+  if (/presentationml/.test(m) || /\.pptx$/.test(n)) return 'pptx';
+  if (/hwp\+zip|hwpx/.test(m) || /\.hwpx$/.test(n)) return 'hwpx';
+  if (/\.hwp$/.test(n) || /x-hwp|haansoft/.test(m)) return 'hwp';
+  if (/pdf/.test(m) || /\.pdf$/.test(n)) return 'pdf';
+  if (/^image\/(png|jpe?g|webp|gif|heic|heif)$/.test(m) || /\.(png|jpe?g|webp|gif|heic|heif)$/.test(n)) return 'image';
+  return '';
+}
+
+/**
+ * 폴더의 파일 이름 → 학생. 학번(20315) > 이름 > "3반 15번"/"3-15" 순으로 찾는다.
+ * @param {string} fileName
+ * @param {Array<{year?, cls, no, name}>} students
+ * @return {number} students 의 위치, 못 찾으면 -1 (둘 이상이 맞으면 -1)
+ */
+function matchFileToStudent(fileName, students) {
+  var f = String(fileName || '').replace(/\.[A-Za-z0-9]{2,5}$/, '');
+  var hits = [];
+  var push = function (i) { if (hits.indexOf(i) < 0) hits.push(i); };
+  var sid = f.match(/(?:^|\D)(\d{5})(?:\D|$)/);
+  if (sid) {
+    var y = Number(sid[1].charAt(0)), c = Number(sid[1].slice(1, 3)), n = Number(sid[1].slice(3));
+    students.forEach(function (st, i) {
+      if (Number(st.cls) === c && Number(st.no) === n && (!st.year || Number(st.year) === y)) push(i);
+    });
+    if (hits.length === 1) return hits[0];
+    hits = [];
+  }
+  students.forEach(function (st, i) {
+    var nm = String(st.name || '').trim();
+    if (nm.length >= 2 && f.indexOf(nm) >= 0) push(i);
+  });
+  if (hits.length === 1) return hits[0];
+  if (hits.length > 1) return -1;
+  var cn = f.match(/(\d{1,2})\s*반\s*(\d{1,2})\s*번/) || f.match(/(?:^|\D)(\d{1,2})\s*-\s*(\d{1,2})(?:\D|$)/);
+  if (cn) {
+    students.forEach(function (st, i) { if (Number(st.cls) === Number(cn[1]) && Number(st.no) === Number(cn[2])) push(i); });
+    if (hits.length === 1) return hits[0];
+  }
+  return -1;
+}
+
+/* ============================================================ 내 문체 */
+var STYLE_SYSTEM =
+  '# 역할\n당신은 학교생활기록부 문장의 문체를 분석하는 교사다.\n\n' +
+  '# 할 일\n아래 [예전에 쓴 세특]들에서 "쓰는 방식"만 뽑아 문체 카드를 만든다. 학생·활동 내용은 옮기지 않는다.\n' +
+  '다음을 각각 한 줄로: 한 편의 문장 수와 문장 길이, 첫 문장을 여는 방식, 내용을 펼치는 순서, 끝맺음 어미, 자주 쓰는 이음말, ' +
+  '평가어를 쓰는 정도, 피하는 표현. 8줄 이내로, 줄마다 "- "로 시작한다. 다른 사람이 이 카드만 보고 같은 문체로 쓸 수 있게 구체적으로.\n\n' +
+  '# 출력\n문체 카드만 출력한다.';
+
+function buildStyleUser(samples) {
+  return '# 예전에 쓴 세특\n' + samples.map(function (t, i) { return '## ' + (i + 1) + '\n' + String(t).trim(); }).join('\n\n');
+}
+
+/** 문체 카드를 학생 자료 바로 뒤에 한 번 더 — 글을 쓰기 직전에 본 것을 가장 잘 따르므로 */
+function styleTail(card) {
+  card = String(card || '').trim();
+  return card ? '\n\n# 쓰기 직전 확인 — 내 문체 (예시·규칙과 함께 그대로 따른다)\n' + card : '';
+}
+
+/** 문장 나누기 — 마침표 기준(소수점 제외) */
+function sentencesOf(text) {
+  return String(text || '').replace(/\s+/g, ' ').split(/(?<=[가-힣a-zA-Z)\]])\.(?:\s|$)/).map(function (x) { return x.trim(); }).filter(String);
+}
+
+/** 문체 지표: 문장 평균 길이, '~하였음'류 끝맺음 비율 */
+function styleProfile(texts) {
+  var lens = [], past = 0, total = 0;
+  (texts || []).forEach(function (t) {
+    sentencesOf(t).forEach(function (s) {
+      lens.push(s.length);
+      total++;
+      if (/(였|었|았|했)음$|하였음$/.test(s)) past++;
+    });
+  });
+  if (!total) return null;
+  var avg = lens.reduce(function (a, b) { return a + b; }, 0) / total;
+  return { avgLen: Math.round(avg), pastRatio: past / total, sentences: total, texts: (texts || []).length };
+}
+
+/**
+ * 예시·내 문체와 견줘 많이 다르면 [확인] 한 줄. 기준 글이 2편 미만이면 보지 않는다.
+ * @return {{level, label, hit, why}|null}
+ */
+function styleDrift(ref, text) {
+  if (!ref || ref.texts < 2) return null;
+  var p = styleProfile([text]);
+  if (!p) return null;
+  var why = [];
+  if (ref.pastRatio >= 0.6 && p.pastRatio < 0.3) why.push("끝맺음: 예시는 '~하였음' 쪽인데 이 글은 '~함' 쪽");
+  else if (ref.pastRatio <= 0.2 && p.pastRatio >= 0.6) why.push("끝맺음: 예시는 '~함' 쪽인데 이 글은 '~하였음' 쪽");
+  var r = p.avgLen / Math.max(ref.avgLen, 1);
+  if (r > 1.6 || r < 0.6) why.push('문장 길이: 예시 평균 ' + ref.avgLen + '자, 이 글 ' + p.avgLen + '자');
+  return why.length ? { level: 'check', label: '문체', hit: why.join(' / '), why: '예시·내 문체와 많이 다릅니다. 같은 문체로 맞추려면 고쳐 쓰세요.' } : null;
+}
+
+/* ============================================================ 구글 설문지 */
+/** 설문지 머리글 한 칸 → 'ts'·'email'·'sid'·'year'·'cls'·'no'·'name'·'' */
+function formHeadKind(title) {
+  var raw = String(title === null || title === undefined ? '' : title).trim();
+  if (!raw) return '';
+  if (/타임스탬프|timestamp/i.test(raw)) return 'ts';
+  if (/이메일|e-?mail/i.test(raw)) return 'email';
+  var t = raw.replace(/\(.*?\)|\[.*?\]/g, '').replace(/[?？:：*.!]/g, '').replace(/\s+/g, '')
+             .replace(/(을|를|은|는)?(입력|적어|써|선택)(하세요|주세요|해주세요|해 주세요|주십시오|하시오).*$/, '')
+             .replace(/(이|가)?(인가요|입니까|이에요|예요|이요)$/, '').replace(/^몇/, '');
+  var k = typeof rosterHeadKind === 'function' ? rosterHeadKind(t) : '';
+  return k === 'level' ? '' : k;
+}
+
+/** 설문지 응답 시트 머리글 해석 — 학생 칸과 문항 칸을 나눈다 */
+function parseFormHeader(head) {
+  var info = { ts: -1, email: -1, sid: -1, year: -1, cls: -1, no: -1, name: -1, questions: [] };
+  (head || []).forEach(function (h, i) {
+    var k = formHeadKind(h);
+    if (k && info[k] === -1) { info[k] = i; return; }
+    if (String(h || '').trim()) info.questions.push({ i: i, title: String(h).trim() });
+  });
+  info.ok = info.sid >= 0 || (info.cls >= 0 && info.no >= 0) || info.name >= 0;
+  return info;
+}
+
+/** 응답 한 줄 → 학생 표시 {year, cls, no, name} */
+function formStudentOf(row, info) {
+  var st = { year: '', cls: '', no: '', name: '' };
+  if (info.sid >= 0) {
+    var p = typeof splitStudentId === 'function' ? splitStudentId(row[info.sid]) : null;
+    if (p) { st.year = p[0]; st.cls = p[1]; st.no = p[2]; }
+  }
+  var num = function (v) { var m = String(v === null || v === undefined ? '' : v).match(/\d+/); return m ? Number(m[0]) : ''; };
+  if (info.year >= 0 && row[info.year] !== '') st.year = num(row[info.year]);
+  if (info.cls >= 0 && row[info.cls] !== '') st.cls = num(row[info.cls]);
+  if (info.no >= 0 && row[info.no] !== '') st.no = num(row[info.no]);
+  if (info.name >= 0) st.name = String(row[info.name] || '').trim();
+  return st;
+}
+
+/** 같은 학생이 여러 번 내면 마지막 응답만 (응답 시트는 시간 순) */
+function latestResponses(rows, info) {
+  var byKey = {}, order = [];
+  (rows || []).forEach(function (r) {
+    var st = formStudentOf(r, info);
+    var key = (st.cls !== '' && st.no !== '') ? (st.year || '') + '|' + st.cls + '|' + st.no : 'n|' + st.name;
+    if (key === 'n|') return;
+    if (!byKey[key]) order.push(key);
+    byKey[key] = { st: st, row: r };
+  });
+  return order.map(function (k) { return byKey[k]; });
+}
+
+/**
+ * 문항 → 보낼 칸 자동 연결. 이름이 같은 칸, 보고서 시트면 파일·"보고서" 문항 → [보고서].
+ * @param {Array<{title, isFile?}>} questions
+ * @param {string[]} targetCols  활동의 입력 항목
+ * @param {string} mode  '보고서' | '바로쓰기' | ''
+ * @return {Object<string,string>} 문항 제목 → 칸 이름 ('' 이면 보내지 않음)
+ */
+function autoMapQuestions(questions, targetCols, mode) {
+  var map = {};
+  var norm = function (s) { return String(s || '').replace(/\s+/g, '').replace(/[?？:：().]/g, ''); };
+  (questions || []).forEach(function (q) {
+    var hit = '';
+    (targetCols || []).forEach(function (c) { if (!hit && norm(c) === norm(q.title)) hit = c; });
+    if (!hit && mode === '보고서' && (q.isFile || /보고서|탐구|산출물|과제/.test(q.title))) hit = REPORT_COL;
+    if (!hit && mode === '바로쓰기' && targetCols.length === 1) hit = targetCols[0];
+    map[q.title] = hit;
+  });
+  return map;
+}
+
+/** 여러 문항이 한 칸으로 갈 때 "문항: 답" 으로 잇는다(한 문항뿐이면 답만) */
+function joinAnswers(parts) {
+  var filled = (parts || []).filter(function (p) { return String(p.value === null || p.value === undefined ? '' : p.value).trim() !== ''; });
+  if (filled.length === 1) return String(filled[0].value).trim();
+  return filled.map(function (p) { return p.title + ': ' + String(p.value).trim(); }).join('\n');
+}
+
+/** 짧은 지문 — 설문지에서 넣은 값을 선생님이 고쳤는지 알아보는 데 쓴다 */
+function textHash(s) {
+  s = String(s === null || s === undefined ? '' : s);
+  var h = 5381;
+  for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+var FORM_NOTE_PREFIX = '📝 설문지에서 가져옴';
+function formNote(hash, when) { return FORM_NOTE_PREFIX + ' ' + (when || '') + ' #' + hash; }
+function noteHash(note) { var m = String(note || '').match(/#([0-9a-z]+)\s*$/); return m ? m[1] : ''; }
+
+/** 이 칸을 설문지 값으로 바꿔도 되는지: 비었거나, 지난번 설문지 값 그대로(선생님이 안 고침)일 때 */
+function formCellWritable(current, note) {
+  var cur = String(current === null || current === undefined ? '' : current);
+  if (!cur.trim()) return true;
+  var h = noteHash(note);
+  return !!h && String(note).indexOf(FORM_NOTE_PREFIX) === 0 && textHash(cur) === h;
+}
+
+/* Node 테스트용 export (Apps Script에서는 무시됨) */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    REPORT_COLUMNS: REPORT_COLUMNS, REPORT_POINTS: REPORT_POINTS, EXTRACT_SYSTEM: EXTRACT_SYSTEM,
+    buildExtractUser: buildExtractUser, cleanPoints: cleanPoints, driveIdsIn: driveIdsIn, driveFolderIdIn: driveFolderIdIn,
+    textWithoutLinks: textWithoutLinks, xmlText: xmlText, fileKind: fileKind, matchFileToStudent: matchFileToStudent,
+    STYLE_SYSTEM: STYLE_SYSTEM, buildStyleUser: buildStyleUser, styleTail: styleTail, sentencesOf: sentencesOf,
+    styleProfile: styleProfile, styleDrift: styleDrift, formHeadKind: formHeadKind, parseFormHeader: parseFormHeader,
+    formStudentOf: formStudentOf, latestResponses: latestResponses, autoMapQuestions: autoMapQuestions,
+    joinAnswers: joinAnswers, textHash: textHash, formNote: formNote, noteHash: noteHash, formCellWritable: formCellWritable
+  };
+}
+
+
+/* ==========================================================================
    20_Lib.gs
    ========================================================================== */
 
@@ -1835,11 +2172,42 @@ function promptFor_(act, examples) {
   var recs = getRecordTypes_(), subs = getSubjects_(), com = getCommon_();
   var rec = findByKey(recs, act.recordKey) || recs[0];
   var sub = findByKey(subs, act.subjectKey) || findByKey(subs, '공통') || subs[0];
+  var useStyle = styleOn_();
+  if (!useStyle) com.STYLE_CARD = '';
   return buildPrompt({
     activity: act, record: rec, subject: sub, common: com,
     examples: examples === undefined ? readExamples_(act) : examples,
+    styleSamples: useStyle ? readStyleSamples_() : '',
     years: Number(cfg_('교사 경력(년)', 15))
   });
+}
+
+/** [⚙️ 설정] 내 문체 적용 (없으면 켬) */
+function styleOn_() { return cfgBool_('내 문체 적용', true); }
+
+/** 학생 자료 바로 뒤에 붙일 문체 카드 (꺼 두었거나 카드가 없으면 '') */
+function styleTail_() {
+  if (!styleOn_()) return '';
+  try { return styleTail(getCommon_().STYLE_CARD || ''); } catch (e) { return ''; }
+}
+
+/**
+ * AI 에게 보낼 입력 항목 — 보고서 시트는 [보고서] 원문 대신 확인된 요점과 관찰 메모만 보낸다
+ * (긴 원문이 예시를 덮지 않게).
+ * @return {Array<{name:string, i:number}>}  i = 입력 항목 안에서의 위치
+ */
+function modelCols_(act) {
+  var cols = parseColumns(act.columns);
+  return cols.map(function (c, i) { return { name: c, i: i }; })
+    .filter(function (x) { return !(act.mode === '보고서' && x.name === REPORT_COL); });
+}
+
+/** 한 학생의 입력값 → AI 에게 보낼 자료 한 덩어리 */
+function blockFor_(act, values, grade) {
+  var mc = modelCols_(act);
+  return buildStudentBlock(mc.map(function (x) { return x.name; }),
+    mc.map(function (x) { var v = values[x.i]; return x.name === POINTS_COL ? String(v || '').replace(/\s*\n\s*/g, ' / ') : v; }),
+    { grade: grade });
 }
 
 /** 활동의 글자수(활동값 > 기록종류 기본값) */
@@ -1872,14 +2240,15 @@ function readExampleRows_(act) {
 
 /** 예시 시트에서 예시 합본(프롬프트용 문자열) 읽기 */
 function readExamples_(act) {
-  var cols = parseColumns(act.columns);
+  var mc = modelCols_(act);
   var rows = readExampleRows_(act);
   var cap = typeof EXAMPLE_MAX === 'number' ? EXAMPLE_MAX : 8;
   var out = [];
   for (var i = 0; i < rows.length && i < cap; i++) {
     var parts = [];
-    for (var c = 0; c < cols.length; c++) {
-      if (rows[i].values[c]) parts.push(cols[c] + ': ' + rows[i].values[c].replace(/\n/g, ' '));
+    for (var k = 0; k < mc.length; k++) {
+      var v = rows[i].values[mc[k].i];
+      if (v) parts.push(mc[k].name + ': ' + v.replace(/\s*\n\s*/g, mc[k].name === POINTS_COL ? ' / ' : ' '));
     }
     out.push('## 예시' + (i + 1) + ' 입력\n' + parts.join('\n') +
              '\n## 예시' + (i + 1) + ' 결과\n' + rows[i].result);
@@ -1993,7 +2362,8 @@ function onOpen() {
   // 항목 이름의 ①~⑧ 번호는 안내문·오류 메시지가 가리키는 이름이라 그대로 둔다.
   var m = ui.createMenu(APP.MENU);
   m.addItem('🚀 시작하기 (처음이면 여기)', 'openOnboard');
-  m.addItem('✍️ 바로 쓰기 시트 추가 (항목 정하지 않고)', 'openQuickSheetDialog');
+  m.addItem('✍️ 바로 쓰기 · 📄 보고서 시트 추가', 'openQuickSheetDialog');
+  m.addItem('📝 구글 설문지 연결 (응답 → 시트, 파일 업로드 포함)', 'openFormDialog');
   m.addItem('🔍 맞춤법 · 금지어 검사', 'openCheckSidebar');
   m.addSeparator();
   m.addItem('⑥ 체크된 행 생성', 'generateChecked');
@@ -2005,7 +2375,7 @@ function onOpen() {
     .addItem('   모델 연결 테스트', 'testAllModels')
     .addItem('③ 학생 명단 불러오기 (엑셀·붙여넣기)', 'openRosterDialog')
     .addItem('   학생 명단 동기화', 'syncRoster'));
-  m.addSubMenu(ui.createMenu('④⑤ 활동 · 예시')
+  m.addSubMenu(ui.createMenu('④⑤ 활동 · 예시 · 보고서')
     .addItem('④ 활동 만들기 · 입력 항목 바꾸기 ★', 'openWizard')
     .addItem('   활동 직접 추가 (질문에 답하기)', 'addActivityDialog')
     .addItem('   활동 복제', 'duplicateActivityDialog')
@@ -2013,7 +2383,11 @@ function onOpen() {
     .addSeparator()
     .addItem('⑤ 예시 더 만들기 (AI)', 'generateMoreExamples')
     .addItem('   예시 칸 늘리기', 'addExampleRows')
-    .addItem('   예시 검증', 'validateExamples'));
+    .addItem('   예시 검증', 'validateExamples')
+    .addItem('⭐ 선택한 학생 글을 예시로 등록', 'promoteToExample')
+    .addSeparator()
+    .addItem('📄 보고서 요점 뽑기 (선택한 행)', 'extractReportPoints')
+    .addItem('   보고서 폴더에서 파일 가져오기 (파일 이름으로 학생 찾기)', 'importReportFolder'));
   m.addSubMenu(ui.createMenu('⑥ 생성 더 보기')
     .addItem('📋 키 없이 — 프롬프트 복사 · 답 붙여넣기 (체크된 행)', 'openManualForChecked')
     .addItem('   선택한 행만 생성', 'generateSelection')
@@ -2028,13 +2402,16 @@ function onOpen() {
     .addItem('⑧ 프롬프트 미리보기', 'previewPrompt')
     .addItem('   AI 앱용 지침 내보내기 (Gemini Gem · Claude 스킬)', 'openExportDialog')
     .addSeparator()
+    .addItem('✒️ 내 문체 카드 만들기', 'openStyleDialog')
+    .addItem('   ✒️ 내 문체 시트 열기 (예전 세특 붙여 넣기)', 'openStyleSheet')
+    .addSeparator()
     .addItem('📏 기재요령 규칙 보기 · 고치기', 'openRulesSheet')
     .addItem('   기재요령 규칙 업데이트 확인', 'checkRulesUpdate'));
   m.addSubMenu(ui.createMenu('도움말 · 부가 기능')
     .addItem('📄 스캔 문서 → 엑셀 사용 설명서 (업무 대시보드)', 'openOcrGuide')
     .addItem('📖 사용법 시트 열기', 'openHelpSheet')
     .addSeparator()
-    .addItem('구글폼 응답 동기화', 'syncFormResponses')
+    .addItem('구글 설문지 응답 지금 받아 오기 (연결해 둔 것 모두)', 'syncFormResponses')
     .addItem('수업관찰 기록 열기', 'openObserve')
     .addItem('수업관찰 웹앱 배포 안내', 'observeDeployHelp')
     .addItem('예시 시트 구조 복구', 'repairExampleSheet')
@@ -2100,7 +2477,8 @@ function installCore_() {
   var steps = [
     ['🚀 시작하기', buildStart], ['⚙️ 설정', buildConfig], ['🧩 기록종류', buildRecordTypes],
     ['📚 교과영역', buildSubjects], ['📐 공통규칙', buildCommonRules], ['📏 기재요령', buildRulesSheet],
-    ['2026 기재요령 반영', migrateRules_], ['🗂 활동목록', buildActivityList],
+    ['2026 기재요령 반영', migrateRules_], ['✒️ 내 문체', buildStyleSheet], ['내 문체 카드 칸', ensureStyleCardRow_],
+    ['🗂 활동목록', buildActivityList],
     ['👤 학생명단', buildRoster], ['✅ 검토', buildReview], ['📖 사용법', buildHelp],
     ['시트 순서 정리', orderSheets_]
   ];
@@ -2118,7 +2496,7 @@ function installCore_() {
 
 function orderSheets_() {
   var order = [APP.SH.START, APP.SH.HELP, APP.SH.CONFIG, APP.SH.ROSTER, APP.SH.ACTIVITY,
-               APP.SH.RECORD, APP.SH.SUBJECT, APP.SH.COMMON, APP.SH.RULES];
+               APP.SH.RECORD, APP.SH.SUBJECT, APP.SH.COMMON, APP.SH.RULES, APP.SH.STYLE];
   var i = 1;
   order.forEach(function (n) {
     var s = sh_(n);
@@ -2178,7 +2556,8 @@ function buildConfig() {
     ['생각 줄이기', true, 'TRUE면 모델의 생각(추론) 단계를 줄여 더 빠르고 싸게 씁니다. 생각 토큰은 출력 요금으로 청구됩니다. 세특 품질에는 거의 영향이 없습니다.'],
     ['한 번에 묶을 학생 수', 5, '여러 학생을 한 번의 호출로 생성합니다. 규칙 부분을 한 번만 보내 비용과 호출 횟수가 줄어듭니다. 1이면 한 명씩(가장 꼼꼼, 가장 비쌈). 최대 10.'],
     ['자동 고쳐쓰기', true, 'TRUE면 생성 직후 검사에서 [수정]이 나온 학생만 걸린 점을 짚어 한 번 더 고쳐 쓰게 합니다(분량 초과·기재 금지어·어미). 그 학생만 호출이 한 번 늘어납니다.'],
-    ['근거 자동 확인', false, 'TRUE면 생성할 때마다 AI 결과가 학생 자료에 있는 내용인지 한 번 더 확인합니다(호출이 학생마다 한 번 늘어남). FALSE여도 메뉴 ⑧ [근거 확인]으로 골라서 할 수 있습니다.']
+    ['근거 자동 확인', false, 'TRUE면 생성할 때마다 AI 결과가 학생 자료에 있는 내용인지 한 번 더 확인합니다(호출이 학생마다 한 번 늘어남). FALSE여도 메뉴 ⑧ [근거 확인]으로 골라서 할 수 있습니다.'],
+    ['내 문체 적용', true, 'TRUE면 [✒️ 내 문체] 시트의 예전 세특(앞 3편)과 [📐 공통규칙]의 내 문체 카드를 모든 생성에 함께 보냅니다. 카드는 학생 자료 바로 뒤에도 한 번 더 붙어 몇 번째 학생이든 같은 문체로 씁니다.']
   ];
   rows.forEach(function (r) { if (existing.hasOwnProperty(r[0])) r[1] = existing[r[0]]; });
   s.getRange(4, 1, rows.length, 3).setValues(rows);
@@ -2304,7 +2683,7 @@ function refreshActivityValidation_() {
   if (subKeys.length) s.getRange(3, 4, n, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(subKeys, true).build());
   s.getRange(3, 8, n, 1).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList(['자동', '직접작성', '바로쓰기'], true).build());
+    SpreadsheetApp.newDataValidation().requireValueInList(['자동', '직접작성', '바로쓰기', '보고서'], true).build());
 }
 
 /* -------------------------------------------------------------- 학생명단 */
@@ -2612,13 +2991,13 @@ function onboardCreateQuick(p) {
 /* -------------------------------------------------------------- 5단계 */
 /** 시험에 쓸 학생 자료 한 건 — 예시 시트 1번, 없으면(바로 쓰기) 보기 메모 */
 function testBlockFor_(act) {
-  var cols = parseColumns(act.columns);
   var rec = findByKey(getRecordTypes_(), act.recordKey);
   var rows = readExampleRows_(act);
   var values = rows.length ? rows[0].values : null;
   if (!values && act.mode === '바로쓰기') values = [SAMPLE_MEMO[act.recordKey] || SAMPLE_MEMO['과세특']];
+  if (!values && act.mode === '보고서') values = ['', SAMPLE_POINTS, ''];
   if (!values) throw new Error('예시 시트가 비어 있어 시험할 자료가 없습니다. 활동을 다시 만들거나 예시를 한 줄 채워 주세요.');
-  return buildStudentBlock(cols, values, { grade: (rec && rec.useGrade) ? 3 : '' });
+  return blockFor_(act, values, (rec && rec.useGrade) ? 3 : '');
 }
 
 /** 키 없이 시험: 요청문을 만들어 준다 */
@@ -2732,9 +3111,11 @@ function onboardGoto(name) {
 /** [🚀 시작하기] 시트 위쪽 버튼 — 그림에 함수를 붙인다(휴대폰 앱에서는 동작하지 않아 메뉴 안내를 함께 둔다) */
 var START_BUTTONS = [
   { img: 'start', fn: 'openOnboard', alt: '시작하기 (처음이면 여기)', row: 0, col: 0 },
-  { img: 'quick', fn: 'openQuickSheetDialog', alt: '바로 쓰기 시트 만들기', row: 0, col: 1 },
-  { img: 'check', fn: 'openCheckSidebar', alt: '맞춤법 · 금지어 검사', row: 1, col: 0 },
-  { img: 'ocr', fn: 'openOcrGuide', alt: '스캔 문서 → 엑셀 사용 설명서', row: 1, col: 1 }
+  { img: 'quick', fn: 'openQuickSheetDialog', alt: '바로 쓰기 · 보고서 시트 추가', row: 0, col: 1 },
+  { img: 'form', fn: 'openFormDialog', alt: '구글 설문지 연결', row: 1, col: 0 },
+  { img: 'check', fn: 'openCheckSidebar', alt: '맞춤법 · 금지어 검사', row: 1, col: 1 },
+  { img: 'style', fn: 'openStyleDialog', alt: '내 문체 카드', row: 2, col: 0 },
+  { img: 'ocr', fn: 'openOcrGuide', alt: '스캔 문서 → 엑셀 사용 설명서', row: 2, col: 1 }
 ];
 
 function buildStart() {
@@ -2746,6 +3127,7 @@ function buildStart() {
 
   L.push(['#', '세특 작성 도우미 ' + APP.VERSION]);
   P('학생부 특기사항을 활동 단위로 모으고, 프롬프트를 자동으로 조립해 AI에게 맡기는 도구입니다. 과목별 세특 · 자율 · 동아리 · 진로 · 행발까지 같은 방식으로 씁니다.');
+  L.push(['btn', '']);
   L.push(['btn', '']);
   L.push(['btn', '']);
   P('버튼이 안 눌리면 상단 메뉴 [' + APP.MENU + '] 에서 같은 이름을 누르세요. (휴대폰·태블릿 앱에서는 버튼이 동작하지 않습니다)');
@@ -2780,6 +3162,9 @@ function buildStart() {
   H('이 도구로 할 수 있는 것');
   P('· 활동별 세특·창체·행발 초안 — 메뉴 ④ 활동 만들기 (입력 항목은 직접 적거나 AI에게 맡김)');
   P('· ✍️ 바로 쓰기 — 입력 항목을 정하지 않고 학생마다 메모만 적어 초안 받기, 또는 직접 쓴 글을 바로 검사하기');
+  P('· 📄 보고서 세특 — 학생 보고서(본문·PDF·사진·구글 문서·HWPX) → AI가 요점 뽑기 → 선생님 확인 → 직접 쓴 3~5편을 ⭐예시로 → 나머지 생성');
+  P('· 📝 구글 설문지 연결 — 응답이 오면 저절로 시트에(파일 업로드 보고서 포함), 원하면 바로 생성');
+  P('· ✒️ 내 문체 — 예전에 쓴 세특을 넣으면 "나처럼" 쓰도록 문체 카드를 만들어 모든 학생에게 똑같이 적용');
   P('· 🔍 맞춤법 · 금지어 검사 — 2026 기재요령 금지어, 어미 · 특수문자, 맞춤법 · 띄어쓰기, 나이스 바이트');
   P('· 생성 직후 자동 검사 → [수정]이 나온 학생만 걸린 점을 짚어 한 번 더 고쳐 쓰기, 원하면 근거 확인(학생 자료에 없는 내용 찾기)');
   P('· 📏 기재요령 규칙판은 해마다 저절로 업데이트 — 직접 고친 칸은 그대로 둡니다');
@@ -2856,14 +3241,14 @@ function buildHelp() {
   P('교과 세특뿐 아니라 자율·동아리·진로·행동특성 및 종합의견까지 같은 방식으로 씁니다.');
   P('⚠️ ' + AI_NOTICE_2026);
 
-  H('메뉴 한눈에 보기 (v3.6 — 화면이 작아도 잘리지 않게 묶었습니다)');
-  P('  맨 위: 🚀 시작하기 · ✍️ 바로 쓰기 시트 추가 · 🔍 맞춤법·금지어 검사 · ⑥ 체크된 행 생성 · ⑦ 최종취합');
+  H('메뉴 한눈에 보기 (화면이 작아도 잘리지 않게 묶었습니다)');
+  P('  맨 위: 🚀 시작하기 · ✍️ 바로 쓰기 · 📄 보고서 시트 추가 · 📝 구글 설문지 연결 · 🔍 맞춤법·금지어 검사 · ⑥ 체크된 행 생성 · ⑦ 최종취합');
   P('  ①②③ 준비 — 처음 설치 / AI 연결 · 모델 설정 / 학생 명단');
-  P('  ④⑤ 활동 · 예시 — 활동 만들기 · 복제 · 삭제 / 예시 더 만들기 · 늘리기 · 검증');
+  P('  ④⑤ 활동 · 예시 · 보고서 — 활동 만들기 · 복제 · 삭제 / 예시 더 만들기 · 늘리기 · 검증 / ⭐ 예시로 등록 / 📄 보고서 요점 뽑기 · 폴더에서 가져오기');
   P('  ⑥ 생성 더 보기 — 📋 키 없이(복사·붙여넣기) · 선택한 행만 · 자동 생성 켜기/끄기 · 최종 압축본');
-  P('  ⑧ 점검 · 기재요령 2026 — 검사 · 근거 확인 · 재검증 · 프롬프트 미리보기 · AI 앱용 지침 내보내기 · 📏 기재요령 규칙 · 업데이트 확인');
-  P('  도움말 · 부가 기능 — 📄 스캔 문서 → 엑셀 사용 설명서 · 사용법 · 구글폼 · 수업관찰 · 구조 복구 · 버전');
-  P('  [🚀 시작하기] 시트 위쪽 버튼 4개로도 같은 창을 엽니다.');
+  P('  ⑧ 점검 · 기재요령 2026 — 검사 · 근거 확인 · 재검증 · 프롬프트 미리보기 · AI 앱용 지침 내보내기 · ✒️ 내 문체 카드 · 📏 기재요령 규칙');
+  P('  도움말 · 부가 기능 — 📄 스캔 문서 → 엑셀 사용 설명서 · 사용법 · 설문지 응답 지금 받아 오기 · 수업관찰 · 구조 복구 · 버전');
+  P('  [🚀 시작하기] 시트 위쪽 버튼 6개로도 같은 창을 엽니다.');
 
   H('0. 이 도구의 핵심 — 프롬프트를 직접 쓰지 않습니다');
   P('프롬프트는 네 개의 시트에서 자동으로 조립됩니다.');
@@ -2928,6 +3313,28 @@ function buildHelp() {
   P('  · 학생마다 [관찰 메모] 한 칸에 자유롭게 적고 [생성] → AI 초안 (키가 없으면 복사·붙여넣기 창)');
   P('  · 또는 [최종본]에 직접 쓰면 [검증] 칸이 바로 금지어·어미·맞춤법·바이트를 검사합니다(AI를 부르지 않음).');
   P('  · 최종취합·검토는 보통 활동과 똑같이 됩니다. 학생 명단이 없으면 반·번호·이름을 직접 적어도 되고, 나중에 명단을 넣어도 적어 둔 줄은 지워지지 않습니다.');
+
+  H('2-2. 📄 보고서 세특 — 완성된 보고서를 보고 쓰기');
+  P('메뉴 [✍️ 바로 쓰기 · 📄 보고서 시트 추가] 에서 [📄 보고서 세특]을 고릅니다. 칸은 [보고서] [보고서 요점] [교사 관찰 메모] 셋입니다.');
+  P('  ① [보고서]: 본문을 붙이거나 구글 드라이브 파일 링크. 📝 설문지(파일 업로드)를 연결하거나, 메뉴 ④⑤ [보고서 폴더에서 파일 가져오기]로');
+  P('     클래스룸 과제 폴더 같은 곳의 파일을 이름(학번·이름·"3반 15번")으로 학생에게 한 번에 붙입니다.');
+  P('     읽는 파일: 구글 문서 · PDF(스캔본 포함) · 사진 · HWPX · docx · pptx · txt.  .hwp 는 한글에서 PDF나 HWPX로 저장해 주세요.');
+  P('  ② [생성]을 체크하거나 학생 줄을 고르고 메뉴 ④⑤ [📄 보고서 요점 뽑기] → AI가 탐구 주제·과정·결과·한계·교과 개념·학생의 질문을 뽑습니다. 읽고 고치세요.');
+  P('     수업에서 직접 본 것은 [교사 관찰 메모]에. 생성할 때는 요점과 관찰 메모만 갑니다(긴 원문이 예시를 덮지 않게).');
+  P('  ③ 수준이 다른 3~5명은 선생님이 직접 세특을 쓰고 [⭐ 선택한 학생 글을 예시로 등록] → 나머지 [생성] 체크 → 메뉴 ⑥.');
+  P('     요점이 빈 학생은 ⑥ 을 누르면 요점부터 뽑고 이어서 씁니다. 보고서 시트는 늘 한 명씩 생성합니다.');
+  P('  · 키 없이: 요점 뽑기도 복사·붙여넣기 창으로 합니다. 파일은 Gemini 대화창의 [+] → 드라이브로 첨부하라는 안내가 뜹니다.');
+  P('  · 드라이브 파일은 읽기만 합니다(승인 창의 "Google 드라이브 파일 보기"). 고치거나 지우지 않습니다.');
+  P('  · 2026 기재요령: 수업 중에 쓴 보고서만 쓰세요(학교 밖 과제형 수행평가 금지). 연구보고서(소논문) 실적은 쓰지 않습니다.');
+
+  H('2-3. 예시가 뒤로 갈수록 잊히지 않게 — ⭐ 예시 등록 · ✒️ 내 문체');
+  P('· ⭐ 예시로 등록: 입력 시트에서 학생 줄을 고르고 메뉴 ④⑤ [⭐ 선택한 학생 글을 예시로 등록] → [최종본](없으면 AI 결과)이 예시 시트로 갑니다.');
+  P('  선생님이 직접 쓰거나 고친 글일수록 좋고, 수준이 다른 3~5편이면 충분합니다.');
+  P('· ✒️ 내 문체: [✒️ 내 문체] 시트에 예전에 쓴 세특을 한 칸에 한 편씩(이름은 지우고) 넣고 메뉴 ⑧ [✒️ 내 문체 카드 만들기].');
+  P('  쓰는 방식만 뽑은 카드가 [📐 공통규칙] STYLE_CARD 에 저장됩니다. 다른 활동에도 그대로 씁니다.');
+  P('· 잊히지 않는 까닭: 학생마다(보고서는 한 명씩) 같은 규칙·예시·문체 예시를 처음부터 다시 보내고, 문체 카드는 학생 자료 바로 뒤에 한 번 더 붙입니다.');
+  P('  그래서 30번째 학생도 첫 번째와 똑같은 예시를 봅니다. 생성 뒤 문장 길이·끝맺음이 예시와 많이 다르면 [검증]에 [확인] 문체가 뜹니다.');
+  P('· 키 없이 대화창에 붙여 넣을 때는 한 대화에 계속 이어 붙이지 말고 묶음마다 새 대화로 하세요. 대화가 길어지면 앞쪽 예시가 흐려집니다.');
 
   H('3. 예시 채우기 — 품질을 가장 크게 좌우합니다');
   P('「활동명 ▸예시」 시트에 모범 예시를 채웁니다. 예시가 한 개라도 있으면 결과의 톤과 구조가 눈에 띄게 안정됩니다.');
@@ -3052,7 +3459,17 @@ function buildHelp() {
   P('Q. 복사·붙여넣기 창에서 "빠진 학생"이 나와요 → 대화창 답에 [S번호] 표시가 없거나 비었습니다. 그 학생만 다시 요청하거나, 답을 고쳐 붙여 넣으세요.');
   P('Q. 기재요령이 바뀌었는데 규칙이 그대로예요 → 메뉴 ⑧ [기재요령 규칙 업데이트 확인]. 직접 고친 칸은 그대로 두므로 [📏 기재요령] 2행 문구와 비교해 보세요.');
 
-  H('12. 함께 쓰면 좋은 도구 — 📄 스캔 문서 → 엑셀');
+  H('12. 📝 구글 설문지 연결');
+  P('① 구글 설문지 편집 화면 → [응답] → [Sheets에 연결] → "기존 스프레드시트 선택" → 이 파일. 응답이 "설문지 응답 시트1" 탭으로 들어옵니다.');
+  P('   학생 문항은 학번(또는 반·번호)과 이름을 단답형으로. 순서는 상관없고 이메일 수집을 켜도 됩니다. 보고서는 [파일 업로드] 문항으로.');
+  P('② 메뉴 맨 위 [📝 구글 설문지 연결] → 응답 시트 · 학생 칸 · 보낼 곳(있는 시트, 새 📄 보고서 · ✍️ 바로 쓰기 · 새 활동) · 문항 → 칸을 고르고 [연결하고 지금 받아 오기].');
+  P('   · 문항은 이름으로 맞춥니다(순서를 바꿔도 됨). 여러 문항을 한 칸으로 보내면 "문항: 답"으로 이어 붙입니다.');
+  P('   · 같은 학생이 여러 번 내면 마지막 응답을 씁니다. 명단에 없는 학생은 줄을 더하거나(선택) 목록으로 알려 줍니다.');
+  P('   · 선생님이 시트에서 고친 칸은 다시 받아 와도 덮어쓰지 않습니다(칸 메모 "📝 설문지에서 가져옴"으로 알아봄).');
+  P('   · [응답이 오면 저절로 받아 오기]를 켜면 제출 때마다 받아 오고, [바로 세특 생성]을 켜면 그 학생만 생성합니다(API 키 필요).');
+  P('   · 한 번에 다시 받으려면 [도움말 · 부가 기능] > [구글 설문지 응답 지금 받아 오기].');
+
+  H('13. 함께 쓰면 좋은 도구 — 📄 스캔 문서 → 엑셀');
   P('업무 인수인계 대시보드(윈도우 프로그램, 같은 만든이)의 기능입니다. 손글씨 활동지·신청서를 스캔하면 AI가 글자 그대로 표로 읽어 엑셀로 저장합니다.');
   P('표를 복사해 이 시트의 ▸입력 노란 칸(또는 바로 쓰기의 [관찰 메모])에 붙여 넣으면 됩니다. 설치·사용법: 메뉴 [도움말 · 부가 기능] > [📄 스캔 문서 → 엑셀 사용 설명서].');
 
@@ -3639,7 +4056,7 @@ var RESERVED_NAMES = ['반', '번호', '이름', '성취수준', '생성', '모�
 /**
  * 활동 생성 (마법사·직접추가 공용)
  * def = {key, name, recordKey, subjectKey, chars, columns, desc, examples:[{values:[],result:''}],
- *        mode?:'자동'|'바로쓰기', noExamples?:boolean}
+ *        mode?:'자동'|'바로쓰기'|'보고서', noExamples?:boolean}
  *   바로쓰기: 입력 항목을 정하지 않고 [관찰 메모] 한 칸에 자유롭게 적는 시트 (예시 시트 없이)
  */
 function createActivity_(def) {
@@ -3661,7 +4078,7 @@ function createActivity_(def) {
   var rec = findByKey(recs, def.recordKey) || recs[0];
   var chars = Number(def.chars || 0) || rec.chars;
 
-  var mode = def.mode === '바로쓰기' ? '바로쓰기' : '자동';
+  var mode = (def.mode === '바로쓰기' || def.mode === '보고서') ? def.mode : '자동';
   var inSheet = buildActivityInputSheet_(key, name, cols, rec, mode);
   var exSheet = def.noExamples ? null : buildActivityExampleSheet_(key, name, cols, def.examples || []);
 
@@ -3682,7 +4099,7 @@ function buildActivityInputSheet_(key, name, cols, rec, mode) {
 
 /** 입력 시트의 머리말·헤더·폭·서식 (활동 만들 때와 입력 항목 바꿀 때 함께 씀) */
 function layoutInputSheet_(s, name, cols, rec, mode) {
-  var quick = mode === '바로쓰기';
+  var quick = mode === '바로쓰기', report = mode === '보고서';
   var head = ['반', '번호', '이름', '성취수준']
     .concat(cols)
     .concat(['생성', '모델', 'AI 결과', '최종본', '바이트', '검증']);
@@ -3690,8 +4107,11 @@ function layoutInputSheet_(s, name, cols, rec, mode) {
   var n = head.length;
 
   splitBanner_(s, 3, n,
-    (quick ? '✍️ ' : '▶ ') + name + '\n' + rec.name + ' · ' + rec.chars + '자',
-    quick
+    (quick ? '✍️ ' : report ? '📄 ' : '▶ ') + name + '\n' + rec.name + ' · ' + rec.chars + '자',
+    report
+      ? '📄 보고서 세특 — ① [보고서]에 본문이나 드라이브 파일 링크(설문지 연결·폴더에서 가져오기)  →  ② 메뉴 ④⑤ [📄 보고서 요점 뽑기] 후 요점을 읽고 고치기, ' +
+        '수업에서 본 것은 [교사 관찰 메모]  →  ③ 3~5명은 직접 써서 [⭐ 예시로 등록]  →  ④ 나머지 [생성] 체크 → 메뉴 ⑥ (요점이 빈 학생은 요점부터 뽑음)'
+      : quick
       ? '바로 쓰기 — 입력 항목을 정하지 않고 [관찰 메모]에 자유롭게 적습니다.  AI 초안: [생성] 체크 → 메뉴 ⑥ (키가 없으면 복사·붙여넣기 창)  ·  ' +
         '직접 쓰기: [최종본]에 바로 쓰면 [검증]이 즉시 금지어·맞춤법을 검사합니다.  학생 줄은 명단에서 채워지고, 명단이 없으면 반·번호·이름을 직접 적어도 됩니다.'
       : '① 노란 칸에 학생 자료 입력  →  ② [모델] 선택  →  ③ [생성] 체크 또는 메뉴 ⑥ 체크된 행 생성  →  ' +
@@ -3706,7 +4126,8 @@ function layoutInputSheet_(s, name, cols, rec, mode) {
 
   // 폭
   s.setColumnWidth(1, 55); s.setColumnWidth(2, 55); s.setColumnWidth(3, 90); s.setColumnWidth(4, 80);
-  for (var i = 0; i < cols.length; i++) s.setColumnWidth(5 + i, quick ? 420 : 230);
+  var reportW = [260, 380, 260];   // 보고서 · 보고서 요점 · 교사 관찰 메모
+  for (var i = 0; i < cols.length; i++) s.setColumnWidth(5 + i, quick ? 420 : report ? (reportW[i] || 230) : 230);
   var base = 4 + cols.length;
   s.setColumnWidth(base + 1, 60);   // 생성
   s.setColumnWidth(base + 2, 150);  // 모델
@@ -5011,8 +5432,9 @@ function listAvailableModels() {
  * @param {string} user    학생 자료
  * @param {string} model
  * @param {string=} provider  회사를 직접 지정할 때(연결 테스트)
- * @param {{json?:boolean, schema?:Object, thinking?:boolean}=} opts
+ * @param {{json?:boolean, schema?:Object, thinking?:boolean, parts?:Array<{mime:string, b64:string, name?:string}>}=} opts
  *        json: JSON 으로만 답하게(묶음 생성) · thinking:false 면 생각 줄이기를 끈다
+ *        parts: 함께 보낼 파일(PDF·사진) — 보고서 요점 뽑기에서 쓴다
  * @return {string}
  */
 function callAI_(system, user, model, provider, opts) {
@@ -5114,7 +5536,7 @@ function callOpenAI_(key, model, system, user, opts) {
   opts = opts || {};
   var body = {
     model: model,
-    messages: [{ role: 'system', content: system }, { role: 'user', content: user }]
+    messages: [{ role: 'system', content: system }, { role: 'user', content: userContent_('openai', user, opts.parts) }]
   };
   var think = opts.thinking && !__noThink[model] ? thinkingFor('openai', model) : null;
   if (think) body.reasoning_effort = think.reasoning_effort;
@@ -5145,7 +5567,7 @@ function callGemini_(key, model, system, user, opts) {
             encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
   var body = {
     systemInstruction: { parts: [{ text: system }] },
-    contents: [{ role: 'user', parts: [{ text: user }] }]
+    contents: [{ role: 'user', parts: userContent_('gemini', user, opts.parts) }]
   };
   var gen = {};
   var think = opts.thinking && !__noThink[model] ? thinkingFor('gemini', model) : null;
@@ -5178,6 +5600,7 @@ function callGemini_(key, model, system, user, opts) {
 }
 
 function callAnthropic_(key, model, system, user, opts) {
+  opts = opts || {};
   // 규칙 부분에 캐시 표시 — 5분 안에 같은 활동을 다시 부르면 이 부분은 할인된 값으로 읽는다
   var json = fetchJson_('https://api.anthropic.com/v1/messages', {
     method: 'post', contentType: 'application/json',
@@ -5185,7 +5608,7 @@ function callAnthropic_(key, model, system, user, opts) {
     payload: JSON.stringify({
       model: model, max_tokens: (opts && opts.json) ? 8000 : 2000,
       system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-      messages: [{ role: 'user', content: user }]
+      messages: [{ role: 'user', content: userContent_('anthropic', user, opts.parts) }]
     }),
     muteHttpExceptions: true
   }, 'Anthropic');
@@ -5196,6 +5619,35 @@ function callAnthropic_(key, model, system, user, opts) {
   (json.content || []).forEach(function (b) { if (b.type === 'text') txt += b.text; });
   if (!txt) throw new Error('Anthropic 응답이 비었습니다.');
   return txt.trim();
+}
+
+/**
+ * 학생 자료 + 첨부 파일 → 회사별 메시지 모양. 첨부가 없으면 글 그대로(예전과 같은 요청).
+ * HEIC 사진은 Gemini 만 읽는다 — 다른 회사면 빼고 그 사실을 글에 적는다.
+ */
+function userContent_(provider, user, parts) {
+  if (!parts || !parts.length) return provider === 'gemini' ? [{ text: user }] : user;
+  var skipped = [];
+  var ok = parts.filter(function (f) {
+    if (provider !== 'gemini' && /heic|heif/i.test(f.mime)) { skipped.push(f.name || 'HEIC 사진'); return false; }
+    return true;
+  });
+  var text = user + (skipped.length ? '\n(이 모델이 읽지 못해 뺀 파일: ' + skipped.join(', ') + ' — JPG·PNG로 바꿔 주세요)' : '');
+  if (provider === 'gemini') {
+    return [{ text: text }].concat(ok.map(function (f) { return { inlineData: { mimeType: f.mime, data: f.b64 } }; }));
+  }
+  if (provider === 'openai') {
+    return [{ type: 'text', text: text }].concat(ok.map(function (f) {
+      return /pdf/.test(f.mime)
+        ? { type: 'file', file: { filename: f.name || 'report.pdf', file_data: 'data:application/pdf;base64,' + f.b64 } }
+        : { type: 'image_url', image_url: { url: 'data:' + f.mime + ';base64,' + f.b64 } };
+    }));
+  }
+  return ok.map(function (f) {
+    return /pdf/.test(f.mime)
+      ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.b64 } }
+      : { type: 'image', source: { type: 'base64', media_type: f.mime, data: f.b64 } };
+  }).concat([{ type: 'text', text: text }]);
 }
 
 /** Gemini 구독(=AI 함수)용 수식 문자열 */
@@ -5228,6 +5680,8 @@ function cleanResult_(t) {
  *   ④ [수정]이 나오면 걸린 점만 짚어 한 번 더 고쳐 쓰게 한다(자동 고쳐쓰기)
  *   ⑤ (켜 두었으면) 학생 자료에 없는 내용이 들어갔는지 근거 확인
  * 키가 없거나 모델이 [키 없이(복사·붙여넣기)] 인 줄은 ②~⑤ 대신 복사·붙여넣기 창으로 넘긴다.
+ * 📄 보고서 시트는 ①앞에 [보고서 요점]이 빈 학생의 요점을 먼저 뽑고, 한 명씩 생성한다(긴 자료가 예시를 덮지 않게).
+ * ✒️ 내 문체 카드가 있으면 학생 자료 바로 뒤에 한 번 더 붙여 몇 번째 학생이든 같은 문체로 쓰게 한다.
  */
 
 /** 한 번 실행에서 AI 호출에 쓸 시간 (Apps Script 한도 6분보다 여유 있게) */
@@ -5300,16 +5754,35 @@ function checkedRows_(sheet) {
   return rows;
 }
 
-/** 이 학생 줄의 AI 자료(이름은 마스킹 설정을 따름). 자료가 비었으면 null */
-function studentJob_(sheet, row, cols, rec, masked) {
+/**
+ * 이 학생 줄의 AI 자료(이름은 마스킹 설정을 따름). 자료가 비었으면 null.
+ * block = 학생 자료만(근거 확인·고쳐쓰기에 씀), user = block + 문체 카드(생성 요청에 씀).
+ * 보고서 시트에서 [보고서 요점]이 비고 [보고서]가 있으면 needsExtract.
+ */
+function studentJob_(act, sheet, row, rec, masked, tail) {
+  var cols = parseColumns(act.columns);
   var vals = sheet.getRange(row, 5, 1, cols.length).getValues()[0];
   var filled = vals.some(function (v) { return String(v).trim() !== ''; });
   if (!filled) return null;
+  var needsExtract = false;
+  if (act.mode === '보고서') {
+    var iR = cols.indexOf(REPORT_COL), iP = cols.indexOf(POINTS_COL);
+    needsExtract = iP >= 0 && !String(vals[iP]).trim() && iR >= 0 && !!String(vals[iR]).trim();
+  }
   var grade = sheet.getRange(row, 4).getValue();
-  var user = buildStudentBlock(cols, vals, { grade: (rec && rec.useGrade) ? grade : '' });
-  if (!masked) user = '학생 이름: ' + sheet.getRange(row, 3).getValue() + '\n' + user;
+  var block = blockFor_(act, vals, (rec && rec.useGrade) ? grade : '');
+  if (!masked) block = '학생 이름: ' + sheet.getRange(row, 3).getValue() + '\n' + block;
   var who = sheet.getRange(row, 1, 1, 3).getValues()[0];
-  return { row: row, user: user, label: String(who[0]) + '반 ' + String(who[1]) + '번 ' + String(who[2]) };
+  return { row: row, block: block, user: block + (tail || ''), needsExtract: needsExtract,
+           label: String(who[0]) + '반 ' + String(who[1]) + '번 ' + String(who[2]) };
+}
+
+/** 규칙 검사 + (기준 글이 있으면) 문체 검사 */
+function inspectStyled_(txt, limit, ref) {
+  var v = inspect_(txt, limit);
+  var d = ref ? styleDrift(ref, txt) : null;
+  if (d) v.issues.push(d);
+  return v;
 }
 
 /**
@@ -5320,7 +5793,7 @@ function runGeneration_(act, sheet, rows, opt) {
   opt = opt || {};
   var lock = LockService.getDocumentLock();
   if (!lock.tryLock(5000)) { toast_('다른 생성 작업이 실행 중입니다.'); return; }
-  var manualJobs = [], manualNote = '';
+  var manualJobs = [], manualNote = '', extractPending = null;
   try {
     var maxN = Number(cfg_('1회 최대 생성 건수', 25));
     if (rows.length > maxN && !opt.manual) {
@@ -5329,7 +5802,6 @@ function runGeneration_(act, sheet, rows, opt) {
       rows = rows.slice(0, maxN);
     }
 
-    var cols = parseColumns(act.columns);
     var head = APP.HEAD_ROW;
     var cGen = colOf_(sheet, head, '생성');
     var cModel = colOf_(sheet, head, '모델');
@@ -5342,8 +5814,11 @@ function runGeneration_(act, sheet, rows, opt) {
     var autoRepair = cfgBool_('자동 고쳐쓰기', true);
     var autoGround = cfgBool_('근거 자동 확인', false);
     var batchN = Math.max(1, Math.min(10, Number(cfg_('한 번에 묶을 학생 수', 5)) || 1));
+    if (act.mode === '보고서') batchN = 1;     // 보고서는 자료가 길어 한 명씩 — 예시가 묻히지 않게
     var rec = findByKey(getRecordTypes_(), act.recordKey);
     var masked = maskName_();
+    var tail = styleTail_();
+    var styleRef = styleReference_(act);
     var has = keyStatus_();
     var anyApi = has.gemini || has.openai || has.anthropic;
     usageReset_();
@@ -5352,10 +5827,11 @@ function runGeneration_(act, sheet, rows, opt) {
     var t0 = Date.now();
 
     // 1) 행마다 학생 자료와 모델을 먼저 모은다
-    var jobs = [];
+    var jobs = [], extractRows = [];
     rows.forEach(function (row) {
-      var job = studentJob_(sheet, row, cols, rec, masked);
+      var job = studentJob_(act, sheet, row, rec, masked, tail);
       if (!job) { skipN++; if (cGen) sheet.getRange(row, cGen).setValue(false); return; }
+      if (job.needsExtract) { extractRows.push(row); return; }
       var model = cModel ? normModel(sheet.getRange(row, cModel).getValue()) : '';
       job.model = model || defModel;
       var prov = providerOf_(job.model);
@@ -5370,11 +5846,27 @@ function runGeneration_(act, sheet, rows, opt) {
       jobs.push(job);
     });
 
+    // 1-1) 📄 보고서: 요점이 빈 학생은 요점부터 — API 면 뽑고 바로 이어서 생성, 키가 없으면 요점 창만 연다
+    if (extractRows.length) {
+      if (!opt.manual && apiModelForChecks_()) {
+        var ex = runExtraction_(act, sheet, extractRows, { quiet: true });
+        ex.rows.forEach(function (row) {
+          var j = studentJob_(act, sheet, row, rec, masked, tail);
+          if (!j) return;
+          var pv = providerOf_(j.model = (cModel ? normModel(sheet.getRange(row, cModel).getValue()) : '') || defModel);
+          if (pv === 'manual' || (!anyApi && pv !== 'subscription' && !providerUsable(pv, has))) manualJobs.push(j); else jobs.push(j);
+        });
+        if (ex.failed) errN += ex.failed;
+      } else {
+        extractPending = extractRows;
+      }
+    }
+
     var finish = function (job, res, repaired) {
       var txt = cleanResult_(res.text);
       sheet.getRange(job.row, cAi).setValue(txt);
       if (autoValidate && cValid) {
-        var v = formatIssues(inspect_(txt, limit));
+        var v = formatIssues(inspectStyled_(txt, limit, styleRef));
         if (repaired) v += '\n(자동 고쳐쓰기 1회)';
         if (res.backup) v += '\n(예비 모델 ' + res.model + ' 로 생성)';
         if (res.ground) v += '\n' + res.ground;
@@ -5397,7 +5889,7 @@ function runGeneration_(act, sheet, rows, opt) {
         if (needsRepair(v1)) {
           try {
             var fixList = v1.issues.filter(function (x) { return x.level === 'block'; });
-            var r2 = callWithBackup_(system, buildRepairUser(job.user, draft, fixList, limit), res.model || job.model);
+            var r2 = callWithBackup_(system, buildRepairUser(job.block, draft, fixList, limit) + tail, res.model || job.model);
             var t2 = cleanResult_(r2.text);
             if (t2 && betterResult(v1, inspect_(t2, limit)) === 'b') {
               res = { text: t2, model: r2.model, backup: res.backup || r2.backup };
@@ -5407,7 +5899,7 @@ function runGeneration_(act, sheet, rows, opt) {
         }
       }
       if (autoGround && Date.now() - t0 < RUN_BUDGET_MS) {
-        try { res.ground = groundText_(groundCheck_(job.user, cleanResult_(res.text), res.model || job.model)); } catch (e) {}
+        try { res.ground = groundText_(groundCheck_(job.block, cleanResult_(res.text), res.model || job.model)); } catch (e) {}
       }
       finish(job, res, repaired);
     };
@@ -5428,7 +5920,7 @@ function runGeneration_(act, sheet, rows, opt) {
       i = k;
       toast_((i) + '/' + jobs.length + ' 생성 중… (' + first.model + (chunk.length > 1 ? ' · ' + chunk.length + '명 묶음' : '') + ')', act.name);
 
-      var got = chunk.length > 1 ? generateBatch_(system, chunk, first.model) : {};
+      var got = chunk.length > 1 ? generateBatch_(system, chunk, first.model, tail) : {};
       if (got.error) { chunk.forEach(function (job) { fail(job, got.error); }); SpreadsheetApp.flush(); continue; }
       chunk.forEach(function (job) {
         try {
@@ -5453,7 +5945,12 @@ function runGeneration_(act, sheet, rows, opt) {
     } else if (jobs.length || skipN) toast_(msg + (used ? '\n' + used : ''), act.name);
   } finally { lock.releaseLock(); }
 
-  // 3) 키 없이 쓰는 줄 — 복사·붙여넣기 창 (잠금을 푼 뒤에 연다)
+  // 3) 키 없이 + 보고서 요점이 빈 학생 — 요점 창부터 (창은 한 번에 하나만 열린다)
+  if (extractPending && extractPending.length) {
+    runExtraction_(act, sheet, extractPending, { manual: true });
+    return;
+  }
+  // 4) 키 없이 쓰는 줄 — 복사·붙여넣기 창 (잠금을 푼 뒤에 연다)
   if (manualJobs.length) {
     openManualDialog_({
       kind: 'generate', sheet: sheet.getName(), target: 'AI 결과', check: '생성',
@@ -5467,9 +5964,9 @@ function runGeneration_(act, sheet, rows, opt) {
  * @return {Object} row → {text, model, backup}. 호출 자체가 실패하면 {error: Error}.
  *         응답에서 빠진 학생은 결과에 없으므로, 부르는 쪽이 한 명씩 다시 부른다.
  */
-function generateBatch_(system, chunk, model) {
+function generateBatch_(system, chunk, model, tail) {
   var ids = chunk.map(function (job, n) { return 'S' + (n + 1); });
-  var user = buildBatchUser(chunk.map(function (job, n) { return { id: ids[n], block: job.user }; }));
+  var user = buildBatchUser(chunk.map(function (job, n) { return { id: ids[n], block: job.block || job.user }; })) + (tail || '');
   var res;
   try {
     res = callWithBackup_(system, user, model, { json: true, schema: BATCH_SCHEMA });
@@ -5521,19 +6018,18 @@ function groundCheckSelection() {
       '[Gemini 앱에서 근거 확인 — 요청 복사]를 누르세요.', ui_().ButtonSet.OK);
     return;
   }
-  var cols = parseColumns(act.columns);
   var rec = findByKey(getRecordTypes_(), act.recordKey);
   var cAi = colOf_(sheet, APP.HEAD_ROW, 'AI 결과'), cFi = colOf_(sheet, APP.HEAD_ROW, '최종본'), cV = colOf_(sheet, APP.HEAD_ROW, '검증');
   var n = 0, found = 0, t0 = Date.now();
   usageReset_();
   for (var i = 0; i < rows.length; i++) {
     if (Date.now() - t0 > RUN_BUDGET_MS) break;
-    var job = studentJob_(sheet, rows[i], cols, rec, true);
+    var job = studentJob_(act, sheet, rows[i], rec, true, '');
     var draft = String(cFi ? sheet.getRange(rows[i], cFi).getValue() : '').trim() || String(sheet.getRange(rows[i], cAi).getValue()).trim();
     if (!job || !draft || draft.indexOf('⚠') === 0) continue;
     toast_((i + 1) + '/' + rows.length + ' 근거 확인 중…', APP.MENU);
     try {
-      var list = groundCheck_(job.user, draft, model);
+      var list = groundCheck_(job.block, draft, model);
       if (list.length) found++;
       var prev = String(sheet.getRange(rows[i], cV).getValue()).split('\n')
         .filter(function (l) { return !/^\[근거\]|자료에 없는 내용/.test(l); }).join('\n');
@@ -5678,10 +6174,14 @@ function recheckOnEdit_(e) {
 
 /**
  * @param {{kind:string, sheet:string, target:string, check:string, title:string, limit:number,
- *          system:string, jobs:Array<{row:number, user:string, label:string}>, note?:string, heading?:string}} p
+ *          system:string, jobs:Array<{row:number, user:string, label:string, links?:string[]}>, note?:string,
+ *          heading?:string, chunk?:number}} p
+ *   kind: 'generate' | 'compile' | 'extract'(보고서 요점 — 줄바꿈을 살리고 검사하지 않음)
+ *   chunk: 한 번에 묶을 학생 수(보고서 파일을 첨부해야 하면 1)
  */
 function openManualDialog_(p) {
-  var size = Math.min(10, Math.max(5, Number(cfg_('한 번에 묶을 학생 수', 5)) || 5));
+  var size = p.chunk || Math.min(10, Math.max(5, Number(cfg_('한 번에 묶을 학생 수', 5)) || 5));
+  var tail = p.kind === 'extract' ? '' : styleTail_();
   var chunks = [];
   for (var i = 0; i < p.jobs.length; i += size) {
     var part = p.jobs.slice(i, i + size);
@@ -5690,7 +6190,8 @@ function openManualDialog_(p) {
       rows: part.map(function (j) { return j.row; }),
       ids: items.map(function (x) { return x.id; }),
       labels: part.map(function (j) { return j.label; }),
-      user: buildManualUser(items, p.heading)
+      links: part.map(function (j) { return j.links || []; }),
+      user: p.kind === 'extract' ? items.map(function (x) { return x.block; }).join('\n\n') : buildManualUser(items, p.heading) + tail
     });
   }
   var data = {
@@ -5717,12 +6218,21 @@ function manualApply(p) {
   var cC = p.check ? colOf_(s, APP.HEAD_ROW, p.check) : 0;
   var parsed = parseManualAnswer(p.answer, p.ids || []);
   var results = [], written = 0;
+  var extract = p.kind === 'extract';
+  var ref = null;
+  if (!extract) { try { var act = activityOfSheet_(p.sheet); if (act) ref = styleReference_(act); } catch (e) {} }
   (p.ids || []).forEach(function (id, n) {
     var row = p.rows[n];
     var raw = parsed.map[id];
     if (!raw || !row) return;
+    if (extract) {
+      s.getRange(row, cT).setValue(cleanPoints(raw)).setWrap(true);
+      written++;
+      results.push({ label: (p.labels || [])[n] || id, bytes: 0, limit: 0, ok: true, issues: ['요점을 넣었습니다 — 읽고 고친 뒤 생성하세요'] });
+      return;
+    }
     var txt = cleanResult_(raw);
-    var v = inspect_(txt, Number(p.limit) || 1500);
+    var v = inspectStyled_(txt, Number(p.limit) || 1500, ref);
     s.getRange(row, cT).setValue(txt);
     if (cV) s.getRange(row, cV).setValue(formatIssues(v) + '\n(키 없이 · 복사·붙여넣기)');
     if (cC) s.getRange(row, cC).setValue(false);
@@ -5862,8 +6372,8 @@ var SAMPLE_MEMO = {
 };
 
 function openQuickSheetDialog() {
-  var html = HtmlService.createHtmlOutputFromFile('UI_Quick').setWidth(500).setHeight(560);
-  ui_().showModalDialog(html, '✍️ 바로 쓰기 시트 추가');
+  var html = HtmlService.createHtmlOutputFromFile('UI_Quick').setWidth(560).setHeight(640);
+  ui_().showModalDialog(html, '✍️ 바로 쓰기 · 📄 보고서 시트 추가');
 }
 
 function quickContext() {
@@ -5871,21 +6381,24 @@ function quickContext() {
   var recs = getRecordTypes_(), subs = getSubjects_();
   var n = 1;
   while (getActivity_('바로쓰기' + n) || sh_(sheetNameIn_('바로쓰기' + n))) n++;
+  var m = 1;
+  while (getActivity_('보고서' + m) || sh_(sheetNameIn_('보고서' + m))) m++;
   var roster = 0;
   try { roster = getRoster_().length; } catch (e) {}
   return {
     records: recs.map(function (r) { return { key: r.key, name: r.name, chars: r.chars }; }),
     subjects: subs.map(function (s) { return { key: s.key, name: s.name, kind: s.kind }; }),
     defaultSubject: String(cfg_('기본 교과영역', '공통')),
-    suggestName: '바로쓰기' + n, rosterCount: roster
+    suggestName: '바로쓰기' + n, suggestReport: '보고서' + m, rosterCount: roster
   };
 }
 
 /**
- * @param {{name:string, recordKey:string, subjectKey:string, chars?:number, desc?:string}} p
+ * @param {{kind?:string, name:string, recordKey:string, subjectKey:string, chars?:number, desc?:string}} p  kind '보고서'면 보고서 시트
  * @return {{inSheet:string, name:string}}
  */
 function createQuickSheet(p) {
+  if (p && p.kind === '보고서') return createReportSheet(p);
   var name = safeKey_(p.name) || ('바로쓰기' + Date.now() % 1000);
   var recs = getRecordTypes_();
   var rec = findByKey(recs, p.recordKey) || recs[0];
@@ -6252,126 +6765,669 @@ function compressPrompt_(rec) {
 
 
 /* ==========================================================================
+   82_Report.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 📄 보고서 세특 · 보고서 파일 읽기 · 예시 등록 · ✒️ 내 문체
+ *
+ * 보고서 시트(프롬프트 모드 '보고서')의 입력 항목은 [보고서] [보고서 요점] [교사 관찰 메모] 세 칸.
+ *   [보고서]      : 본문을 붙여 넣거나, 구글 드라이브 파일 링크(설문지 파일 업로드·클래스룸·직접 붙인 링크)
+ *   [보고서 요점]  : AI 가 보고서에서 뽑고 교사가 확인·수정한다 — 생성에는 이 칸과 관찰 메모만 간다
+ *   [교사 관찰 메모]: 교사가 수업에서 직접 본 것 (2026 기재요령: 세특은 교사가 관찰·평가한 내용 바탕)
+ * 드라이브 파일은 읽기만 한다(drive.readonly). 구글 문서·PDF·사진·docx·hwpx·pptx·txt 를 읽고, .hwp 는 PDF 로 바꿔 달라고 안내한다.
+ */
+
+var DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+// base64 로 보내면 4/3 배가 된다 — Gemini 한 요청 20MB 안쪽에 들도록
+var REPORT_FILE_MAX = 10 * 1024 * 1024;     // 한 파일
+var REPORT_PARTS_MAX = 13 * 1024 * 1024;    // 한 학생 첨부 합계
+var STYLE_SAMPLE_MAX = 3;                   // 프롬프트에 넣을 문체 예시 수
+
+/** 시작하기 시험 생성에 쓰는 보기 요점 (실제 학생 자료가 아님) */
+var SAMPLE_POINTS =
+  '탐구 주제와 동기: 급식 잔반량이 요일마다 다른 까닭이 궁금해 잔반 기록을 분석함\n' +
+  '탐구 과정과 방법: 4주 동안 요일별 잔반 무게를 표로 정리하고 평균과 분산을 구함\n' +
+  '결과와 해석: 금요일 잔반이 가장 많았고 메뉴 선호도 설문과 비교해 원인을 추측함\n' +
+  '한계와 개선점: 조사 기간이 짧아 계절 영향을 보지 못했다고 스스로 밝힘\n' +
+  '활용한 교과 개념: 평균, 분산, 표준편차\n' +
+  '학생의 생각과 질문: 분산이 크면 무엇을 바꿔야 하는지 질문함';
+
+function isReportActivity_(act) { return !!act && act.mode === '보고서'; }
+
+/** 보고서 시트 만들기 (바로 쓰기 창에서 [📄 보고서]를 고르면) */
+function createReportSheet(p) {
+  var name = safeKey_(p.name) || ('보고서' + Date.now() % 1000);
+  var recs = getRecordTypes_();
+  var rec = findByKey(recs, p.recordKey) || recs[0];
+  var made = createActivity_({
+    key: name, name: name, recordKey: rec.key,
+    subjectKey: p.subjectKey || cfg_('기본 교과영역', '공통'),
+    chars: Number(p.chars) || 0, columns: REPORT_COLUMNS, desc: String(p.desc || '').trim(),
+    mode: '보고서'
+  });
+  var s = sh_(made.inSheet);
+  if (s) ss_().setActiveSheet(s);
+  try { if (compileSheets_().length) buildCompileCore_(); } catch (e) {}
+  return { inSheet: made.inSheet, exSheet: made.exSheet, name: name };
+}
+
+/* ------------------------------------------------------- 드라이브 읽기 */
+/** 드라이브 읽기 권한 — 처음 승인 때 체크를 풀었으면 여기서 다시 묻는다 */
+function ensureDriveScope_() {
+  try {
+    if (ScriptApp.requireScopes) ScriptApp.requireScopes(ScriptApp.AuthMode.FULL, [DRIVE_SCOPE]);
+  } catch (e) {
+    throw new Error('보고서 파일을 읽으려면 "Google 드라이브 파일 보기" 권한이 필요합니다. 메뉴를 다시 눌러 승인 창에서 그 항목을 체크하고 [계속]을 누르세요. (' + e.message + ')');
+  }
+}
+
+/** 구글 문서·프레젠테이션 → 글자 (Drive API 내보내기) */
+function exportGoogleText_(id) {
+  var res = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '/export?mimeType=text%2Fplain',
+    { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) throw new Error('구글 문서를 글자로 내보내지 못했습니다(' + res.getResponseCode() + ')');
+  return res.getContentText('UTF-8');
+}
+
+/** zip 안 XML 들 → 글자 (docx·pptx·hwpx) */
+function zipText_(blob, kind) {
+  var entries = Utilities.unzip(blob.setContentType('application/zip'));
+  var pick = kind === 'docx' ? /^word\/document\.xml$/ : kind === 'pptx' ? /^ppt\/slides\/slide(\d+)\.xml$/ : /^Contents\/section(\d+)\.xml$/;
+  var found = entries.filter(function (b) { return pick.test(b.getName()); })
+    .sort(function (a, b) {
+      var na = Number((a.getName().match(/(\d+)\.xml$/) || [0, 0])[1]), nb = Number((b.getName().match(/(\d+)\.xml$/) || [0, 0])[1]);
+      return na - nb;
+    });
+  return found.map(function (b) { return xmlText(b.getDataAsString('UTF-8'), kind); }).join('\n');
+}
+
+/**
+ * [보고서] 칸 → 보낼 것. 링크가 없으면 글 그대로.
+ * @return {{text:string, parts:Array<{mime,b64,name}>, files:string[], errors:string[]}}
+ */
+function readReportSource_(value) {
+  var out = { text: '', parts: [], files: [], errors: [] };
+  var ids = driveIdsIn(value);
+  if (!ids.length) { out.text = String(value || '').trim(); return out; }
+  ensureDriveScope_();
+  var texts = [], rest = textWithoutLinks(value), total = 0;
+  if (rest) texts.push(rest);
+  ids.forEach(function (id) {
+    var f;
+    try { f = DriveApp.getFileById(id); } catch (e) { out.errors.push('파일을 열 수 없습니다(권한이 없거나 지워짐): …' + id.slice(-6)); return; }
+    var name = f.getName(), mime = f.getMimeType(), kind = fileKind(mime, name);
+    out.files.push(name);
+    try {
+      if (kind === 'gdoc') {
+        try { texts.push(exportGoogleText_(id)); }
+        catch (ex) {   // 글자 내보내기가 막히면 PDF 로 바꿔 그림째 보낸다
+          var pdf = f.getAs('application/pdf');
+          if (pdf.getBytes().length > REPORT_FILE_MAX) throw ex;
+          out.parts.push({ mime: 'application/pdf', b64: Utilities.base64Encode(pdf.getBytes()), name: name + '.pdf' });
+        }
+      }
+      else if (kind === 'text') texts.push(f.getBlob().getDataAsString('UTF-8'));
+      else if (kind === 'docx' || kind === 'pptx' || kind === 'hwpx') texts.push(zipText_(f.getBlob(), kind));
+      else if (kind === 'pdf' || kind === 'image') {
+        var size = f.getSize();
+        if (size > REPORT_FILE_MAX || total + size > REPORT_PARTS_MAX) { out.errors.push(name + ': 파일이 너무 큽니다(한 학생 10MB까지) — 쪽을 나누거나 사진 해상도를 줄여 올려 주세요'); return; }
+        total += size;
+        var m = kind === 'pdf' ? 'application/pdf' : (/jpe?g$/i.test(mime) ? 'image/jpeg' : mime);
+        out.parts.push({ mime: m, b64: Utilities.base64Encode(f.getBlob().getBytes()), name: name });
+      }
+      else if (kind === 'hwp') out.errors.push(name + ': 한글(.hwp) 파일은 읽지 못합니다 — 한글에서 PDF나 HWPX로 저장해 올려 주세요');
+      else out.errors.push(name + ': 읽을 수 없는 파일 형식(' + mime + ')');
+    } catch (e) { out.errors.push(name + ': ' + e.message); }
+  });
+  out.text = texts.join('\n\n').trim();
+  return out;
+}
+
+/* ------------------------------------------------------- 요점 뽑기 */
+/** 한 학생 보고서 → 요점 (API). @return {{points:string, errors:string[], model:string}} */
+function extractPoints_(reportValue, model) {
+  var src = readReportSource_(reportValue);
+  if (!src.text && !src.parts.length) throw new Error(src.errors.length ? src.errors.join(' / ') : '보고서가 비었습니다.');
+  var res = callWithBackup_(EXTRACT_SYSTEM, buildExtractUser(src.text, src.files.filter(function (n, i) { return i < 5; })), model,
+                            { parts: src.parts });
+  return { points: cleanPoints(res.text), errors: src.errors, model: res.model };
+}
+
+/** 메뉴: 선택한(없으면 체크된) 학생의 보고서 요점 뽑기 */
+function extractReportPoints() {
+  var sheet = ss_().getActiveSheet();
+  var act = activityOfSheet_(sheet.getName());
+  if (!isReportActivity_(act)) {
+    ui_().alert(APP.MENU, '📄 보고서 시트(○○ ▸입력)에서 학생 줄을 고른 뒤 실행하세요.\n보고서 시트는 메뉴 [✍️ 바로 쓰기 · 📄 보고서 시트 추가]에서 만듭니다.', ui_().ButtonSet.OK);
+    return;
+  }
+  // [생성]을 체크한 학생이 있으면 그 학생들, 없으면 고른 줄
+  var rows = checkedRows_(sheet);
+  if (!rows.length) rows = selectedRows_(sheet);
+  if (!rows.length) { toast_('[생성]을 체크하거나 학생 줄을 고르세요.'); return; }
+  var c = function (n) { return colOf_(sheet, APP.HEAD_ROW, n); };
+  var withReport = rows.filter(function (r) { return String(sheet.getRange(r, c(REPORT_COL)).getValue()).trim(); });
+  if (!withReport.length) { toast_('고른 줄의 [보고서] 칸이 비었습니다.'); return; }
+  var filled = withReport.filter(function (r) { return String(sheet.getRange(r, c(POINTS_COL)).getValue()).trim(); });
+  var redo = false;
+  if (filled.length) {
+    var ans = ui_().alert(APP.MENU, filled.length + '명은 [보고서 요점]이 이미 있습니다. 다시 뽑아 덮어쓸까요?\n[아니요]를 누르면 빈 줄만 뽑습니다.', ui_().ButtonSet.YES_NO_CANCEL);
+    if (ans === ui_().Button.CANCEL) return;
+    redo = ans === ui_().Button.YES;
+  }
+  var todo = redo ? withReport : withReport.filter(function (r) { return filled.indexOf(r) < 0; });
+  runExtraction_(act, sheet, todo, { manual: !apiModelForChecks_() });
+}
+
+/**
+ * 요점 뽑기 실행 — API 면 학생마다 한 번씩, 키가 없으면 복사·붙여넣기 창(파일은 학생마다 한 명씩, 첨부 안내).
+ * @return {{done:number, failed:number, rows:number[]}}  API 로 채운 줄
+ */
+function runExtraction_(act, sheet, rows, opt) {
+  opt = opt || {};
+  var c = function (n) { return colOf_(sheet, APP.HEAD_ROW, n); };
+  var cR = c(REPORT_COL), cP = c(POINTS_COL), cV = c('검증');
+  var model = apiModelForChecks_();
+  if (opt.manual || !model) {
+    var jobs = rows.map(function (r) {
+      var v = String(sheet.getRange(r, cR).getValue());
+      var who = sheet.getRange(r, 1, 1, 3).getValues()[0];
+      var links = driveIdsIn(v).map(function (id) { return 'https://drive.google.com/open?id=' + id; });
+      return { row: r, label: String(who[0]) + '반 ' + String(who[1]) + '번 ' + String(who[2]), links: links,
+               user: buildExtractUser(textWithoutLinks(v) || (links.length ? '' : v), links.length ? ['보고서 파일 ' + links.length + '개를 이 대화에 첨부했습니다'] : []) };
+    });
+    openManualDialog_({ kind: 'extract', sheet: sheet.getName(), target: POINTS_COL, check: '', title: act.name + ' — 보고서 요점 뽑기',
+      limit: 0, system: EXTRACT_SYSTEM, jobs: jobs, chunk: 1,   // 요점 답에는 [S1] 표시가 없어 한 명씩
+      note: '요점을 시트에 넣은 뒤 읽어 보고 고치세요. 그다음 [생성]을 체크하고 메뉴 ⑥ 을 누르면 세특을 씁니다.' });
+    return { done: 0, failed: 0, rows: [] };
+  }
+  var done = 0, failed = 0, okRows = [], t0 = Date.now();
+  usageReset_();
+  rows.forEach(function (r, k) {
+    if (Date.now() - t0 > RUN_BUDGET_MS) return;
+    toast_((k + 1) + '/' + rows.length + ' 보고서 읽는 중…', act.name);
+    try {
+      var x = extractPoints_(sheet.getRange(r, cR).getValue(), model);
+      sheet.getRange(r, cP).setValue(x.points).setWrap(true);
+      if (x.errors.length && cV) sheet.getRange(r, cV).setValue('[확인] 보고서 파일: ' + x.errors.join(' / '));
+      done++; okRows.push(r);
+    } catch (e) {
+      if (cV) sheet.getRange(r, cV).setValue('⚠ 요점 뽑기 실패: ' + e.message);
+      failed++;
+    }
+    SpreadsheetApp.flush();
+  });
+  if (!opt.quiet) toast_('보고서 요점 ' + done + '건' + (failed ? ' / 실패 ' + failed + '건([검증] 칸)' : '') +
+                         ' — 요점을 읽고 고친 뒤 생성하세요.' + (usageText_() ? '\n' + usageText_() : ''), act.name);
+  return { done: done, failed: failed, rows: okRows };
+}
+
+/* ------------------------------------------------------- 폴더에서 가져오기 */
+/** 메뉴: 드라이브 폴더(클래스룸 과제 폴더 등)의 보고서 파일을 파일 이름으로 학생에게 붙인다 */
+function importReportFolder() {
+  var sheet = ss_().getActiveSheet();
+  var act = activityOfSheet_(sheet.getName());
+  if (!isReportActivity_(act)) { ui_().alert(APP.MENU, '📄 보고서 시트에서 실행하세요.', ui_().ButtonSet.OK); return; }
+  var url = promptText_('보고서 폴더에서 가져오기',
+    '보고서 파일이 든 구글 드라이브 폴더의 링크를 붙여 넣으세요.\n(클래스룸 과제 폴더도 됩니다. 파일 이름에 학번(20315)·이름·"3반 15번" 중 하나가 있어야 학생을 찾습니다)');
+  if (!url) return;
+  var r = importReportFolderCore_(sheet, url);
+  ui_().alert(APP.MENU, '학생 ' + r.matched + '명에게 파일을 붙였습니다.' +
+    (r.kept ? '\n이미 [보고서]에 내용이 있어 건너뛴 학생: ' + r.kept + '명' : '') +
+    (r.unmatched.length ? '\n\n누구 것인지 모르는 파일 ' + r.unmatched.length + '개:\n· ' + r.unmatched.slice(0, 12).join('\n· ') + (r.unmatched.length > 12 ? '\n…' : '') : '') +
+    (r.noFile ? '\n\n파일을 못 찾은 학생: ' + r.noFile + '명' : '') +
+    '\n\n다음: 학생 줄을 고르고 메뉴 ⑥ 생성 더 보기 > [📄 보고서 요점 뽑기].', ui_().ButtonSet.OK);
+}
+
+function importReportFolderCore_(sheet, url) {
+  var fid = driveFolderIdIn(url) || (String(url).trim().match(/^[A-Za-z0-9_-]{20,}$/) || [''])[0];
+  if (!fid) throw new Error('폴더 링크를 알아보지 못했습니다. 드라이브에서 폴더를 열고 주소창의 링크를 복사하세요.');
+  ensureDriveScope_();
+  var folder = DriveApp.getFolderById(fid);
+  var last = sheet.getLastRow();
+  var n = Math.max(0, last - APP.DATA_ROW + 1);
+  var who = n ? sheet.getRange(APP.DATA_ROW, 1, n, 3).getValues() : [];
+  var students = who.map(function (w) {
+    var a = String(w[0]).trim(), m = a.match(/^(\d)-(\d+)$/);
+    return { year: m ? Number(m[1]) : '', cls: m ? Number(m[2]) : Number(a), no: Number(w[1]), name: String(w[2]).trim() };
+  });
+  var cR = colOf_(sheet, APP.HEAD_ROW, REPORT_COL);
+  var cur = n ? sheet.getRange(APP.DATA_ROW, cR, n, 1).getValues().map(function (x) { return String(x[0]); }) : [];
+  var add = {}, unmatched = [], count = 0;
+  var it = folder.getFiles();
+  while (it.hasNext() && count < 1000) {
+    var f = it.next(); count++;
+    var i = matchFileToStudent(f.getName(), students);
+    if (i < 0) { unmatched.push(f.getName()); continue; }
+    (add[i] = add[i] || []).push('https://drive.google.com/open?id=' + f.getId());
+  }
+  var matched = 0, kept = 0;
+  Object.keys(add).forEach(function (k) {
+    var i = Number(k);
+    if (String(cur[i]).trim() && !driveIdsIn(cur[i]).length) { kept++; return; }   // 본문을 붙여 둔 학생은 그대로
+    var have = driveIdsIn(cur[i]);
+    var links = add[i].filter(function (l) { return have.indexOf(driveIdsIn(l)[0]) < 0; });
+    var v = (String(cur[i]).trim() ? String(cur[i]).trim() + '\n' : '') + links.join('\n');
+    sheet.getRange(APP.DATA_ROW + i, cR).setValue(v);
+    matched++;
+  });
+  return { matched: matched, kept: kept, unmatched: unmatched, noFile: students.filter(function (s, i) { return s.name && !add[i]; }).length };
+}
+
+/* ------------------------------------------------------- 예시로 등록 */
+/** 메뉴: 선택한 학생의 [최종본](없으면 AI 결과)을 이 활동의 예시로 */
+function promoteToExample() {
+  var sheet = ss_().getActiveSheet();
+  var act = activityOfSheet_(sheet.getName());
+  if (!act) { ui_().alert(APP.MENU, '활동 입력 시트(○○ ▸입력)에서 예시로 쓸 학생 줄을 고른 뒤 실행하세요.', ui_().ButtonSet.OK); return; }
+  var rows = selectedRows_(sheet);
+  if (!rows.length) { toast_('예시로 쓸 학생 줄을 고르세요.'); return; }
+  var ok = ui_().alert(APP.MENU, '선택한 ' + rows.length + '명의 [최종본](비었으면 AI 결과)을 [' + act.name + ']의 예시로 등록합니다.\n\n' +
+    '예시는 다른 학생을 생성할 때 AI 에게 함께 갑니다(학생 이름은 가지 않음). 선생님이 직접 쓰거나 고친 글일수록 좋습니다.\n' +
+    '수준이 다른 학생 3~5명이 알맞습니다. 계속할까요?', ui_().ButtonSet.YES_NO);
+  if (ok !== ui_().Button.YES) return;
+  var r = promoteRows_(act, sheet, rows);
+  toast_('예시 ' + r.added + '건 등록 → [' + r.exSheet + '] (지금 예시 ' + r.total + '건, 프롬프트에는 앞에서 ' + EXAMPLE_MAX + '건까지)' +
+         (r.skipped ? ' · 글이 없어 건너뜀 ' + r.skipped + '명' : ''), act.name);
+}
+
+function promoteRows_(act, sheet, rows) {
+  var cols = parseColumns(act.columns);
+  var cFi = colOf_(sheet, APP.HEAD_ROW, '최종본'), cAi = colOf_(sheet, APP.HEAD_ROW, 'AI 결과');
+  var exs = [], skipped = 0;
+  rows.forEach(function (r) {
+    var result = String(cFi ? sheet.getRange(r, cFi).getValue() : '').trim() || String(cAi ? sheet.getRange(r, cAi).getValue() : '').trim();
+    if (!result || result.indexOf('⚠') === 0) { skipped++; return; }
+    exs.push({ values: sheet.getRange(r, 5, 1, cols.length).getValues()[0].map(function (v) { return String(v); }), result: result });
+  });
+  var ex = act.exSheet && sh_(act.exSheet);
+  if (!ex) {
+    ex = buildActivityExampleSheet_(act.key, act.name, cols, []);
+    var list = shRequire_(APP.SH.ACTIVITY);
+    var c = colOf_(list, 2, '예시 시트');
+    if (c && act.__row) list.getRange(act.__row, c).setValue(ex.getName());
+  }
+  var cResult = colOf_(ex, APP.HEAD_ROW, '결과') || (1 + cols.length + 1);
+  var last = Math.max(ex.getLastRow(), APP.DATA_ROW - 1);
+  var empty = [];
+  if (last >= APP.DATA_ROW) {
+    var v = ex.getRange(APP.DATA_ROW, 1, last - APP.DATA_ROW + 1, cResult).getValues();
+    v.forEach(function (row, i) { if (row.slice(1).every(function (x) { return String(x).trim() === ''; })) empty.push(APP.DATA_ROW + i); });
+  }
+  exs.forEach(function (e) {
+    var at = empty.length ? empty.shift() : Math.max(ex.getLastRow(), APP.DATA_ROW - 1) + 1;
+    writeExampleRows_(ex, cols, [e], at, 1);
+  });
+  try { validateExamplesQuiet_(getActivity_(act.key) || act); } catch (e) {}
+  return { added: exs.length, skipped: skipped, exSheet: ex.getName(), total: readExampleRows_(getActivity_(act.key) || act).length };
+}
+
+/* ------------------------------------------------------- ✒️ 내 문체 */
+var STYLE_HEAD = ['사용', '예전에 쓴 세특 (한 칸에 한 편)', '기록 항목', '메모'];
+
+function buildStyleSheet() {
+  var s = shOrCreate_(APP.SH.STYLE);
+  var n = STYLE_HEAD.length;
+  banner_(s, n, '✒️ 내 문체 — 예전에 쓴 세특으로 "나처럼" 쓰게 하기',
+    '예전에 직접 쓴 세특을 한 칸에 한 편씩 붙여 넣으세요(학생 이름은 지우고). [사용]을 켠 앞의 ' + STYLE_SAMPLE_MAX + '편이 "문체 예시"로 모든 생성에 함께 가고, ' +
+    '메뉴 ⑧ [✒️ 내 문체 카드 만들기]를 누르면 쓰는 방식만 뽑은 카드가 [📐 공통규칙]의 STYLE_CARD 에 저장되어 학생마다 쓰기 직전에 한 번 더 보여 줍니다. ' +
+    '끄려면 [⚙️ 설정]의 내 문체 적용을 FALSE 로.');
+  s.setRowHeight(2, 8);
+  s.getRange(APP.HEAD_ROW, 1, 1, n).setValues([STYLE_HEAD]);
+  styleHeader_(s, APP.HEAD_ROW, n, '#4a3f6b');
+  s.setFrozenRows(APP.HEAD_ROW);
+  ensureRows_(s, APP.DATA_ROW + 30);
+  s.getRange(APP.DATA_ROW, 1, 30, 1).insertCheckboxes();
+  s.getRange(APP.DATA_ROW, 2, 30, 1).setBackground(APP.COLORS.input).setWrap(true).setVerticalAlignment('top');
+  [56, 640, 110, 200].forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
+  return s;
+}
+
+/** [📐 공통규칙]에 STYLE_CARD 줄이 없으면 맨 아래에 더한다 (옛 사본) */
+function ensureStyleCardRow_() {
+  var s = sh_(APP.SH.COMMON);
+  if (!s) return;
+  var last = s.getLastRow();
+  var keys = last >= 3 ? s.getRange(3, 1, last - 2, 1).getValues().map(function (r) { return String(r[0]).trim(); }) : [];
+  if (keys.indexOf('STYLE_CARD') >= 0) return;
+  s.getRange(last + 1, 1, 1, 3).setValues([['STYLE_CARD', '내 문체 카드', '']]);
+  s.getRange(last + 1, 1, 1, 2).setBackground(APP.COLORS.lock);
+  s.getRange(last + 1, 3).setBackground(APP.COLORS.input).setWrap(true).setVerticalAlignment('top');
+}
+
+/** [사용]을 켠 예전 세특 (앞에서부터) */
+function styleSampleTexts_(max) {
+  var s = sh_(APP.SH.STYLE);
+  if (!s || s.getLastRow() < APP.DATA_ROW) return [];
+  return s.getRange(APP.DATA_ROW, 1, s.getLastRow() - APP.DATA_ROW + 1, 2).getValues()
+    .filter(function (r) { return (r[0] === true || String(r[0]).toUpperCase() === 'TRUE') && String(r[1]).trim(); })
+    .map(function (r) { return String(r[1]).trim(); })
+    .slice(0, max || STYLE_SAMPLE_MAX);
+}
+
+var __styleSamples = null;
+function readStyleSamples_() {
+  if (__styleSamples !== null) return __styleSamples;
+  var t = styleSampleTexts_(STYLE_SAMPLE_MAX);
+  __styleSamples = t.map(function (x, i) { return '## 문체 예시' + (i + 1) + '\n' + x; }).join('\n\n');
+  return __styleSamples;
+}
+
+/** 문체 검사의 기준 글: 이 활동의 예시 결과 + 내 문체 예시 */
+function styleReference_(act) {
+  var texts = [];
+  try { texts = readExampleRows_(act).map(function (e) { return e.result; }); } catch (e) {}
+  if (styleOn_()) texts = texts.concat(styleSampleTexts_(6));
+  return styleProfile(texts.slice(0, 12)) ;
+}
+
+function openStyleDialog() {
+  if (!sh_(APP.SH.STYLE)) buildStyleSheet();
+  ensureStyleCardRow_();
+  var html = HtmlService.createHtmlOutputFromFile('UI_Style').setWidth(720).setHeight(640);
+  ui_().showModalDialog(html, '✒️ 내 문체 카드');
+}
+
+function styleContext() {
+  return { samples: styleSampleTexts_(20).length, card: String(getCommon_().STYLE_CARD || ''), on: styleOn_(),
+           model: apiModelForChecks_(), request: STYLE_SYSTEM + '\n\n' + buildStyleUser(styleSampleTexts_(10)) };
+}
+
+/** AI 로 문체 카드 만들기 (저장은 하지 않고 돌려준다 — 창에서 보고 [저장]) */
+function styleMakeCard() {
+  var model = apiModelForChecks_();
+  if (!model) throw new Error('API 키가 없습니다. [요청문 복사]로 Gemini 앱에서 만들어 붙여 넣으세요.');
+  var samples = styleSampleTexts_(10);
+  if (samples.length < 2) throw new Error('[✒️ 내 문체] 시트에 예전 세특을 2편 이상 넣고 [사용]을 켜 주세요.');
+  usageReset_();
+  var res = callWithBackup_(STYLE_SYSTEM, buildStyleUser(samples), model);
+  return { card: String(res.text || '').replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim(), usage: usageText_() };
+}
+
+function styleSaveCard(text) {
+  ensureStyleCardRow_();
+  var s = shRequire_(APP.SH.COMMON);
+  var v = s.getRange(1, 1, s.getLastRow(), 1).getValues();
+  for (var i = 0; i < v.length; i++) {
+    if (String(v[i][0]).trim() === 'STYLE_CARD') { s.getRange(i + 1, 3).setValue(String(text || '').trim()); return '저장했습니다. 다음 생성부터 모든 활동에 적용됩니다.'; }
+  }
+  throw new Error('공통규칙에 STYLE_CARD 줄을 만들지 못했습니다.');
+}
+
+function openStyleSheet() { var s = sh_(APP.SH.STYLE) || buildStyleSheet(); ss_().setActiveSheet(s); }
+
+
+/* ==========================================================================
    90_Forms.gs
    ========================================================================== */
 
 /**
- * 세특 작성 도우미 v3 — 구글폼 응답 연동
+ * 세특 작성 도우미 v3 — 📝 구글 설문지 연결
  *
- * 전제: 폼의 첫 세 문항이 [반] [번호] [이름] (단답형)
- *       폼 응답을 이 스프레드시트로 연결해 두면 "설문지 응답 시트N" 이 생깁니다.
+ * 설문지 응답 시트(폼의 [응답] → [Sheets에 연결] → 이 파일)를 활동 시트에 잇는다.
+ *   · 학생 칸(학번·학년·반·번호·이름)과 문항을 머리글 "이름"으로 읽는다 — 문항 순서를 바꾸거나 이메일 수집을 켜도 흔들리지 않는다
+ *   · 문항 → 칸 연결은 창에서 고른다(이름이 같으면 저절로). 여러 문항을 한 칸에 모을 수 있다
+ *   · 같은 학생이 여러 번 내면 마지막 응답, 명단에 없는 학생은 줄을 더하거나(선택) 목록으로 알려 준다
+ *   · 선생님이 고친 칸은 덮어쓰지 않는다(설문지에서 넣은 값의 지문을 칸 메모에 남겨 비교)
+ *   · [응답이 오면 저절로 받아 오기]를 켜면 제출 때마다 받아 오고, 원하면 그 학생만 바로 생성한다
+ *   · 파일 업로드 문항(보고서)은 드라이브 링크로 들어오고, 📄 보고서 시트가 그 파일을 읽어 요점을 뽑는다
+ * 연결 정보는 이 파일(DocumentProperties)에 저장한다.
  */
 
-/** 폼 응답 시트 후보 찾기 */
+var FORM_LINKS_PROP = 'FORM_LINKS';
+var FORM_NEW_COL = '＋';    // 새 활동: 이 문항 이름으로 새 입력 항목
+
+/** 설문지 응답 시트 후보 — 1행 첫 칸이 타임스탬프 */
 function formSheets_() {
-  var known = {};
-  known[APP.SH.HELP] = 1; known[APP.SH.CONFIG] = 1; known[APP.SH.ROSTER] = 1;
-  known[APP.SH.RECORD] = 1; known[APP.SH.SUBJECT] = 1; known[APP.SH.COMMON] = 1;
-  known[APP.SH.ACTIVITY] = 1; known[APP.SH.REVIEW] = 1;
-  var actSheets = {};
-  getActivities_().forEach(function (a) { actSheets[a.inSheet] = 1; actSheets[a.exSheet] = 1; });
+  var acts = {};
+  try { getActivities_().forEach(function (a) { acts[a.inSheet] = 1; acts[a.exSheet] = 1; }); } catch (e) {}
   return ss_().getSheets().filter(function (s) {
-    var n = s.getName();
-    if (known[n] || actSheets[n]) return false;
-    if (recordKeyOfCompile_(n)) return false;
-    if (s.getLastRow() < 1) return false;
-    var h = String(s.getRange(1, 1).getValue());
-    return /타임스탬프|Timestamp/i.test(h) || /응답/.test(n);
+    if (acts[s.getName()] || s.getLastRow() < 1 || s.getLastColumn() < 2) return false;
+    return /타임스탬프|timestamp/i.test(String(s.getRange(1, 1).getValue()));
   });
 }
 
-function syncFormResponses() {
-  var forms = formSheets_();
-  if (!forms.length) {
-    ui_().alert(APP.MENU,
-      '폼 응답 시트를 찾지 못했습니다.\n\n' +
-      '1) 구글폼을 만들고 첫 세 문항을 [반] [번호] [이름] 단답형으로 넣으세요.\n' +
-      '2) 폼의 [응답] 탭 → 스프레드시트 아이콘 → "기존 스프레드시트 선택" → 이 파일을 고르세요.\n' +
-      '3) 응답이 한 건이라도 들어온 뒤 다시 실행하세요.', ui_().ButtonSet.OK);
-    return;
-  }
-  var fList = forms.map(function (s, i) { return (i + 1) + '. ' + s.getName() + ' (' + Math.max(0, s.getLastRow() - 1) + '건)'; }).join('\n');
-  var fAns = promptText_('구글폼 동기화 (1/2)', '어느 응답 시트를 쓸까요?\n\n' + fList);
-  if (fAns === null) return;
-  var fs = forms[Number(fAns) - 1];
-  if (!fs) { ui_().alert('번호가 올바르지 않습니다.'); return; }
+function formLinks_() {
+  try { return JSON.parse(PropertiesService.getDocumentProperties().getProperty(FORM_LINKS_PROP) || '[]') || []; }
+  catch (e) { return []; }
+}
+function saveFormLinks_(links) {
+  PropertiesService.getDocumentProperties().setProperty(FORM_LINKS_PROP, JSON.stringify(links));
+  ensureFormTrigger_(links);
+}
 
+/** 저절로 받아 오기를 켠 연결이 있으면 제출 트리거 하나, 없으면 지운다 */
+function ensureFormTrigger_(links) {
+  var want = (links || formLinks_()).some(function (l) { return l.auto; });
+  var have = ScriptApp.getProjectTriggers().filter(function (t) { return t.getHandlerFunction() === 'onFormSubmitInstalled'; });
+  if (want && !have.length) ScriptApp.newTrigger('onFormSubmitInstalled').forSpreadsheet(ss_()).onFormSubmit().create();
+  if (!want) have.forEach(function (t) { ScriptApp.deleteTrigger(t); });
+}
+
+/* ------------------------------------------------------- 창 */
+function openFormDialog() {
+  var html = HtmlService.createHtmlOutputFromFile('UI_Form').setWidth(780).setHeight(700);
+  ui_().showModalDialog(html, '📝 구글 설문지 연결');
+}
+
+/** 응답 시트 하나의 머리글 해석 + 파일 업로드 문항 찾기 */
+function formSheetInfo_(s) {
+  var head = s.getRange(1, 1, 1, s.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
+  var info = parseFormHeader(head);
+  var n = Math.min(Math.max(s.getLastRow() - 1, 0), 30);
+  var sample = n ? s.getRange(2, 1, n, head.length).getValues() : [];
+  info.questions.forEach(function (q) {
+    q.isFile = sample.some(function (r) { return driveIdsIn(r[q.i]).length > 0; });
+  });
+  return { name: s.getName(), rows: Math.max(s.getLastRow() - 1, 0), head: head, info: info };
+}
+
+function formDialogContext() {
   var acts = getActivities_();
-  var aList = acts.map(function (a, i) { return (i + 1) + '. ' + a.key + ' — ' + a.name; }).join('\n');
-  var aAns = promptText_('구글폼 동기화 (2/2)',
-    '어느 활동으로 보낼까요?\n0을 입력하면 이 폼의 문항으로 새 활동을 만듭니다.\n\n' + aList);
-  if (aAns === null) return;
+  return {
+    sheets: formSheets_().map(formSheetInfo_),
+    activities: acts.map(function (a) { return { key: a.key, name: a.name, mode: a.mode, cols: parseColumns(a.columns) }; }),
+    records: getRecordTypes_().map(function (r) { return { key: r.key, name: r.name }; }),
+    subjects: getSubjects_().map(function (s) { return { key: s.key, name: s.name }; }),
+    defaultSubject: String(cfg_('기본 교과영역', '공통')),
+    links: formLinks_().map(function (l) {
+      var a = getActivity_(l.act);
+      return { sheet: l.sheet, act: l.act, actName: a ? a.name : '(지워진 활동)', auto: !!l.auto, autoGen: !!l.autoGen, last: l.last || '' };
+    }),
+    hasKey: !!apiModelForChecks_(), rosterCount: (function () { try { return getRoster_().length; } catch (e) { return 0; } })(),
+    reportCols: REPORT_COLUMNS
+  };
+}
+
+/**
+ * 연결 저장 + 지금 받아 오기
+ * @param {{sheet:string, keys:Object, map:Object<string,string>, target:{type:string, key?:string, kind?:string, name?:string,
+ *          recordKey?:string, subjectKey?:string}, auto:boolean, autoGen:boolean, addMissing:boolean}} p
+ */
+function formSave(p) {
+  var fs = sh_(p.sheet);
+  if (!fs) throw new Error('응답 시트를 찾을 수 없습니다: ' + p.sheet);
+  var keys = p.keys || {};
+  if (!(keys.sid >= 0 || (keys.cls >= 0 && keys.no >= 0) || keys.name >= 0)) {
+    throw new Error('학생을 알아볼 칸(학번, 또는 반·번호, 또는 이름)을 하나 이상 골라 주세요.');
+  }
+  var map = p.map || {};
+  var act;
+  if (p.target.type === 'existing') {
+    act = getActivity_(p.target.key);
+    if (!act) throw new Error('활동을 찾을 수 없습니다.');
+  } else {
+    var name = safeKey_(p.target.name);
+    if (!name) throw new Error('새 시트 이름을 적어 주세요.');
+    var base = { name: name, recordKey: p.target.recordKey, subjectKey: p.target.subjectKey, desc: '구글 설문지로 받은 학생 응답' };
+    if (p.target.kind === '보고서') act = getActivity_(createReportSheet(base).name);
+    else if (p.target.kind === '바로쓰기') act = getActivity_(createQuickSheet(base).name);
+    else {
+      var cols = Object.keys(map).filter(function (q) { return map[q] === FORM_NEW_COL; });
+      if (!cols.length) throw new Error('새 활동의 입력 항목으로 쓸 문항을 하나 이상 고르세요.');
+      cols.forEach(function (q) { map[q] = q.replace(/[|,\n]/g, ' ').trim().slice(0, 40); });
+      var made = createActivity_({ key: name, name: name, recordKey: p.target.recordKey, subjectKey: p.target.subjectKey,
+                                   columns: cols.map(function (q) { return map[q]; }), desc: base.desc, examples: [] });
+      act = getActivity_(made.key);
+    }
+  }
+  var target = parseColumns(act.columns);
+  Object.keys(map).forEach(function (q) { if (map[q] && target.indexOf(map[q]) < 0) map[q] = ''; });
+  if (!Object.keys(map).some(function (q) { return map[q]; })) throw new Error('시트로 보낼 문항을 하나 이상 연결해 주세요.');
+  var links = formLinks_().filter(function (l) { return l.sheet !== p.sheet; });
+  var link = { sheet: p.sheet, act: act.key, keys: keys, map: map, auto: !!p.auto, autoGen: !!p.autoGen, addMissing: !!p.addMissing };
+  links.push(link);
+  saveFormLinks_(links);
+  var r = pushFormLink_(link);
+  link.last = stamp_();
+  saveFormLinks_(links);
+  return { act: act.name, inSheet: act.inSheet, result: r, text: formResultText_(r) };
+}
+
+function formUnlink(sheetName) {
+  saveFormLinks_(formLinks_().filter(function (l) { return l.sheet !== sheetName; }));
+  return '연결을 끊었습니다. 응답 시트와 이미 받아 온 내용은 그대로 있습니다.';
+}
+
+function formRunNow(sheetName) {
+  var links = formLinks_();
+  var l = links.filter(function (x) { return x.sheet === sheetName; })[0];
+  if (!l) throw new Error('연결이 없습니다.');
+  var r = pushFormLink_(l);
+  l.last = stamp_();
+  saveFormLinks_(links);
+  return formResultText_(r);
+}
+
+/** 메뉴: 연결해 둔 설문지를 모두 지금 받아 온다 (없으면 연결 창) */
+function syncFormResponses() {
+  var links = formLinks_();
+  if (!links.length) { openFormDialog(); return; }
+  var lines = [];
+  links.forEach(function (l) {
+    try { lines.push('· ' + l.sheet + ' → ' + formResultText_(pushFormLink_(l))); l.last = stamp_(); }
+    catch (e) { lines.push('· ' + l.sheet + ' — ' + e.message); }
+  });
+  saveFormLinks_(links);
+  ui_().alert(APP.MENU, '설문지 응답을 받아 왔습니다.\n\n' + lines.join('\n'), ui_().ButtonSet.OK);
+}
+
+function formResultText_(r) {
+  var t = '학생 ' + r.students + '명 반영';
+  if (r.appended) t += ' · 새 줄 ' + r.appended;
+  if (r.kept) t += ' · 선생님이 고친 칸 ' + r.kept + '개는 그대로';
+  if (r.unmatched.length) t += ' · 명단에 없는 응답 ' + r.unmatched.length + '건(' + r.unmatched.slice(0, 5).join(', ') + (r.unmatched.length > 5 ? ' …' : '') + ')';
+  return t;
+}
+
+/* ------------------------------------------------------- 받아 오기 */
+/**
+ * 응답 시트 → 활동 입력 시트
+ * @return {{students:number, appended:number, kept:number, unmatched:string[], rows:number[]}}  rows = 이번에 값이 바뀐 줄
+ */
+function pushFormLink_(link) {
+  var fs = sh_(link.sheet);
+  if (!fs) throw new Error('응답 시트가 없습니다: ' + link.sheet);
+  var act = getActivity_(link.act);
+  if (!act) throw new Error('보낼 활동이 지워졌습니다. 연결을 다시 만드세요.');
+  var t = sh_(act.inSheet);
+  if (!t) throw new Error('입력 시트가 없습니다: ' + act.inSheet);
+  var out = { students: 0, appended: 0, kept: 0, unmatched: [], rows: [] };
+  var last = fs.getLastRow();
+  if (last < 2) return out;
 
   var head = fs.getRange(1, 1, 1, fs.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
-  // 0:타임스탬프 1:반 2:번호 3:이름 4~:문항
-  var qCols = head.slice(4).filter(function (h) { return h; });
-  if (!qCols.length) { ui_().alert(APP.MENU, '문항을 찾지 못했습니다. 첫 세 문항이 [반][번호][이름]인지 확인하세요.', ui_().ButtonSet.OK); return; }
+  var info = parseFormHeader(head);
+  ['sid', 'year', 'cls', 'no', 'name'].forEach(function (k) {
+    if (link.keys && link.keys[k] !== undefined && link.keys[k] !== null) info[k] = Number(link.keys[k]);
+  });
+  var resps = latestResponses(fs.getRange(2, 1, last - 1, head.length).getValues(), info);
+  if (!resps.length) return out;
 
-  var act;
-  if (String(aAns).trim() === '0') {
-    var nm = promptText_('새 활동 만들기', '활동 이름을 입력하세요.');
-    if (!nm) return;
-    var recs = getRecordTypes_();
-    var rl = recs.map(function (r, i) { return (i + 1) + '. ' + r.key + ' (' + r.name + ')'; }).join('\n');
-    var rAns = promptText_('새 활동 만들기', '기록종류 번호를 고르세요.\n\n' + rl);
-    if (rAns === null) return;
-    var rec = recs[Number(rAns) - 1];
-    if (!rec) { ui_().alert('번호가 올바르지 않습니다.'); return; }
-    try {
-      var made = createActivity_({
-        key: nm, name: nm, recordKey: rec.key,
-        subjectKey: cfg_('기본 교과영역', '공통'),
-        columns: qCols.join('|'), desc: '구글폼으로 받은 학생 응답'
-      });
-      act = getActivity_(made.key);
-    } catch (e) { ui_().alert(APP.MENU, '오류: ' + e.message, ui_().ButtonSet.OK); return; }
-  } else {
-    act = acts[Number(aAns) - 1];
-    if (!act) { ui_().alert('번호가 올바르지 않습니다.'); return; }
-  }
+  var cols = parseColumns(act.columns);
+  var byCol = {};       // 칸 이름 → [{title, i}]
+  head.forEach(function (h, i) {
+    var c = link.map && link.map[h];
+    if (c && cols.indexOf(c) >= 0) (byCol[c] = byCol[c] || []).push({ title: h, i: i });
+  });
+  var grade = classHead_() === '학년-반';
+  var labelOf = function (st) { return grade && st.year !== '' ? st.year + '-' + st.cls : String(st.cls); };
 
-  var n = pushFormInto_(fs, act, qCols);
-  toast_('폼 응답 ' + n + '건을 [' + act.name + ']에 반영했습니다.', APP.MENU);
-  var t = sh_(act.inSheet);
-  if (t) ss_().setActiveSheet(t);
+  // 학생 줄 찾기 — 반(학년-반)·번호, 안 되면 이름이 한 명뿐일 때
+  var n0 = Math.max(t.getLastRow() - APP.DATA_ROW + 1, 0);
+  var who = n0 ? t.getRange(APP.DATA_ROW, 1, n0, 3).getValues() : [];
+  var byId = {}, byName = {}, nameCnt = {};
+  who.forEach(function (w, i) {
+    var id = String(w[0]).trim() + '-' + String(w[1]).trim();
+    if (id !== '-') byId[id] = APP.DATA_ROW + i;
+    var nm = String(w[2]).trim();
+    if (nm) { nameCnt[nm] = (nameCnt[nm] || 0) + 1; byName[nm] = APP.DATA_ROW + i; }
+  });
+  var targets = [];
+  resps.forEach(function (r) {
+    var st = r.st;
+    var row = (st.cls !== '' && st.no !== '') ? byId[labelOf(st) + '-' + st.no] : 0;
+    if (!row && st.name && nameCnt[st.name] === 1) row = byName[st.name];
+    if (!row) {
+      var lab = (st.cls !== '' ? labelOf(st) + '반 ' : '') + (st.no !== '' ? st.no + '번 ' : '') + (st.name || '');
+      if (!link.addMissing || st.cls === '' || st.no === '') { out.unmatched.push(lab.trim() || '(학생 칸 비어 있음)'); return; }
+      row = Math.max(t.getLastRow(), APP.DATA_ROW - 1) + 1;
+      ensureRows_(t, row);
+      t.getRange(row, 1).setNumberFormat('@');
+      t.getRange(row, 1, 1, 3).setValues([[labelOf(st), st.no, st.name]]);
+      byId[labelOf(st) + '-' + st.no] = row;
+      out.appended++;
+    }
+    targets.push({ row: row, resp: r });
+  });
+  if (out.appended) applyRowFormat_(t, t.getLastRow() - APP.DATA_ROW + 1);
+
+  // 칸마다 한 번에 읽고 한 번에 쓴다 (선생님이 고친 칸은 남김)
+  var nRows = t.getLastRow() - APP.DATA_ROW + 1;
+  var when = stamp_();
+  var touched = {}, changedRows = {};   // touched: 응답이 반영돼 있는 학생 · changedRows: 이번에 값이 바뀐 학생(바로 생성 대상)
+  Object.keys(byCol).forEach(function (c) {
+    var col = 5 + cols.indexOf(c);
+    var rng = t.getRange(APP.DATA_ROW, col, nRows, 1);
+    var vals = rng.getValues(), notes = rng.getNotes();
+    var changed = false;
+    targets.forEach(function (x) {
+      var v = joinAnswers(byCol[c].map(function (q) { return { title: q.title, value: x.resp.row[q.i] }; }));
+      if (!String(v).trim()) return;
+      var k = x.row - APP.DATA_ROW;
+      if (String(vals[k][0]) === v) { touched[x.row] = 1; return; }
+      if (!formCellWritable(vals[k][0], notes[k][0])) { out.kept++; return; }
+      vals[k][0] = v; notes[k][0] = formNote(textHash(v), when);
+      changed = true; touched[x.row] = 1; changedRows[x.row] = 1;
+    });
+    if (changed) { rng.setValues(vals); rng.setNotes(notes); }
+  });
+  out.rows = Object.keys(changedRows).map(Number).sort(function (a, b) { return a - b; });
+  out.students = Object.keys(touched).length;
+  SpreadsheetApp.flush();
+  return out;
 }
 
-/** 응답 시트 → 활동 입력 시트 (반/번호로 매칭, 같은 학생은 최신 응답 사용) */
-function pushFormInto_(formSheet, act, qCols) {
-  var target = sh_(act.inSheet);
-  if (!target) throw new Error('입력 시트를 찾을 수 없습니다: ' + act.inSheet);
-  var cols = parseColumns(act.columns);
-  var last = formSheet.getLastRow();
-  if (last < 2) return 0;
-
-  var vals = formSheet.getRange(2, 1, last - 1, formSheet.getLastColumn()).getValues();
-  var byId = {};
-  vals.forEach(function (r) {
-    var id = String(r[1]).trim() + '-' + String(r[2]).trim();
-    if (id === '-') return;
-    byId[id] = r;   // 뒤에 오는(최신) 응답이 덮어씀
-  });
-
-  var tLast = target.getLastRow();
-  if (tLast < APP.DATA_ROW) return 0;
-  var cnt = tLast - APP.DATA_ROW + 1;
-  var ab = target.getRange(APP.DATA_ROW, 1, cnt, 2).getValues();
-  var out = target.getRange(APP.DATA_ROW, 5, cnt, cols.length).getValues();
-
-  var n = 0;
-  for (var i = 0; i < cnt; i++) {
-    var id = String(ab[i][0]).trim() + '-' + String(ab[i][1]).trim();
-    var r = byId[id];
-    if (!r) continue;
-    for (var c = 0; c < cols.length; c++) {
-      // 활동의 c번째 입력 항목 ← 폼의 c번째 문항 (순서 기준)
-      var v = (c < qCols.length) ? r[4 + c] : '';
-      if (String(v).trim() !== '') out[i][c] = v;
-    }
-    n++;
+/** 설치형 트리거: 설문지 제출 때마다 그 응답 시트를 받아 오고, 켜 두었으면 받은 학생만 생성 */
+function onFormSubmitInstalled(e) {
+  try {
+    var name = e && e.range ? e.range.getSheet().getName() : '';
+    var links = formLinks_();
+    links.forEach(function (l) {
+      if (!l.auto || (name && l.sheet !== name)) return;
+      var r = pushFormLink_(l);
+      l.last = stamp_();
+      if (l.autoGen && r.rows.length && PROVIDERS.some(function (p) { return getKey_(p); })) {
+        var act = getActivity_(l.act);
+        var t = act && sh_(act.inSheet);
+        if (t) runGeneration_(act, t, r.rows);
+      }
+    });
+    PropertiesService.getDocumentProperties().setProperty(FORM_LINKS_PROP, JSON.stringify(links));
+  } catch (err) {
+    try { toast_('설문지 받아 오기 오류: ' + err.message); } catch (e2) {}
   }
-  target.getRange(APP.DATA_ROW, 5, cnt, cols.length).setValues(out);
-  return n;
 }
 
 
@@ -6486,8 +7542,10 @@ function openOcrGuide() {
  */
 var BUTTON_PNG = {
   start: 'iVBORw0KGgoAAAANSUhEUgAAAvgAAABoCAYAAACE24SJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAZQElEQVR4nO3d6bMTVf7H8XkyMw9m/QemaqrGmnlAlWXNDepPIWHGcVzGETduog4KMqK4gjsibqioKCKuiIIb7gsqihtuuCLgNoiKK6IgmyCiIkp++UQCp0+6O91JJ6dv8v5WvUqBTt+Tzu3kk+6z/OxnFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEX1hNqu0O+PXYXskN757OTehdzcTD67vPTfIgAAAIAqy0q5eU4pM0/qnc8N7l3I/sF1ni/Xdvv0+32mu+/wTCG3MAUHCQAAAOi58tkFmXzfY7oGdP2u5cF+h4N3+G3p28Z5JeudHwgAAACgjWTyuXVd3dkzth247a9aEu7/mu+zV2/dUkjBkwcAAADaVaaQ/SzTnd2zacF+mz22+WXp28TETD67yfWTBQAAADrBT9k7e3mvAb1+kWi41+2BUrh/wvUTBAAAADpRppB7PLEuO5v7289z/aQAAACADjdX2byhcF/ullPIvpyCJwMAAACgkJ3VNbTr53UH/NIOprp/EgAAAAAqMvnclLrCfVd3331cNx4AAABAtUy+b/9Y4b7XgH6/7p3Pfeq64QAAAACqZQrZxbEG3Wby2VGuGw0AAAAgRHduZKRwX541p5Bd7bzBAAAAAILls6v+svfOv6l99b6QG+G8sQAAAABqy2ePj9I9hznvAQAAgJ7h1dBwv32+z59T0EgAAAAAEXXld/pTYMAvbTDUdQMBAAAARJcpZA8LCfgsbAUAAAD0JJl89vqw/vevuG4gAAAAgBjy2ReDA34ht8J5AwEAAABEpkWvwq7gb3DdQAAAAADRZfK5NWGDbJ03EAAAAEB0mXx2EwEfAAAAaCMEfAAAAKCNEPABAACANkLABwAAANoIAR8AAABoIwR8AAAAoI0Q8AEAAIA2QsAHAAAA2ggBHwAAAGgjBHygTez0n394tEMb/u/gXTz72+HAv/WYY5HGttSy40F/97RVf27FY9tRWl73nvq66FxPQ7vT8joCcRHwgTZw0CmHFc36bsMG523Y+MMPDe/ztYVvevZ5yY0Taz5m0KgjPY/56ut1zl6XfY47MDVtieKeJx7wtFd/jvrYG6dP8zz2oWdmNtyefx/TXTz6/BOK5183rjjhlquLk+6aUrz2rhvK/6+/079pG9fHzbbLf/9dtMtVOLRf0xvuu9n58YlCr7VZdz56X8vb0NPOX8BEwAfaQNyAv/2B/YrTZ81omBmuCPjVelpASEPAP+CEgcW7H7u/uHTFsqqQHFSfL19avOux+4r7j/iP82MoBPzGEfCBxhDwgRSZt+C14rKVy7c44eKRkR4XN+Dr9ncSNXDk4YFt6IkBf0ApXOrx9Thk5NCq/fW0gOAy4O88cNfiHTPvLW7atKnu30c99vZH7m4oTOvL72kTzio+PWd2+UvGhu83FL9cu6a44P2FxStvm1Tc9fC9a+6jnoCvn/vYC7Pq5vf75/eaNjvg671l9JXnFWfPf7H8HrZx48bi19+sLx8/hfYox0/qCfidfv4CJgI+kCIfLfnE84EycsLZkR5HwN+qkYA/t/QFq95SmLH319MCgquAr3D7zKuzfY/r9xu/L76/+MPiS2/MKYXu58rBW/+vv9O/+ZW2q+f59z82X3zj3bdCX+c169YWT7vszND91BPwGz0nTxx3eqTXtJkBX3df3vnovdB2rlv/daT3tXoCfqefv4CJgI9U0getBli6bkertTLgL166xNfqtV9W7Sto2/xJgwLbECXgqw+1gmCQVWtWe/b5v0Vvh26vYOUq4C/88N2q/bkICMdecFL5i1DFP4f29/y77hIFvZ4KX2bpz0HbKsiZ+20k4Csw26XXeviFp4YGY71HHH/hKcW3Fi2oevwp40fHOm57HT0gcregH3/8sThq4jmB+3IR8M+88rzyz7XNeHamZ7tmBfz9hh9cXPnlqkht1Z2WM64YE7q/Vgf8Rs7fIWce7TnndCyafZ4DtRDwkUoXTL6k+MGnHxUHnzHMeVtaqVUBv9axN+v1d96sqw1RAr4+DJMsjQlwFfBffP2Vqv21OuDrfDGvavtdyf5s+dK6n2PYc2kk4M96+RnPY998b0Fxx4NjzOBT2laPMevJ0j7jHDu/K/fvfrSoPB7gqVeerbpboK47+w0/yHdfSQX8Tz5fXH5P8PPthu8iv1ZmNSPga4abdz9eVPWz9CVNx++5uS8Uf/jxB8+/qf37Hu9//KTVAb+R83e3I/b1XBj5+LNPirlBuzf1XAdqIeAjlSohU1fKpj18V7HPIf903qZWSEPAH3/zlZ59vffx+3W1oScG/ENOH1q+Ah7Fk1YoVZCx99fKgK9AYV6BVr9xBU17uzQGfDucX3X7dbGfvx5jlvYZ9bFnXz226vldfuvVnm26Tzq0uHz1Cs82L7z2su/+kgr4fQ/dLXB7u/ta1GpGwB839fKqnzN28qWebdSdT7+TZq1YvbL8JcqPfTcgSsB3ef7qjpFZunPSrHMdiIKAj1SyryJ/umxJ8chzj3fermZLQ8C/Y+Y9nn1pgFyUOajrCfjnXDO2HDiTsuew/Vs2i459tfCMiedWbdPKgK8AZNa511wY8PreGzhQU1eM7fMuaNsHnn7Ys99GAr761Zv18huvxn7+GtRplvYZ9bELPnjH89iZsx/33e6Ic44v2uV3FbrTAr79vqUZjfy20ziBeivpWXSacf7qLoBZx5x/YuLHGoiKgI9UsgO+Sv0273vywWK/wXs4b1+zKFCZpX61UR6XZMD/cMnHVcdefeXjtkFlB/A5b81t+jFsRcBXWNMxNmvvY/JV27Uq4Gv2ELMLxAeLP6xrP7c9fLenva0aZHvWVRdU/e4osAfNDGNSNxkFcrvOuur8SD9bjzdL7zP9jysEbj/nrXme7TUvv72Ni4CvdgwbM6LK7HneLz5JB/yDTh3i2b+6LoXNlKNuO/VUkgG/Wedv94mHlO86V0rvpVEX5wOSRsBHKvkF/EpptgMNvnPdxmbQB4hZUWaNkaQC/uFnH+t7zOcvfCN2G/xKV/qituVfRx1Qnq5w3NQJxYnTri0vbKQrqH0G7hr6uFYEfN1ZMWvJF5/7bteqgG93N4h658emKSbNalXAVx/6eQH9p9VVQ1f0tT9dGVbQ092D5+e/FNjdSPuK2odfX6LN0nSOYdvb701+fbddBHxXs+hEOR6m8Tdd4dlesxLpbovNviuQZMBv5vn7xEtPex4T9YsmkDQCPlIpLOBXSlft/PoY91T9Bu9Z9RyjfqglEfAVMOy+0Gapb36cNvhVlICvuf/DrvLpuelOjr4A+D2+FQH/1f/N9/yMa+683ne7VgR8jTswrxqqn3i9Vw0Vos165Dn/rip+Gp0H/2+H/as8KLjR0oBY7Svqz9UYH7P0JSds+wNPGezZXl9A7G06KeDb+w86Fyrs83PJss98t2vmQlfNPH81o45ZGnyc5PEGoiLgI5WiBHyVplHUVV7X7U3CsRecXPX8NNgsymOTCPjX3TPVsw971gv9WYMRo7ZBXR3saSynTr818PEKOLoyG7XWrvuqeNzYk6v20+yAr8GCZilcB33ZaEXAv/7emzw/I+wY1/LKm3M9+1I/ZXubK26bVL5Ka9NVULPqXclW/Za1v6A57v1K2+oxUbqS2ezuPbpjFLa9Bvzbr7+9jYuAf/+sh4oX3XBZFXu7pAO+vlCZFTZ9qN+x0fuK33bNCvitOH/tbo56T0rymANREPCRSlEDfqV05U9TlbludyPswa2qWv2BKxoN+Aru9gqi6h5kX1HVNjc9eJtv94dGF7pSQIlb6u/737OO8eyn2QHfDkzPzn0+cNtWBHw7TJiLj8Wh13T9t9949qWpDHe2ukRpgG2UqjfgV2QP3b0c9hW4dVX9wacfKT7x4lNl+n/9nf5NM6Jo23p/jt1HPUqXCv1um2WPC+qkQbb2l0KtSxD3edq/Y9KsgN+K81fH2KxbHroj0WMOREHARyrFDfgqXdHVrCyu214PfcCpL6pfRbki20jA1xR39tV69WHW6qIKTm9bM4yotEbBSZeMCm1DnICvGZLs0kqlp44/szxgT8dHi8doIKE9OE4zv5hfOOyAr8Wa1I3FpEWN6nmdRlv9tXXcNH1i0PbNDvj68meWX3eRqBTM/Mruz9+qgN8qmurSrNERBrbbdxf+PsTbJSipgK/96HF+aq24G1RJB3y7u4vuRIZtr/cV+2KC3zTIzQj4rTp/tR6FWXHGHgFJIeAjleoJ+JXSMvYKca6fQxwXT5kQ+Hw0TaW9GqmtnoCvOx66GmqXVin9hzELhq5Ozn/7dd+2advDN19BbyTg6yqaWeqaFHT1Ul8GzD7nKvPLhh3w/UpXquO+RvqCodfCLI0FCHtMswO+VgM1K87UkDZ7ir9K6QueuZ2uRurLl82e4zws4OuOkbnyZysEdS979PknPe0ee/2locdJq+faZY95cLGS7Zqv1pQnILB9Y92VSTrg21OcalXisO31fmKWwr7fdkkH/Faev7rgoLuLZu0yZK9EjztQCwEfqdRIwFcpwKn/qevnEYUG19rhyK7pT80I3UecgK/wrm42urJtl6bp9OuPqivo9jzrKt3uVuDxa0OcgP/td996HltrliR71hhztpdmBHx92dCCX2bpNdvtiH1CH9fsgG9Pa3n1HeEDHIP4ze9u1phJF9fcR5xBtvpi2OrSz/Rri9YFMEvnRtjzVFA0y+81dRHwXQ2ynT5rhmf/9gJhNvt94otVy323SzLguzh/NRuTWfWMDwEaQcBHKjUa8Cul6R31gez6+YTRiodmqauOpgO0SyslBu0jTsDXNJP2XN4qXamt9YGn4F0ZTKnZL8wr/fUGfL8wVGsWFPW9NktTJlb+LemAv7PP8dJVR78BvrZmB3z7zketAY5+9AVt0ScfePbz8WfeKQrVbr8FnUw9NeDry4tZeq3DnqeOsVm6uxXld7pdA759LmqayLDt7eOtuwxX3zG5in3O1RvwXZ2/dlc2faYledyBWgj4SKWkAr5KYXfirdekcsERu0+oSl0EFLq0WJFZ69avKx586hDf/cTtovNTyN86OE53CPwGuvlRUJlwy9XlRV3C2hA14KuPvV25QeGDJi+8Ybxne3XLqvybHfB1d0ALKZnUtSVK23RM7D7aqpsemBbp8c0O+OrKZJY94DgKe3D36rVflgPqwg/f9fy9BvOGffHqqQHfnvZy48aNni+utlnW3aNpM+6s2qaegC9+QTeqoAsZzQ74dn9z3RkMGxwc1BWsVtUT8F2ev7oTZNaU+29J9LgDtRDwkUpJBvxKaTn6NPXN1wwh9mA9tbHyRUSreNoDStXP1m+WlHr64Cvka+aapJZT10qQ5kI1mj4vyuM06M5+nkedF347257aULOqVP4tqVl09hy2f9VtdpVmXdnxoGiLKDU74NsrHyusxnm8Zoyxq3IXoHDyoKr+2/pCETQeJE7A1xc4dU1rpbAvjfZMRDc/eLvvdvZKpSq/KRDrDfjN0OyAL/aCY1feNsl3u0NHHVF1XKJW3IDv+vzVl65G2g80ioCPVEo64Cuo6FaywqTr5ya6nW73O9eHhz0lpt8VfoVheyBgUivZujJ7vneqwrcWLdjSt982ePSwqmkKza4pSQR89ZddsXpl1bHX1cc4Qa3ZAV+LWpkVpzuaunzZsyc9/Nxjnm1GXHxa1TZLVyzbMrDa1OhCVy5pJimz9JztLhyaKcfux62uTX77SzLg62q4Ke7jWxHwr7r9Os/P0ABT+3dEg/o/+fzTquMSteIE5DScv1oY0Kxa46iApBHwkUpJBvw0zaqj0KoPWHuaOF0VDOpDay9AVSn1mddVVm3TaMDXh576pSdJXYqi/nxdsbdLIV9/X/lAVkC49KYrquZqV+DsY3QvaiTg62fMfP4J3+Ot+b77ROzGVNHsgP+5deU0bMo/02W3XFV1JVpdcvymK1SfaXtbBWDNQKKrpJXtGgn4Ctga9Jgk7TPqz9esJ+9bXeLUVefux+4vTxM6vvR7Zy/kpdLgZL/9JRXw9b5lV9yQ34qAr/NCY3LM0nuQVgnWQoQTp11b9WVU74GHn31s+Y6ln8n33OjZPkrAT9P5qwXhzLrn8emJH3cgDAEfqZREwNe8+Opv7fq5VCgMac52u/RBN+bai0Ifa18hU+n2c+XDPomAn3TFXejKno3DrKBVTfUztNCRuZ96Ar4+yBWE7K5ClVI/9ai39e39xm1LHHbXEnWBCNt+jyP3qxqYq1q28gtPWLdp6kO/18C8c9JIwFcATLq0zzjHUt2b9PpErbDZdjot4Iv64ttdusKqVp/0OLPopPH8tRe7upXFrtBiBHykUqMBX9Mo1poRxgXdtjWv3uvK6HkRpiCUsZMv3RKy1Pfa7AvdDgFfV+3Ulz5qKUzo6qC9n3oCvgYva3CpXVrJ9cwICx8FaXbAt2cHsRcfs51/3biqu0daHGvACQNr/iytP7Bqzeotj7MHKvb0gF/53dGsLmFVWc05bD+dGPBFdzTM35HA4xdhkGucgJ/G8/eBpx/2PFZ3zZp13AE/BHykUr0BX/0ua4Uc1zSDi27/6w5DrVUfbQog6kphT1nYaMDX1S0tYNQIO5zHDfgVWr3WnrbRLHUP0RR0+w33n7ax3i46B5RCrubkrpRW6Gx0itVmB3z7mKsrSaTfv81jGDQ48oAI4b5i9yP3La9yrGlJ7fEsSQZ8dfdQMI3D7iJST8AXLcSkEGwPHNU5pYHjQ848uuY+0hTwtcCSuYpzrSloG6Wfp/cD81xSqV/+c3NfiDzTU9x58NN2/tpfvvW+1szjDtgI+EilegK+BjE1+8MrKcPGDK8aUNuINAyy3X/EfzxtqDfgV+gDW12XtHjT1Om3lqfmPOHikTVXhGykD37/Y/Plvv+aXSaJY9LsgK9Ab9aMZx+N9DitZ6CwumvIdJBBdKfFL2QmGfB1By5uu+zFz+oN+Cb9rmlcw15HDyj304/8uBQFfJf0+6VxQvoyHuf4ST0LXaXp/NWMZ2YFXZAAmoWAj1SKE/A1+G3YmBHO2+xSOwb8eiU1TWYSmh3wDxt9lGf/WqDK1XNtx4BfLwJ+45JcybZe9Z6/usNqlu7Wuj6e6DwEfKRSlICv/uuapcFv5o9OQ8DfqpMCvq6K2gNDdRXTxXMl4G9FwG9cTw74F0/xru6rLoWujyc6DwEfqVQr4GuVV83a4LqdaUHA36qTAr7Yi35pILeL55pkwNfUtvp9ikOPMatdA75ebx3bRoTNmJQWPTngm6uEqzTVquvjic5DwEcqBQV8DU7VvPBBiyB1KgL+Vp0W8DW7jVn68uviubbDLDpJaWbAT6KirpfgUk8N+LqDZs5Updl9XK1ijM5GwEcq+QV8zfteWdgJXgT8rTot4Is961DQAkzNRMDfioDfuJ4a8DWDkFnNnJYUCEPARyqZAf/b774tdzvQ7B2u25VWBPytOjHga3YhszSVZaufKwF/q6QCvrrSaLrOpDU6fWQr9MSAr7VJzMW+1qxb22NmdkP7IeAjlSoBX3MZ603WdXvSTgFfgbpCHzKtboMCvtkGzXvt4lgo4Jvt0HR1rl4X/e62qi12v19NhdnK56qVSc3nqoV+oj5WUwieOO70RLmcllAB3zwWQjeNeK6583rP8dNqtK1uQ9zz115U7KIbLnN+HNG5CPhIpdMvP6c4JuIKrwB+6s7x9Tfrt4QLTR/bZ+CuztsFdAJN+qCZ3Srl4i4aYCLgA0Cb0GqZ5gA/XVF03Sag3eUG7V5cvHTJlvNu5ZeresRMRWhvBHwAaCPnXDO2PNCvQv2CXbcJaGdaaNE85w45fajzNgEEfAAAAKCNEPABAACANkLABwAAANoIAR8AAABoIwR8AAAAoI0Q8AEAAIA2QsAHAAAA2ggBHwAAAGgjBHwAAACgjRDwAQAAgDaRyWc3BQb80j9ucN1AAAAAANFl8rk1wQG/kFvhuoEAAAAAossUsovDruC/4rqBAAAAAGLIZ18M6YOfneq8gQAAAAAiy+Sz14cNsh3quoEAAAAAossUsocFBvzt833+7LqBAAAAAKLryu/0p8CAv7kf/jzXjQQAAAAQyauh4b4c8Au5ESloKAAAAIBa8tnjawb8HQ7e4beZQna188YCAAAACJbPrvrL3jv/pmbA39xNZ5TzBgMAAAAI1p0bGSncq3oN6Pfr3vncp84bDQAAAKCKFrfaduC2v4oc8FVd3X33cd1wAAAAANUy+b79Y4X7SrHwFQAAAJAumXxuSl3hXrXNHtv8MlPIvuz6SQAAAACQ7KyuoV0/rzvgq8qz6jA3PgAAAODaXGXzhsJ9pdSBP5PPPZGCJwUAAAB0nEwh93jsQbW1qtxdJ5+bmMlnN7l+ggAAAEAn+Cl7Zy/vNaDXLxIN92b9Nd9nr9IPW+b6yQIAAADtLFPIfpbpzu7ZtGBv1uZ++eeVrHf9xAEAAIB2ksnn1nV1Z89IvEtOlNpun36/z3T3HZ4p5Ba6PhAAAABAj5bPLsjk+x7TNaDrdy0P9n61XaHfH7sK2SGlhk0uNXBuybJMIbva+YECAAAAUkJ96ssZOZ9bWsrNc0p/nlT6/8G9C9k/uM7zFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVRFEVFqv8HL52WMadPxX4AAAAASUVORK5CYII=',
-  quick: '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',
+  quick: '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',
+  form: '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',
   check: 'iVBORw0KGgoAAAANSUhEUgAAAvgAAABoCAYAAACE24SJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAaZUlEQVR4nO3daZQU5b3Hcd8luefe3HvyNi9ukuM5uUlMjMwgIEPPiDFBg6LRoQcQBREEWUURlM0RkE0RUEFwJQgSQ1xwwQ2BYRMcQHGP4oqKG6LsGqjbvwrVPP1MVXf1NtX0fD/n/E/iTHVV9XQ3/aunnuWEEwAAAADAz+/Pq/mfitqaqsp4h0GV8epplfHYPIqiKIqiKIqiUqt1XWxKRbx6QGXXqva/PLf9f0Wd41NU1MZ+WxHvUN86HtuUONkjreuqHYqiKIqiKIqiwpWboeOx9RVdY2MqutX8X2TBvjLeoUviyqMh6j8IRVEURVEURZVLKexX1sVWVXaNnd1swb5V15q2iYM3Bp1U2+4dna5XXewMmzrKmTR/ujP93lnO7EV3UBRFURRFUVSLr+n3znQmzpvmDJ1yjXPh8J5udg4M+3WxF1rVVlUULdj/rFfNDxNXFLcmDnTYPnjngbXOrYvnOS++usU5cPCAAwAAACCzfQf2O5teaXRuWXi7c/aAC/xCfiJ7x2adeNaJPyhouG/dveoXrePVW+0D9h0/yFmzeb1z+PDhqP82AAAAwHFNmXp141qn95gBfkF/y+/ran5WkHB/Srzq5MRVw2fmATr1P99Zuakh6r8BAAAAUJaeXf+8m7mtoL+zVbcOv8sr3GuGnMTVwi5zx6Nmjnf27t8X9XMGAAAAytqefXudkTPGpYb8ePWXlfGak3IK96fWxn5eGY99bu5wwaOLnCNHjkT9XAEAAIAWQdlbGdwK+R+dXNvup9m13J9T8R/2TDlLli+N+vkBAAAALZKyuNVdp7FdbbsfhQ74mi3H3ME9Dy+M+jkBAAAALZoyeWrIj80KF+5rO5xqToU5enY93XIAAACAiCmTK5ubU2ieUldTmTHgt47HNpnz2zOgFgAAACgNyubK6Mf648fWZ+ia06GL2ezf0Lgu6ucAAAAAwKC58s3M3ipe1Tk44NfF1nkbXjr2iqjPHQAAAIBFXXV6jzUXw4o1BLTe15xkXgms3bIh6nMHAAAA4EM9bZJ98eOxI63isV817XtfV32Dt9F5Q7oxsBYAAAAoUcrqXQbHza46Y/0CfnLe+9n3z436nAEAAACkMXPhHLMVf2NKuP91bbufmFNjbn1jW9TnCwAAACCNza9tTZkys02PNj8+1nrfNRbzftm2e0fnwKGDUZ8vAAAAgDSU2dt0Oz0Z8itqa6rM7jn9vF/UDu8Z9bkCAAAACOGCKy86FvDrYn3M+e+ner8YcfOYqM8TAAAAQAjDpow0p8ucYM5/P9f7Rf3cyVGfJwAAAIAQRs+uN1e1nWkG/EXeLybfdXPU5wkAAAAghDGzbzACfvUcAj4AAABwHCPgAwAAAGWEgA8AAACUEQI+AAAAUEYI+AAAAEAZIeADAAAAZYSADwAAAJQRAj4AAABQRgj4AAAAQBkh4AMoiu+//9459N2hZP3r8L8Kfowtr7/kPPj0Q8l68dUtBT9GoZl/ExWi1Rzv07COx/dG1H+/I0eOHJd/N6DYCPgAiuLqm0Yf+8clUQ88+feCH2PaPTNTjjFh3rSCH6OQ9uzbk3K+qigDZbZ0riteWFXQWrNlfaTPyX6f/uPZRyM7F/u98cnnn0Z2LmGNnDEu5Zx1od2c3nr/7ZTjn37pn5v1+ECpIuADcE2aP90Ze9vEnOrAwQNN9ne8B/zh06512nbvmKxHVz4RuO1Dzy1L2VaP9XO8B/z9B/Y3Of9866z+f4n0ObWkgL9g2WI3kOdSd/1jge8+CfhAaSLgA3DpizHXkKbgassn4O/dv8+5ecGtGav7NZemHKPr1ZeEepz2n8mwqaNS9v3I848HbqtQaG6rx/oh4DetzgNrQx377Q+2O8+sX5F3fWyF5kIE/O0fvuvMSLyv9P6r6X22U9XzTKfLkDqnfu5kZ+sb20Lvp9gB336u2ZQ+N34KFfBfe+cN589XXJisHiP7hHocAR/wR8AHCuTTL3Y6G7c1Ok82POM8vOIx5/HVTzkNjeucdxJf/t//q/RDXCkF/C+//qrgQdIs7T8TAn5TxQj45w3pFurYc5bcVZDjPb56ecp+8wn4hw8fdm5dPM+9a5PumPqiPXDoYMb9lXLAf6Lhad99Firgv/TmtpT9/Ony80M9joAP+CPgA3nY9tarzo133uR2M0j35agWvYGThjuPrHjctztLKbADvlog41f3alK1w3sS8C0tJeAr0CpQ5VMKgObzV6t3GKUW8DW4U13Cwh637/WDne++/y7tPosd8KffO8v3M23X2QMuaHIuO7/83HefBHygNBHwgRy8vv1Np+/4QSlfLKd2q3FvLfe8tq8zaNJVTu+xA9zWydMu+kPKdmf06ewsfGyJO/tEKbED/itvv+a7nV9ILXTA//qb3c6FiQuJdKW/tV+Q0s8zPVb7z8QO+N1H9nGfk1/ZXYXKNeAXwprN61Oevz4vYZRawNcFn71vfYbG3z7JmZgI/ucM6trk9zP+elvafRY74IeVEgwS1a9+SOC2BHygNBHwgSwojCloKMx7n48rp41yb1/v+uZr38ccPHTI2fDyJmf6vTOd2CWdko9TH9MPPvmomZ9BsFIK+JnoeJdZF1heXXxdv8DXIht2wM+m9Nr69f/WQN2WHvBXbmoIHR5Nuih7/+MPfGvMrRNS9qn/Dtp2z769KfvNJeDr/acLdfNxvccMcHZ/e+zCURfw426bmLJNm26nOx9+uiNwv6UQ8HVMu8uRuhwGIeADpYmAD4SkPrQK897n4vL6oe7AsGwopKgVT1/02odCwrZ/+gfp5lbsgH/b4nlNwta+A/uzPs/VjWudcwfF0wbsTv3Pd5avecbtUpKrfAJ+NtXSAv5Ta59Lef7DpozMe5/2bEr677ByCfh2lywNrP1i15dNtlOXnLoRvVK2nXr3LYH7LYWAb/4bp9IdsXRzyxPwgdJEwAdCUGvc4BuvTn5Ybn9gvtsH1/bujved9S9tdJavfdad3/uNd9/yDXAajOu1ACoc6EsqasUO+H616sU1oc5NQUd3ALpd07vJPnSxpL7QbXs0HeiocQR3P/RXd5aTbNkBX10uLr62n29pJhgCfjh215ZRM8fnvc/mDvjqT29fvAZ5dsPKlG3Vvz1I1AFf3Zfsc9C4IZ2zOQ2sWfb2uQb8za9tTdnPGZedE+pxBHzAHwEfCEGfAe/z8Niq1D68apWfdf+cwD7hXr/cDz75MOVxulX/p8vPS4bHb/c2DcnNqRQCvi6Qnt+42lm28kl33u3Rs+udvwzrHvh4teRvemWz+9iX33ol7bYaCK1z0sXZ0kSIU0vyV7t3Bf498hlkS8APpgs18/lPLMDaBebn0/3OujP8d1a2AV+vV9XFf0x5zD/ffydwe3XRs7cP6poXZcDX58ceL6RuR3q+ak0P+37ONeDrc2/uR90gw9yBI+AD/gj4QAbmoMC5f7sr5XcKidW9OqV8wai1Sy3NXQbHU1qV1dI8Z8mdKV9amoXH+1Idf/uNzf3UUpRCwH9vxwdO+55nZnyc/saLnnjQDU8mdYn421MPhWpR12DbdLOa5BPwNQDbbwYZzYne0gO+LtzM5z9z4Zy896m7AOY+1W0krGwD/vaP3kvZvsMlf/K9m2fSgHvzMZo+109UAV/dY+zPv/5d27HzY/f3zRHwlyxfmtPzJ+AD/gj4QBrqmqOgrs+Bprk0v8jV9cP7jChQqlXYbhFWH3O1TGngp7etAoU5L/6ix/+W/J269ETF/oLf8vpLbt9bu/ymsAwT8LXirfrFm+U39d6CRxf5BgddLGmFWHV5yLSugEKzLh4U9IIuGNQlIB2myXSc3Xu+cWeMKmTZA081zay9jY6bjV6j+6fsU1M9hpVtwG+0upLoYj4T+zlratDBN45oUlEEfH1O7DsMaj1/7oVVyW3uXHqfeyHmV38Z1qMgAf+6WfVNnr+6OmZCwAf8EfCBNLRYlfc5MPvJm31V9cUUZhEbBVdv9p0pd89I/lyh2Wtx1r6iUioLXSnwXjL6crdLjfo6awXNlZvWNJn9JCytO6BxEVqQSOMo1I1n0vzpGR9nB3z1N9bFgl/ZfZHLJeDrIizX90Q+peOGpVWJ/fqC+w169ZNtwFcgNrfX3ZpM7DECYauYAV8XybMX3eF73HSz5tgKMchW5+J1VzQrzL+HdsDXe+GKicNTKujzCJQzAj6QhjeYbtQt45I/Uwu21+KVbSBfsvwfyQ+cBtp6lh5tAVZYVGCJQqkE/FKRzyw6BPzmC/j2rDxe6Q5bGNkGfLuveJhpPrXAVCkF/Fffft13wLoaIPRvVDYKEfDtiyav2vU4I+OaFXbA9ytNTwy0NAR8IIC6CXifAfN2tdcap0G1YVrubepmosebC/yotdE7lqaBjELUAV+hQ4Mjm7t0XD8E/OMj4Nvdc7xSi3CYi+VsA/6mVxpTtr9o1GUZj1E/d3LKY9TtTwNY7Sp2wNcYFzVKmOt4eKU+95r5K1uFCPj2rERmaQKDdAj4gD8CPhBAX3Z6/+uWr9c9RANkz+x7bs5fZGJ+IZkz63iroaabcq+YdBdBITyX8husmm3AL7UwqZbh+Uvvzan0WD/FDvgKcPc9ssj567IHnI8LEA4/++pz93PQ3KXjhmGvimtXmOkysw34dqDs2Cdzn+/+NwxNeUzQ9LDFCvhaa2PAhCsD/06aq/+dHKaSlXwDflDrvVdqxU+3IKD9emgyAy2CZ5bGTwEtDQEfCOANfr3gyouSP9MAQO9z8fmuL3Let+Zn1z4044tn7NGBeGZ3oOPZ8R7wi6GYAV/B2OyLXtXzzMC7E+VAd8+8AfBe2Ys0qaVa4y/SyTbg62LWXnPBm23Gj15fXQSY2+tCzE+xAr6m4PUaEMzS++WOB+9OO5tUJvkEfH0e7EXrRtw8xh1/Y/5MkxQEnSODbAF/BHwggGaI0Ptft489Xv/bP/brkte+9SWm/dyy8Pbkz7TCrXu8EIP2jgeLn/i7e9HiVaag9ez6590v52xKrXt2a1+2+9Bxm4vCnqYkNKtQ/Lo5aPaWcjXhjqkpz1VdXHSHzQ7seo21anKQXBa60uJm5mN0xySIxtqY2+rfjqBpNYsV8EVjh8x1IjRrT7r5+8PKJ+Db05uqm5C6Kz6zfkWTv0XQ2gYEfMAfAR8IoJluvBYlz0PPLXN/1vWqi/Patxb30X60AJbnnocXuj8z++YjvQlH/45eZbOCaS5ee+cNNwB6pa4P2VArpPl4vZ8K5fL6oU1C0fVzJhds/6VEq6vaLdFeWFWQtedtV4uwvdCcJ5eAv/CxJU32rylx/divi/rjBylmwJdPv9jp3uV48dUtBdun7g7ob+6VZq0KQ2uC2M9XjQIev3U01AhiI+AD/gj4QABNz6j3v9l/05uxQwNs8+HN+Tz17luSP9M0jvrZpWOvyGvf+fJbrr4Qdf7Q7gU/1+YO+HOW3JVyvGwXabK76CiYForukJh3NDTTUzHWVRgwYViTPs75lPaXjRUvrHL7WZt/x3sfuT9lGy3SZq9/8Ie+56bMXOXJJeCbM2l5pa519voM5loZXr353j8D91vsgG/TRY/+nStkaTG3dHT3Yt6D9zR5rpp8wLyzoQsmjQ2wt7tq+nXON3u+TW5HwAf8EfCBAN6Xs/quejYfXeRGwSyoxS4MtdJrP+ZUft5MG1HP2VxKAV+BPd0MOFqN1jyGFhBKt32+FwClHPBFgU2tyxrv4LeIWCGEWWk4m9L+wtKYlSZrDkwZ6dvlRQui2RcC+m+9B8yAmEvAFw1mtp+L1m/Q3QWN6/BrgVaXlHSaO+DbMwIVotJ10dH7/5oZY33/bdCdAJsGitt99FXq5qT3uF53Aj7gj4APBPD6gdb0Pis5EFID+6qOBpyVmxpy2q+5Eqy5mqr63utnmjM7SqUU8KMMk37sgK+xBdms4mqvglrogN8conhN1LXELzBrxVozrNs0va09IFazYJmzsuQa8LXK9aBJV4V+nucN6eYbYk32Y8op4Gu2HL/FrBTg0z1PXajaq+Wq9FkUAj7gj4APBNjx2SfJD4d529kbIKv5t3Phdf0547Jzkrf01bLltUyGWZ69mDRdnlbdDSrNumG3jKrUepnucWGDk6nUA36+VQ4BX4Nb7ZVD05U933uY12TbW6+6XWzMx2l2K10sZ6KuSzW9z3Yfo/nQdaFlyjXgi/qbq8tIpte5x8g+oVbWjTrg6/2o8QvZVJX1fggK+HouusNmbqtZkMI8x69270qZatTMJAR8wB8BH0jDazmaff/c5M/MLxR1h8iGWnC9FkXzsd7dAk3rFya0RMlb6MsufdG//cH2gh7LDpO6KMomfGh7An5h2a/J9iznT9f2ubwmH366w70LpMdonEqYwOxRi71CdqH64NvUHUhjCewFpLonjqmVYe2++UGiDvg632xpIHeYgC9qyPDm49f/Zlql1qS7qBqYq9Ci2ZI8BHzAHwEfSMPrh68WQLMrwIyjrfD6Ql8aMhAo3HvzYWuZ+IOHDrk/Vz9SfbHq56W+IIvf4DizOvU/39n+0XsFO15UYTIIAT/a10SBUH3f1T0mW0FTUxYi4HvUhe+jnTucd3e8n7E7jp9yD/ii1+7x1U8VbP0HAj7gj4APpLF7zzfubX23FX/RHcmf68tp6JRrkh8ezQUdNNf2rm++due797rgKASrT7FHXXK8/Wx4eVPRn1MutLKoZrmwA0jngbVNuuvo76V+/IVQ6gFfM6coJIUte9VOAn7+r0m+Chnw89USAn6hEfABfwR8IIMFyxYnw5g5f7RaouzFdjStm+a2Vwv/DXOnOH3GDUwJwOomYIZ7rYB5Rp/O7u80YK/UqLvQbYvnJS9yzNKiOQr+j61a7tsnX8993dYX8jp+qYXJUp9FpzmU2muSLwI+AR8oRwR8IAP1n1WfX30W1KfbXpZ+deNad+Er+8vZLIV4rXbpdcuRvfv3ubOA6PfqAqRBvVFT31Z1sVHIGTJ5RJMpCb1S/9nd3x7rP9vQuM6dbchvWw2k090P3Z1QwM2GHSZ1HN0pCVvavpgBX/82mov8ZCpNY1luAT/q1yRfBPxjx9O0s9m8lir770fAB0oDAR8IQS3VWtxKnwd1sdGKpib179WiQlpwZ9L86e5MO5rX/vYH5jsvvPyic+i7QynbqxVf/fC1P7V+r9myvjmfjq8nGp5OWSjJr7SUvFab9OvPrAuUfvVD0j7eu4th/z2CMItO6Sm11yRfBPzCvZYEfKB0EPCBkNT66oV8zRijwbW5DBRTi78WavHCvYJ1KVBo1yBf3yDao6Nz4503hZq55MmGZ3wXp1FpULI5938mpRYmCfil95rki4BPwAfKEQEfyIIWXbn42n7JD41uaT+9bkXGVW2/+/47dz7uy44uZuV9Ea3ZHH3LvUndSDS9pHeOWpjm1sXzUsYNhPHvmTKWu2sFmF++moUnG6UWJgn4pfea5IuAT8AHyhEBH8iSwrqC3mkX/SH54VHXFs2DfdN9s91uOg89t8ztc6/ZczT7jD1IdfCNI0qiz70fTeepIK6WdnO+6VxpuXmFJl0oZHvHQ/21NfNMoUr7y4emPyzk+ehuzvGm1F6TfKk7nS60vNJnNyrmeaiKHfA1w1chX0tVc/+7poBv/s00TgoAAR/Imb58teiTWozCttZq4KpazQAAAIqFgA/kSS36Cu13Lr3P/UBdXj/U7ZrS9/rB7u1/TaWolS6zWbURAAAgVwR8AAAAoIwQ8AEAAIAyQsAHAAAAyggBHwAAACgjBHwAAACgjBDwAQAAgDJCwAcAAADKCAEfAAAAKCMEfAAAAKCMEPABAACAMkLABwAAAMpIuoA/1/tF/dzJUZ8nAAAAgBBGz643An5s5rGAH+8w1fvFiJvHRH2eAAAAAEIYNmXksYBfF5uQDPiJH/TzflE7vGfU5wkAAAAghAuuvCgZ8CvqYn2SAb9VXXUH7xdtu3d0Dhw6GPW5AgAAAEhDmb1Nt9OTAb+ya1X7ZMD/dW27n1TWxQ57v3zpzW1Rny8AAACANLa8/tKxcJ/I8m16tPnxCabELxq9DWYvuiPq8wUAAACQxqz75xwL+PHYxhNsiV/c4G1w3pBuzpEjR6I+ZwAAAAA+lNW7DI4bA2yrxzYN+N3a/8bYwFm7ZUPU5w0AAADAR0PjupTuOa3isV81CfhH58Nf523YZ9zAqM8bAAAAgI/eYweY02M2+Ib7o/PhdzFb8ddsXh/1uQMAAAAwmK33qlbxqs6BAf/fIT+20du488BaZ+/+fVE/BwAAAAAJyubK6Eb3nHVpw70b8Gs7nGpOmanlbxlwCwAAAERLmVzZ3Ox7f0pdTWXGgP/vVvzq2Waz/z0PL4z6+QAAAAAtmjK5mdFbx2MzQ4V7aVfb7kfmvPiqJcuXRv2cAAAAgBZJWTwl3NdVv6jMHjrgy6m1sZ9XxmOfmzta8OgiuusAAAAAzUTZWxk8teW++qOTa9v9NKtw76mojf22si62y9zhdbPqGXgLAAAAFNmefXudUTPH2+H+y8p4zUk5hXvPKfGqk1vXxT4zd9yp//nOyk1ron7OAAAAQFl6dsNKN3Nb3XJ2turW4Xd5hXuPuuskrha2Wgdw+l4/2FmzZb1z+PDhqP8GAAAAwHFNmVpz3KcuYpWcMWfLKd1P+9+ChHvPz3rV/FCz65hTaHp17qC4c9vieU7ja1udg4cORf23AQAAAI4LBw4ecDa9stmZuXCO8+crLvQL9oc1W86JZ534g4KGe1NFXVUbjdq1D+5V2+4dnfjVvZwrp41yRt0yzpk0fzpFURRFURRFUYmaOG+am5GHTR3l1A7v6WbnoFzdOl69oSLeoVXRgr0tcTVxbuJqYnVlPHYk8KQoiqIoiqIoigpdarGvrKte2bquqlOzBfsmQT9ec1LiRK5PBP2NhH2KoiiKoiiKyq6UoRN5el3if0dX1rb/ZWTB3k9FbcV/V3atal8Z7zAoceVxXeu62BT1GUqc7DyKoiiKoiiKomK3uBm5a/W1FfHqAYn/f9pvamv+M+ocDwAAAKBE/T9tQ7yfNyHb4wAAAABJRU5ErkJggg==',
+  style: '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',
   ocr: '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'
 };
 

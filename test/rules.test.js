@@ -377,14 +377,14 @@ t('명단에 없는 학생 줄(직접 적은 줄)은 동기화해도 남음', ()
 });
 
 console.log('\n[시작하기 버튼 · 메뉴 · 셀 함수 · 내보내기]');
-t('시작하기 시트에 버튼 4개, 각각 함수가 붙음', () => {
+t('시작하기 시트에 버튼 6개, 각각 함수가 붙음', () => {
   const s = A.__ss.getSheetByName('🚀 시작하기');
   const imgs = s.getImages();
-  eq(imgs.length, 4);
-  eq(imgs.map(i => i.getScript()).join(), 'openOnboard,openQuickSheetDialog,openCheckSidebar,openOcrGuide');
+  eq(imgs.length, 6);
+  eq(imgs.map(i => i.getScript()).join(), 'openOnboard,openQuickSheetDialog,openFormDialog,openCheckSidebar,openStyleDialog,openOcrGuide');
   imgs.forEach(i => ok(typeof A[i.getScript()] === 'function', i.getScript() + ' 없음'));
   A.buildStart();
-  eq(A.__ss.getSheetByName('🚀 시작하기').getImages().length, 4, '다시 만들면 겹침');
+  eq(A.__ss.getSheetByName('🚀 시작하기').getImages().length, 6, '다시 만들면 겹침');
 });
 t('SAETEUK_CHECK: 칸 하나·여러 칸', () => {
   ok(/수정필요/.test(A.SAETEUK_CHECK('토익 만점을 받음.')));

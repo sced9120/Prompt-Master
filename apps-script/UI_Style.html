@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root { --line:#dde3dd; --muted:#6b7280; --accent:#4a3f6b; --accent-soft:#ece9f5; --warn:#8f2f20; --ok:#2c6340; --bg:#f6f8f6; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; padding:14px 18px; color:#16202a; font:13.5px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
+  .lead { background:var(--accent-soft); border-radius:8px; padding:9px 12px; font-size:12.5px; color:#2f2747; }
+  label { display:block; font-weight:600; font-size:12px; margin:12px 0 4px; }
+  textarea { width:100%; padding:8px 10px; border:1px solid #c9d1c9; border-radius:6px; font:12.5px/1.6 inherit; resize:vertical; }
+  textarea.mono { font:11.5px/1.5 ui-monospace,Consolas,monospace; background:#fafbfa; }
+  button { font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; padding:7px 13px; border:1px solid #c9d1c9; border-radius:6px; background:#fff; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.5; }
+  .actions { display:flex; gap:7px; flex-wrap:wrap; align-items:center; margin-top:7px; }
+  .msg { font-size:12.5px; min-height:16px; } .msg.ok { color:var(--ok); } .msg.err { color:var(--warn); }
+  .note { font-size:11.5px; color:var(--muted); margin-top:4px; line-height:1.55; }
+</style>
+</head>
+<body>
+<div class="lead">예전에 직접 쓴 세특에서 <b>쓰는 방식만</b> 뽑은 카드입니다(내용은 옮기지 않음). 카드는 모든 생성의 규칙 끝과 <b>학생 자료 바로 뒤</b>에 한 번 더 붙어,
+  30번째 학생도 첫 번째와 같은 문체로 씁니다. [✒️ 내 문체] 시트의 [사용]을 켠 앞 3편은 "문체 예시"로도 함께 갑니다.</div>
+<div class="note" id="state"></div>
+
+<div id="withKey" hidden>
+  <div class="actions"><button class="primary" id="bMake">AI로 문체 카드 만들기</button><span class="msg" id="mMake"></span></div>
+</div>
+<div id="noKey" hidden>
+  <label>키 없이 만들기 — ① 요청문 복사 → ② Gemini(학교 계정)에 붙여 넣기 → ③ 받은 카드를 아래 [문체 카드]에 붙여 넣고 저장</label>
+  <textarea id="req" class="mono" rows="5" readonly></textarea>
+  <div class="actions"><button id="bCopy">📋 요청문 복사</button><a href="https://gemini.google.com/app" target="_blank" style="font-size:12px">Gemini 열기</a><span class="msg" id="mCopy"></span></div>
+</div>
+
+<label>문체 카드 <span style="font-weight:400;color:var(--muted)">— 직접 고쳐도 됩니다. 비우고 저장하면 쓰지 않습니다</span></label>
+<textarea id="card" rows="10" placeholder="- 한 편은 4~6문장, 문장은 40~70자&#10;- 첫 문장은 활동 장면으로 시작함&#10;- 끝맺음은 '~함', '~임'&#10;…"></textarea>
+<div class="actions">
+  <button class="primary" id="bSave">저장</button>
+  <button id="bSheet">✒️ 내 문체 시트 열기</button>
+  <button id="bClose">닫기</button>
+  <span class="msg" id="mSave"></span>
+</div>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+function say(id, t, cls) { $(id).className = 'msg ' + (cls || ''); $(id).textContent = t || ''; }
+function copyText(text, id) {
+  var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+  document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta); say(id, ok ? '✓ 복사했습니다.' : '복사가 막혔습니다. 칸을 누르고 Ctrl+A → Ctrl+C', ok ? 'ok' : 'err');
+}
+google.script.run.withSuccessHandler(function (c) {
+  $('state').textContent = '[✒️ 내 문체]에서 [사용]을 켠 예전 세특: ' + c.samples + '편' + (c.samples < 2 ? ' — 2편 이상 넣어 주세요(이름은 지우고).' : '') +
+    (c.on ? '' : ' · ⚠ [⚙️ 설정]의 내 문체 적용이 꺼져 있습니다.');
+  $('card').value = c.card;
+  $('withKey').hidden = !c.model; $('noKey').hidden = !!c.model;
+  $('req').value = c.request;
+  $('bMake').disabled = c.samples < 2;
+}).withFailureHandler(function (e) { say('mSave', e.message, 'err'); }).styleContext();
+$('bMake').onclick = function () {
+  var b = this; b.disabled = true; say('mMake', '예전 세특을 읽는 중…');
+  google.script.run.withSuccessHandler(function (r) { b.disabled = false; $('card').value = r.card; say('mMake', '✓ 만들었습니다. 읽어 보고 [저장]. ' + (r.usage || ''), 'ok'); })
+    .withFailureHandler(function (e) { b.disabled = false; say('mMake', e.message, 'err'); }).styleMakeCard();
+};
+$('bCopy').onclick = function () { copyText($('req').value, 'mCopy'); };
+$('bSave').onclick = function () {
+  google.script.run.withSuccessHandler(function (m) { say('mSave', '✓ ' + m, 'ok'); }).withFailureHandler(function (e) { say('mSave', e.message, 'err'); })
+    .styleSaveCard($('card').value);
+};
+$('bSheet').onclick = function () { google.script.run.openStyleSheet(); google.script.host.close(); };
+$('bClose').onclick = function () { google.script.host.close(); };
+</script>
+</body>
+</html>

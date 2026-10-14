@@ -16,10 +16,10 @@ npm run kit       # dist → web/deploy-kit.html 재생성 (배포 키트)
 
 ## 구조
 
-- `apps-script/NN_*.gs` — 모듈(번호순으로 번들). 00 Presets, 10 Engine(순수), 12 Models(순수), 14 RosterParse(순수), 16 Rules(순수: 규칙판·맞춤법·고쳐쓰기·근거·키 없이·내보내기),
+- `apps-script/NN_*.gs` — 모듈(번호순으로 번들). 00 Presets, 10 Engine(순수), 12 Models(순수), 14 RosterParse(순수), 16 Rules(순수: 규칙판·맞춤법·고쳐쓰기·근거·키 없이·내보내기), 18 Reports(순수: 보고서 요점·드라이브 링크·문체·설문지 머리글),
   20 Lib, 30 Setup(메뉴), 32 Onboard(시작하기 시트·버튼), 35 Help, 40 Roster, 45 Rules(📏 시트·원격 규칙판·SAETEUK_CHECK), 50 Activity, 52 Examples, 55 Wizard, 60 AI,
-  70 Generate(하네스 루프), 72 Manual(복사·붙여넣기), 74 Check(검사 사이드바), 76 Quick(바로 쓰기), 78 Export(Gem·스킬), 80 Compile, 90 Forms, 95 Observe, 96 Guide(OCR 설명서), 98 Assets(버튼 PNG base64)
-- `apps-script/UI_*.html` — 다이얼로그 (Onboard, ApiKey, Roster, Wizard, Observe, Manual, Check(사이드바), Quick, Export, OcrGuide)
+  70 Generate(하네스 루프), 72 Manual(복사·붙여넣기), 74 Check(검사 사이드바), 76 Quick(바로 쓰기), 78 Export(Gem·스킬), 80 Compile, 82 Report(보고서 시트·드라이브 파일 읽기·폴더·예시 등록·내 문체), 90 Forms(설문지 연결·제출 트리거), 95 Observe, 96 Guide(OCR 설명서), 98 Assets(버튼 PNG base64)
+- `apps-script/UI_*.html` — 다이얼로그 (Onboard, ApiKey, Roster, Wizard, Observe, Manual, Check(사이드바), Quick(바로 쓰기·보고서), Export, OcrGuide, Form, Style)
 - `rules/latest.json` — 원격 규칙판. **빌드가 `16_Rules.gs` 의 RULES_2026 에서 만든다(직접 고치지 말 것)**. 해마다 고치는 법은 `rules/README.md`
 - `dist/` — 교사가 붙여 넣는 최종본 (Code.gs 1개 + HTML 5개 + appsscript.json). 직접 수정 금지, build로 생성
 - `web/prompt-studio.html`, `web/deploy-kit.html` — 아티팩트로 게시한 웹 도구
@@ -42,6 +42,10 @@ npm run kit       # dist → web/deploy-kit.html 재생성 (배포 키트)
 - **하네스(v3.6)**: `runGeneration_` 의 polish — 생성 → inspect → [수정]이면 `buildRepairUser` 로 한 번 더(설정 `자동 고쳐쓰기`), `betterResult` 가 b 일 때만 교체 → (설정 `근거 자동 확인`) `groundCheck_`.
 - **규칙판 업데이트**: `autoRulesCheck_` 7일 간격(DocumentProperties RULES_CHECKED_AT), 손대지 않은 칸만 — `knownOldTexts`(OLD_NEIS_RULES + history), 글자수는 `history[].chars`. '내 학교' 출처 줄은 보존.
 - **바로 쓰기**: 활동목록 프롬프트 모드 `바로쓰기`, 입력 항목 `관찰 메모` 하나, 예시 시트 없음(`exSheet` ''). onEdit 가 [최종본]·[AI 결과] 편집 때 [검증] 재작성(`recheckOnEdit_`).
+- **보고서(v3.7)**: 모드 `보고서`, 입력 항목 [보고서|보고서 요점|교사 관찰 메모]. `modelCols_` 가 [보고서] 원문을 AI 자료에서 뺀다. 요점이 빈 학생은 `runExtraction_` 먼저, 보고서 시트는 묶음 1.
+  드라이브는 `drive.readonly`만(매니페스트). 파일은 `readReportSource_` — 구글 문서는 Drive API 내보내기(실패 시 getAs PDF), PDF·사진은 parts(base64, 한 학생 13MB), docx·hwpx·pptx 는 unzip.
+- **내 문체(v3.7)**: [✒️ 내 문체] 시트 앞 3편 → buildPrompt styleSamples, 공통규칙 STYLE_CARD → 규칙 끝 + `styleTail_()` 로 학생 자료 뒤. 문체 검사 `styleDrift`(check).
+- **설문지(v3.7)**: 연결은 DocumentProperties FORM_LINKS. 머리글 이름으로 학생 칸·문항(`parseFormHeader`), 고친 칸 보존은 칸 메모의 `textHash`. 제출 트리거 `onFormSubmitInstalled` — 바로 생성은 값이 바뀐 줄(`rows`)만.
 - 시작하기 버튼: `insertImage` + `assignScript` — 함수 이름 끝에 `_` 금지. 휴대폰 앱에선 동작 안 함(메뉴 안내 병기).
 
 ## 반드시 지킬 규칙

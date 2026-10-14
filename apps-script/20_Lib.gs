@@ -141,11 +141,42 @@ function promptFor_(act, examples) {
   var recs = getRecordTypes_(), subs = getSubjects_(), com = getCommon_();
   var rec = findByKey(recs, act.recordKey) || recs[0];
   var sub = findByKey(subs, act.subjectKey) || findByKey(subs, '공통') || subs[0];
+  var useStyle = styleOn_();
+  if (!useStyle) com.STYLE_CARD = '';
   return buildPrompt({
     activity: act, record: rec, subject: sub, common: com,
     examples: examples === undefined ? readExamples_(act) : examples,
+    styleSamples: useStyle ? readStyleSamples_() : '',
     years: Number(cfg_('교사 경력(년)', 15))
   });
+}
+
+/** [⚙️ 설정] 내 문체 적용 (없으면 켬) */
+function styleOn_() { return cfgBool_('내 문체 적용', true); }
+
+/** 학생 자료 바로 뒤에 붙일 문체 카드 (꺼 두었거나 카드가 없으면 '') */
+function styleTail_() {
+  if (!styleOn_()) return '';
+  try { return styleTail(getCommon_().STYLE_CARD || ''); } catch (e) { return ''; }
+}
+
+/**
+ * AI 에게 보낼 입력 항목 — 보고서 시트는 [보고서] 원문 대신 확인된 요점과 관찰 메모만 보낸다
+ * (긴 원문이 예시를 덮지 않게).
+ * @return {Array<{name:string, i:number}>}  i = 입력 항목 안에서의 위치
+ */
+function modelCols_(act) {
+  var cols = parseColumns(act.columns);
+  return cols.map(function (c, i) { return { name: c, i: i }; })
+    .filter(function (x) { return !(act.mode === '보고서' && x.name === REPORT_COL); });
+}
+
+/** 한 학생의 입력값 → AI 에게 보낼 자료 한 덩어리 */
+function blockFor_(act, values, grade) {
+  var mc = modelCols_(act);
+  return buildStudentBlock(mc.map(function (x) { return x.name; }),
+    mc.map(function (x) { var v = values[x.i]; return x.name === POINTS_COL ? String(v || '').replace(/\s*\n\s*/g, ' / ') : v; }),
+    { grade: grade });
 }
 
 /** 활동의 글자수(활동값 > 기록종류 기본값) */
@@ -178,14 +209,15 @@ function readExampleRows_(act) {
 
 /** 예시 시트에서 예시 합본(프롬프트용 문자열) 읽기 */
 function readExamples_(act) {
-  var cols = parseColumns(act.columns);
+  var mc = modelCols_(act);
   var rows = readExampleRows_(act);
   var cap = typeof EXAMPLE_MAX === 'number' ? EXAMPLE_MAX : 8;
   var out = [];
   for (var i = 0; i < rows.length && i < cap; i++) {
     var parts = [];
-    for (var c = 0; c < cols.length; c++) {
-      if (rows[i].values[c]) parts.push(cols[c] + ': ' + rows[i].values[c].replace(/\n/g, ' '));
+    for (var k = 0; k < mc.length; k++) {
+      var v = rows[i].values[mc[k].i];
+      if (v) parts.push(mc[k].name + ': ' + v.replace(/\s*\n\s*/g, mc[k].name === POINTS_COL ? ' / ' : ' '));
     }
     out.push('## 예시' + (i + 1) + ' 입력\n' + parts.join('\n') +
              '\n## 예시' + (i + 1) + ' 결과\n' + rows[i].result);

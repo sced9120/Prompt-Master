@@ -21,8 +21,8 @@ var SAMPLE_MEMO = {
 };
 
 function openQuickSheetDialog() {
-  var html = HtmlService.createHtmlOutputFromFile('UI_Quick').setWidth(500).setHeight(560);
-  ui_().showModalDialog(html, '✍️ 바로 쓰기 시트 추가');
+  var html = HtmlService.createHtmlOutputFromFile('UI_Quick').setWidth(560).setHeight(640);
+  ui_().showModalDialog(html, '✍️ 바로 쓰기 · 📄 보고서 시트 추가');
 }
 
 function quickContext() {
@@ -30,21 +30,24 @@ function quickContext() {
   var recs = getRecordTypes_(), subs = getSubjects_();
   var n = 1;
   while (getActivity_('바로쓰기' + n) || sh_(sheetNameIn_('바로쓰기' + n))) n++;
+  var m = 1;
+  while (getActivity_('보고서' + m) || sh_(sheetNameIn_('보고서' + m))) m++;
   var roster = 0;
   try { roster = getRoster_().length; } catch (e) {}
   return {
     records: recs.map(function (r) { return { key: r.key, name: r.name, chars: r.chars }; }),
     subjects: subs.map(function (s) { return { key: s.key, name: s.name, kind: s.kind }; }),
     defaultSubject: String(cfg_('기본 교과영역', '공통')),
-    suggestName: '바로쓰기' + n, rosterCount: roster
+    suggestName: '바로쓰기' + n, suggestReport: '보고서' + m, rosterCount: roster
   };
 }
 
 /**
- * @param {{name:string, recordKey:string, subjectKey:string, chars?:number, desc?:string}} p
+ * @param {{kind?:string, name:string, recordKey:string, subjectKey:string, chars?:number, desc?:string}} p  kind '보고서'면 보고서 시트
  * @return {{inSheet:string, name:string}}
  */
 function createQuickSheet(p) {
+  if (p && p.kind === '보고서') return createReportSheet(p);
   var name = safeKey_(p.name) || ('바로쓰기' + Date.now() % 1000);
   var recs = getRecordTypes_();
   var rec = findByKey(recs, p.recordKey) || recs[0];

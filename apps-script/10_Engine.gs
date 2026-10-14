@@ -83,6 +83,8 @@ function fillTokens(tpl, map) {
  *   o.years     교직 경력 표기 (기본 15)
  *   record.rules 이 기록 항목에만 붙는 기재 주의([🧩 기록종류]의 [기재 주의] — 기재요령 규칙판에서 옴)
  *   activity.mode '바로쓰기' 면 입력 자료가 교사의 자유 메모 한 칸이다
+ *   activity.mode '보고서' 면 입력 자료가 [보고서 요점](교사가 확인한 것)과 [교사 관찰 메모]다
+ *   o.styleSamples 예전에 쓴 세특 몇 편(쓰는 방식만 참고) · common.STYLE_CARD 내 문체 카드
  * @return {string}
  */
 function buildPrompt(o) {
@@ -106,6 +108,7 @@ function buildPrompt(o) {
       COMPETENCY: sub.comp || '',
       VIEW: rec.view || '',
       RECORD_RULES: rec.rules || '',
+      STYLE_CARD: com.STYLE_CARD || '',
       EXAMPLES: o.examples || '',
       CHARS: chars,
       BYTES: bytes,
@@ -155,11 +158,21 @@ function buildPrompt(o) {
   if (String(act.mode || '') === '바로쓰기') {
     P.push('# 입력 자료 형식\n아래 학생 자료는 교사가 수업·활동 중에 관찰하고 자유롭게 적은 메모다. ' +
            '메모에 있는 사실만 근거로 문장을 다듬어 쓴다. 메모가 짧으면 짧게 쓴다.');
+  } else if (String(act.mode || '') === '보고서') {
+    P.push('# 입력 자료 형식\n아래 학생 자료는 학생이 수업 중에 쓴 보고서에서 뽑아 교사가 확인한 [보고서 요점]과, ' +
+           '교사가 수업에서 직접 본 [교사 관찰 메모]다.\n' +
+           '- 보고서 요점은 학생이 쓴 내용이다. 그대로 옮기지 말고, 교사가 수업과 평가에서 관찰한 탐구 과정과 사고의 변화로 서술한다.\n' +
+           '- 교사 관찰 메모가 있으면 그것을 가장 앞세운다. 요점과 메모가 다르면 메모를 따른다.\n' +
+           '- 보고서 제목, 참고문헌, 연구보고서 실적(제목·주제·참여 인원·소요 시간)은 쓰지 않는다.');
   } else if (cols.length) {
     P.push('# 입력 자료 형식\n아래 학생 자료는 다음 항목이 | 로 구분되어 제공된다.\n' + cols.join('|'));
   }
 
-  // ⑦-2 예시
+  // ⑦-2 예시 (문체 예시 → 활동 예시 순)
+  if (o.styleSamples && String(o.styleSamples).trim()) {
+    P.push('# 문체 예시 — 선생님이 예전에 쓴 세특\n내용·소재는 따르지 말고 문장 길이, 여는 방식, 끝맺음, 이음말 같은 쓰는 방식만 따른다.\n\n' +
+           String(o.styleSamples).trim());
+  }
   if (o.examples && String(o.examples).trim()) {
     P.push('# 예시\n표현 방식과 서술 흐름을 참고한다. 문장을 그대로 베끼지 않는다.\n\n' + String(o.examples).trim());
   }
@@ -169,7 +182,12 @@ function buildPrompt(o) {
     P.push('# 성취수준 반영\n' + com.GRADE_RULE);
   }
 
-  // ⑦-4 마무리 지시문
+  // ⑦-4 내 문체 카드 — 규칙 맨 끝(출력 바로 앞)에 두고, 학생 자료 뒤에도 한 번 더 붙인다(styleTail)
+  if (com.STYLE_CARD && String(com.STYLE_CARD).trim()) {
+    P.push('# 내 문체 (예시와 함께 가장 우선해서 따른다)\n' + String(com.STYLE_CARD).trim());
+  }
+
+  // ⑦-5 마무리 지시문
   P.push('# 출력\n' + (com.INSTRUCTION || '특기사항 본문만 한 문단으로 출력한다.'));
 
   return P.join('\n\n');

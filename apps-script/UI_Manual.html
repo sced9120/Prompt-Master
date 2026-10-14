@@ -52,6 +52,7 @@
   <div class="card">
     <h3><span class="num">1</span>요청문 복사 <span class="note" id="chunkInfo" style="font-weight:400"></span></h3>
     <div class="who" id="who"></div>
+    <div class="info" id="files" hidden></div>
     <div class="note" id="maskNote"></div>
     <textarea id="prompt" class="mono" rows="6" readonly></textarea>
     <div class="actions">
@@ -135,6 +136,11 @@ function draw() {
   [].forEach.call($('who').querySelectorAll('span'), function (sp) {
     sp.onclick = function () { google.script.run.manualGoto({ sheet: DATA.sheet, target: DATA.target, row: c.rows[+sp.dataset.i] }); };
   });
+  var fl = (c.links || []).map(function (ls, i) {
+    return ls.length ? '<b>' + esc(c.labels[i]) + '</b> 보고서: ' + ls.map(function (u, k) { return '<a href="' + esc(u) + '" target="_blank">파일 ' + (k + 1) + ' 열기</a>'; }).join(' · ') : '';
+  }).filter(String);
+  $('files').hidden = !fl.length;
+  $('files').innerHTML = fl.length ? '📎 Gemini 대화창 왼쪽 아래 <b>[+] → 드라이브</b>(또는 파일 올리기)로 이 보고서를 <b>첨부한 뒤</b> 요청문을 붙여 넣으세요.<br>' + fl.join('<br>') : '';
   $('prompt').value = full(c);
   $('answer').value = '';
   $('results').innerHTML = '';

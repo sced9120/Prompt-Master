@@ -10,10 +10,14 @@
 
 /**
  * @param {{kind:string, sheet:string, target:string, check:string, title:string, limit:number,
- *          system:string, jobs:Array<{row:number, user:string, label:string}>, note?:string, heading?:string}} p
+ *          system:string, jobs:Array<{row:number, user:string, label:string, links?:string[]}>, note?:string,
+ *          heading?:string, chunk?:number}} p
+ *   kind: 'generate' | 'compile' | 'extract'(보고서 요점 — 줄바꿈을 살리고 검사하지 않음)
+ *   chunk: 한 번에 묶을 학생 수(보고서 파일을 첨부해야 하면 1)
  */
 function openManualDialog_(p) {
-  var size = Math.min(10, Math.max(5, Number(cfg_('한 번에 묶을 학생 수', 5)) || 5));
+  var size = p.chunk || Math.min(10, Math.max(5, Number(cfg_('한 번에 묶을 학생 수', 5)) || 5));
+  var tail = p.kind === 'extract' ? '' : styleTail_();
   var chunks = [];
   for (var i = 0; i < p.jobs.length; i += size) {
     var part = p.jobs.slice(i, i + size);
@@ -22,7 +26,8 @@ function openManualDialog_(p) {
       rows: part.map(function (j) { return j.row; }),
       ids: items.map(function (x) { return x.id; }),
       labels: part.map(function (j) { return j.label; }),
-      user: buildManualUser(items, p.heading)
+      links: part.map(function (j) { return j.links || []; }),
+      user: p.kind === 'extract' ? items.map(function (x) { return x.block; }).join('\n\n') : buildManualUser(items, p.heading) + tail
     });
   }
   var data = {
@@ -49,12 +54,21 @@ function manualApply(p) {
   var cC = p.check ? colOf_(s, APP.HEAD_ROW, p.check) : 0;
   var parsed = parseManualAnswer(p.answer, p.ids || []);
   var results = [], written = 0;
+  var extract = p.kind === 'extract';
+  var ref = null;
+  if (!extract) { try { var act = activityOfSheet_(p.sheet); if (act) ref = styleReference_(act); } catch (e) {} }
   (p.ids || []).forEach(function (id, n) {
     var row = p.rows[n];
     var raw = parsed.map[id];
     if (!raw || !row) return;
+    if (extract) {
+      s.getRange(row, cT).setValue(cleanPoints(raw)).setWrap(true);
+      written++;
+      results.push({ label: (p.labels || [])[n] || id, bytes: 0, limit: 0, ok: true, issues: ['요점을 넣었습니다 — 읽고 고친 뒤 생성하세요'] });
+      return;
+    }
     var txt = cleanResult_(raw);
-    var v = inspect_(txt, Number(p.limit) || 1500);
+    var v = inspectStyled_(txt, Number(p.limit) || 1500, ref);
     s.getRange(row, cT).setValue(txt);
     if (cV) s.getRange(row, cV).setValue(formatIssues(v) + '\n(키 없이 · 복사·붙여넣기)');
     if (cC) s.getRange(row, cC).setValue(false);

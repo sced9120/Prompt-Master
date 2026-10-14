@@ -43,6 +43,7 @@ function makeSheet(ss, name) {
   const images = [];
   const sheet = {
     __images: images,
+    __notesMap: new Map(),
     insertImage(blob, col, row, ox, oy) {
       const img = { blob, col, row, ox: ox || 0, oy: oy || 0, script: '', alt: '', w: 0, h: 0 };
       const api = strict({
@@ -111,6 +112,13 @@ function makeRange(sheet, sheetProxy, r1, c1, nr, nc, vals, forms, merges, froze
     getDisplayValue() { const v = vals.get(key(r1, c1)); return v === undefined ? '' : String(v); },
     activate() { sheetProxy.getParent().setActiveSheet(sheetProxy); sheetProxy.getParent().__setActiveRange(proxy); return proxy; },
     getFormula() { return forms.get(key(r1, c1)) || ''; },
+    getNote() { return sheet.__notesMap.get(key(r1, c1)) || ''; },
+    setNote(n) { each((r, c) => { if (n) sheet.__notesMap.set(key(r, c), String(n)); else sheet.__notesMap.delete(key(r, c)); }); return proxy; },
+    getNotes() { const out = []; for (let i = 0; i < nr; i++) { const row = []; for (let j = 0; j < nc; j++) row.push(sheet.__notesMap.get(key(r1 + i, c1 + j)) || ''); out.push(row); } return out; },
+    setNotes(arr) {
+      if (arr.length !== nr || arr.some(r => r.length !== nc)) throw new Error('mock: setNotes 크기 불일치');
+      each((r, c, i, j) => { const n = arr[i][j]; if (n) sheet.__notesMap.set(key(r, c), String(n)); else sheet.__notesMap.delete(key(r, c)); }); return proxy;
+    },
     getFormulas() { const out = []; for (let i = 0; i < nr; i++) { const row = []; for (let j = 0; j < nc; j++) row.push(forms.get(key(r1 + i, c1 + j)) || ''); out.push(row); } return out; },
     setValues(arr) {
       if (!Array.isArray(arr) || arr.length !== nr || arr.some(r => !Array.isArray(r) || r.length !== nc))
@@ -205,12 +213,14 @@ function makeGlobals() {
   const ui = {
     alert: (...a) => { alerts.push(a.join(' | ')); return 'OK'; },
     prompt: () => ({ getSelectedButton: () => 'CANCEL', getResponseText: () => '' }),
-    ButtonSet: { OK: 'OK', OK_CANCEL: 'OK_CANCEL', YES_NO: 'YES_NO' },
-    Button: { OK: 'OK', YES: 'YES', CANCEL: 'CANCEL' },
+    ButtonSet: { OK: 'OK', OK_CANCEL: 'OK_CANCEL', YES_NO: 'YES_NO', YES_NO_CANCEL: 'YES_NO_CANCEL' },
+    Button: { OK: 'OK', YES: 'YES', NO: 'NO', CANCEL: 'CANCEL' },
     createMenu: () => { const m = { addItem: () => m, addSeparator: () => m, addSubMenu: () => m, addToUi: () => m }; return m; },
     showModalDialog() {}, showModelessDialog() {}, showSidebar() {}
   };
   const templates = [];
+  const triggers = [];
+  const drive = { files: {}, folders: {} };
   const out = () => { const o = { setWidth() { return o; }, setHeight() { return o; }, setTitle() { return o; } }; return o; };
   const blob = (bytes, type, name) => ({ getBytes: () => bytes, getName: () => name, getContentType: () => type,
                                         getDataAsString: () => Buffer.from(bytes).toString('utf8') });
@@ -234,9 +244,46 @@ function makeGlobals() {
       newBlob: (data, type, name) => blob(typeof data === 'string' ? Array.from(Buffer.from(data, 'utf8')) : data, type, name),
       base64Decode: s => Array.from(Buffer.from(s, 'base64')),
       base64Encode: b => Buffer.from(b).toString('base64'),
-      zip: (blobs, name) => blob(Array.from(Buffer.from('PK' + blobs.map(b => b.getName()).join('|'))), 'application/zip', name)
+      zip: (blobs, name) => blob(Array.from(Buffer.from('PK' + blobs.map(b => b.getName()).join('|'))), 'application/zip', name),
+      // docx·hwpx 시험용: 가짜 드라이브 파일에 entries {이름: XML} 을 넣어 두면 그대로 풀어 준다
+      unzip: (b) => Object.keys(b.__entries || {}).map(n => blob(Array.from(Buffer.from(b.__entries[n], 'utf8')), 'text/xml', n))
     },
-    ScriptApp: { getProjectTriggers: () => [], deleteTrigger() {}, newTrigger: () => builder(['forSpreadsheet', 'onEdit', 'create'], () => ({})) },
+    // 트리거는 만들고 지운 것을 기억한다(설문지 제출 트리거 시험)
+    __triggers: triggers,
+    ScriptApp: {
+      getProjectTriggers: () => triggers.slice(),
+      deleteTrigger(t) { const i = triggers.indexOf(t); if (i >= 0) triggers.splice(i, 1); },
+      newTrigger: (fn) => {
+        const st = {}, b = {};
+        ['forSpreadsheet', 'onEdit', 'onFormSubmit'].forEach(f => { b[f] = (...x) => { st[f] = x; return b; }; });
+        b.create = () => { const t = { fn, kind: st.onFormSubmit ? 'formSubmit' : 'edit', getHandlerFunction: () => fn }; triggers.push(t); return t; };
+        return b;
+      },
+      getOAuthToken: () => 'test-token',
+      AuthMode: { FULL: 'FULL' },
+      requireScopes() {}
+    },
+    // 가짜 드라이브 — 시험이 __drive.files / __drive.folders 에 넣는다
+    __drive: drive,
+    DriveApp: {
+      getFileById(id) {
+        const f = drive.files[id];
+        if (!f) throw new Error('No item with the given ID could be found');
+        return {
+          getName: () => f.name, getMimeType: () => f.mime, getSize: () => (f.size || (f.bytes ? f.bytes.length : 100)), getId: () => id,
+          getBlob: () => {
+            const b = blob(f.bytes || Array.from(Buffer.from(f.text || '', 'utf8')), f.mime, f.name);
+            b.__entries = f.entries; b.setContentType = () => b; return b;
+          },
+          getAs: (mime) => blob(Array.from(Buffer.from('%PDF-from-' + f.name)), mime, f.name + '.pdf')
+        };
+      },
+      getFolderById(id) {
+        const fo = drive.folders[id];
+        if (!fo) throw new Error('No folder');
+        return { getFiles: () => { let i = 0; return { hasNext: () => i < fo.length, next: () => { const id2 = fo[i++]; return { getName: () => drive.files[id2].name, getId: () => id2 }; } }; } };
+      }
+    },
     HtmlService: {
       createHtmlOutputFromFile: () => out(),
       createHtmlOutput: () => out(),

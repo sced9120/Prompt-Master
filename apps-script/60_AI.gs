@@ -540,8 +540,9 @@ function listAvailableModels() {
  * @param {string} user    학생 자료
  * @param {string} model
  * @param {string=} provider  회사를 직접 지정할 때(연결 테스트)
- * @param {{json?:boolean, schema?:Object, thinking?:boolean}=} opts
+ * @param {{json?:boolean, schema?:Object, thinking?:boolean, parts?:Array<{mime:string, b64:string, name?:string}>}=} opts
  *        json: JSON 으로만 답하게(묶음 생성) · thinking:false 면 생각 줄이기를 끈다
+ *        parts: 함께 보낼 파일(PDF·사진) — 보고서 요점 뽑기에서 쓴다
  * @return {string}
  */
 function callAI_(system, user, model, provider, opts) {
@@ -643,7 +644,7 @@ function callOpenAI_(key, model, system, user, opts) {
   opts = opts || {};
   var body = {
     model: model,
-    messages: [{ role: 'system', content: system }, { role: 'user', content: user }]
+    messages: [{ role: 'system', content: system }, { role: 'user', content: userContent_('openai', user, opts.parts) }]
   };
   var think = opts.thinking && !__noThink[model] ? thinkingFor('openai', model) : null;
   if (think) body.reasoning_effort = think.reasoning_effort;
@@ -674,7 +675,7 @@ function callGemini_(key, model, system, user, opts) {
             encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
   var body = {
     systemInstruction: { parts: [{ text: system }] },
-    contents: [{ role: 'user', parts: [{ text: user }] }]
+    contents: [{ role: 'user', parts: userContent_('gemini', user, opts.parts) }]
   };
   var gen = {};
   var think = opts.thinking && !__noThink[model] ? thinkingFor('gemini', model) : null;
@@ -707,6 +708,7 @@ function callGemini_(key, model, system, user, opts) {
 }
 
 function callAnthropic_(key, model, system, user, opts) {
+  opts = opts || {};
   // 규칙 부분에 캐시 표시 — 5분 안에 같은 활동을 다시 부르면 이 부분은 할인된 값으로 읽는다
   var json = fetchJson_('https://api.anthropic.com/v1/messages', {
     method: 'post', contentType: 'application/json',
@@ -714,7 +716,7 @@ function callAnthropic_(key, model, system, user, opts) {
     payload: JSON.stringify({
       model: model, max_tokens: (opts && opts.json) ? 8000 : 2000,
       system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-      messages: [{ role: 'user', content: user }]
+      messages: [{ role: 'user', content: userContent_('anthropic', user, opts.parts) }]
     }),
     muteHttpExceptions: true
   }, 'Anthropic');
@@ -725,6 +727,35 @@ function callAnthropic_(key, model, system, user, opts) {
   (json.content || []).forEach(function (b) { if (b.type === 'text') txt += b.text; });
   if (!txt) throw new Error('Anthropic 응답이 비었습니다.');
   return txt.trim();
+}
+
+/**
+ * 학생 자료 + 첨부 파일 → 회사별 메시지 모양. 첨부가 없으면 글 그대로(예전과 같은 요청).
+ * HEIC 사진은 Gemini 만 읽는다 — 다른 회사면 빼고 그 사실을 글에 적는다.
+ */
+function userContent_(provider, user, parts) {
+  if (!parts || !parts.length) return provider === 'gemini' ? [{ text: user }] : user;
+  var skipped = [];
+  var ok = parts.filter(function (f) {
+    if (provider !== 'gemini' && /heic|heif/i.test(f.mime)) { skipped.push(f.name || 'HEIC 사진'); return false; }
+    return true;
+  });
+  var text = user + (skipped.length ? '\n(이 모델이 읽지 못해 뺀 파일: ' + skipped.join(', ') + ' — JPG·PNG로 바꿔 주세요)' : '');
+  if (provider === 'gemini') {
+    return [{ text: text }].concat(ok.map(function (f) { return { inlineData: { mimeType: f.mime, data: f.b64 } }; }));
+  }
+  if (provider === 'openai') {
+    return [{ type: 'text', text: text }].concat(ok.map(function (f) {
+      return /pdf/.test(f.mime)
+        ? { type: 'file', file: { filename: f.name || 'report.pdf', file_data: 'data:application/pdf;base64,' + f.b64 } }
+        : { type: 'image_url', image_url: { url: 'data:' + f.mime + ';base64,' + f.b64 } };
+    }));
+  }
+  return ok.map(function (f) {
+    return /pdf/.test(f.mime)
+      ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.b64 } }
+      : { type: 'image', source: { type: 'base64', media_type: f.mime, data: f.b64 } };
+  }).concat([{ type: 'text', text: text }]);
 }
 
 /** Gemini 구독(=AI 함수)용 수식 문자열 */

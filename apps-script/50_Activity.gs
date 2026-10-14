@@ -20,7 +20,7 @@ var RESERVED_NAMES = ['반', '번호', '이름', '성취수준', '생성', '모�
 /**
  * 활동 생성 (마법사·직접추가 공용)
  * def = {key, name, recordKey, subjectKey, chars, columns, desc, examples:[{values:[],result:''}],
- *        mode?:'자동'|'바로쓰기', noExamples?:boolean}
+ *        mode?:'자동'|'바로쓰기'|'보고서', noExamples?:boolean}
  *   바로쓰기: 입력 항목을 정하지 않고 [관찰 메모] 한 칸에 자유롭게 적는 시트 (예시 시트 없이)
  */
 function createActivity_(def) {
@@ -42,7 +42,7 @@ function createActivity_(def) {
   var rec = findByKey(recs, def.recordKey) || recs[0];
   var chars = Number(def.chars || 0) || rec.chars;
 
-  var mode = def.mode === '바로쓰기' ? '바로쓰기' : '자동';
+  var mode = (def.mode === '바로쓰기' || def.mode === '보고서') ? def.mode : '자동';
   var inSheet = buildActivityInputSheet_(key, name, cols, rec, mode);
   var exSheet = def.noExamples ? null : buildActivityExampleSheet_(key, name, cols, def.examples || []);
 
@@ -63,7 +63,7 @@ function buildActivityInputSheet_(key, name, cols, rec, mode) {
 
 /** 입력 시트의 머리말·헤더·폭·서식 (활동 만들 때와 입력 항목 바꿀 때 함께 씀) */
 function layoutInputSheet_(s, name, cols, rec, mode) {
-  var quick = mode === '바로쓰기';
+  var quick = mode === '바로쓰기', report = mode === '보고서';
   var head = ['반', '번호', '이름', '성취수준']
     .concat(cols)
     .concat(['생성', '모델', 'AI 결과', '최종본', '바이트', '검증']);
@@ -71,8 +71,11 @@ function layoutInputSheet_(s, name, cols, rec, mode) {
   var n = head.length;
 
   splitBanner_(s, 3, n,
-    (quick ? '✍️ ' : '▶ ') + name + '\n' + rec.name + ' · ' + rec.chars + '자',
-    quick
+    (quick ? '✍️ ' : report ? '📄 ' : '▶ ') + name + '\n' + rec.name + ' · ' + rec.chars + '자',
+    report
+      ? '📄 보고서 세특 — ① [보고서]에 본문이나 드라이브 파일 링크(설문지 연결·폴더에서 가져오기)  →  ② 메뉴 ④⑤ [📄 보고서 요점 뽑기] 후 요점을 읽고 고치기, ' +
+        '수업에서 본 것은 [교사 관찰 메모]  →  ③ 3~5명은 직접 써서 [⭐ 예시로 등록]  →  ④ 나머지 [생성] 체크 → 메뉴 ⑥ (요점이 빈 학생은 요점부터 뽑음)'
+      : quick
       ? '바로 쓰기 — 입력 항목을 정하지 않고 [관찰 메모]에 자유롭게 적습니다.  AI 초안: [생성] 체크 → 메뉴 ⑥ (키가 없으면 복사·붙여넣기 창)  ·  ' +
         '직접 쓰기: [최종본]에 바로 쓰면 [검증]이 즉시 금지어·맞춤법을 검사합니다.  학생 줄은 명단에서 채워지고, 명단이 없으면 반·번호·이름을 직접 적어도 됩니다.'
       : '① 노란 칸에 학생 자료 입력  →  ② [모델] 선택  →  ③ [생성] 체크 또는 메뉴 ⑥ 체크된 행 생성  →  ' +
@@ -87,7 +90,8 @@ function layoutInputSheet_(s, name, cols, rec, mode) {
 
   // 폭
   s.setColumnWidth(1, 55); s.setColumnWidth(2, 55); s.setColumnWidth(3, 90); s.setColumnWidth(4, 80);
-  for (var i = 0; i < cols.length; i++) s.setColumnWidth(5 + i, quick ? 420 : 230);
+  var reportW = [260, 380, 260];   // 보고서 · 보고서 요점 · 교사 관찰 메모
+  for (var i = 0; i < cols.length; i++) s.setColumnWidth(5 + i, quick ? 420 : report ? (reportW[i] || 230) : 230);
   var base = 4 + cols.length;
   s.setColumnWidth(base + 1, 60);   // 생성
   s.setColumnWidth(base + 2, 150);  // 모델

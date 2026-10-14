@@ -44,7 +44,7 @@ t('학생명단 헤더가 반/번호/이름/성취수준', () => {
 });
 t('기록종류 6개가 읽힘', () => ok(A.getRecordTypes_().length === 6, '개수 ' + A.getRecordTypes_().length));
 t('교과영역 10개가 읽힘', () => ok(A.getSubjects_().length === 10, '개수 ' + A.getSubjects_().length));
-t('공통규칙 5개가 읽힘', () => ok(Object.keys(A.getCommon_()).length === 5));
+t('공통규칙 6개가 읽힘(내 문체 카드 포함)', () => ok(Object.keys(A.getCommon_()).length === 6, Object.keys(A.getCommon_()).join()));
 t('안내 배너가 데이터로 읽히지 않음(유령 행 없음)', () => {
   ok(A.getRecordTypes_().every(r => r.key.length < 10), '이상한 키: ' + A.getRecordTypes_().map(r => r.key).join(','));
   ok(A.getActivities_().length === 0, '활동이 없어야 하는데 ' + A.getActivities_().length + '개');
