@@ -33,6 +33,9 @@ function lookupsOf(fnName) {
   return [...new Set([...body.matchAll(/r\['([^']+)'\]/g)].map(x => x[1]))];
 }
 
+// 예전 시트의 머리글 — 옮기기 전 시트도 읽으려고 함께 찾는다(새로 만드는 시트에는 없다)
+const LEGACY = { getActivities_: ['글자수'] };
+
 const pairs = [
   ['buildRecordTypes', 'getRecordTypes_'],
   ['buildSubjects', 'getSubjects_'],
@@ -44,7 +47,7 @@ console.log('\n[헤더 ↔ 읽기 이름]');
 pairs.forEach(([b, g]) => {
   t(b + ' → ' + g, () => {
     const head = headOf(b), look = lookupsOf(g);
-    const missing = look.filter(n => !head.includes(n));
+    const missing = look.filter(n => !head.includes(n) && !(LEGACY[g] || []).includes(n));
     ok(!missing.length, '헤더에 없는 이름을 읽고 있음: ' + missing.join(', ') + '\n       헤더: ' + head.join(' | '));
   });
 });

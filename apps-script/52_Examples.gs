@@ -63,7 +63,7 @@ function validateExamples() {
       '이 예시 시트에는 [검증] 열이 없습니다.\n메뉴 [예시 시트 구조 복구]를 먼저 실행하세요.', ui_().ButtonSet.OK);
     return;
   }
-  var limit = charsFor_(act) * 3;
+  var limit = bytesFor_(act);
   var rows = readExampleRows_(act);
   if (!rows.length) { toast_('채워진 예시가 없습니다.'); return; }
 
@@ -161,7 +161,7 @@ function validateExamplesQuiet_(act) {
   var s = sh_(act.exSheet);
   var cValid = colOf_(s, APP.HEAD_ROW, '검증');
   if (!cValid) return;
-  var limit = charsFor_(act) * 3;
+  var limit = bytesFor_(act);
   readExampleRows_(act).forEach(function (e) {
     s.getRange(e.row, cValid).setValue(formatIssues(inspect_(e.result, limit)));
   });
@@ -176,7 +176,7 @@ function suggestExamples_(act, existing, want, model) {
   var rec = findByKey(recs, act.recordKey) || recs[0];
   var sub = findByKey(subs, act.subjectKey) || findByKey(subs, '공통');
   var cols = parseColumns(act.columns);
-  var chars = charsFor_(act);
+  var bytes = bytesFor_(act), chars = Math.floor(bytes / 3);
 
   var sys = [
     '당신은 학교생활기록부 특기사항 예시를 만드는 조수입니다.',
@@ -193,7 +193,7 @@ function suggestExamples_(act, existing, want, model) {
     cols.join(' | '),
     '',
     '# 대상 기록',
-    rec.name + ' — ' + chars + '자(' + (chars * 3) + '바이트) 이내',
+    rec.name + ' — ' + bytes + '바이트(한글 약 ' + chars + '자) 이내',
     rec.view || '',
     '',
     '# 활동',
@@ -233,7 +233,7 @@ function suggestExamples_(act, existing, want, model) {
   var obj = parseJsonLoose_(raw);
   var arr = (obj && Array.isArray(obj.examples)) ? obj.examples
           : (Array.isArray(obj) ? obj : []);
-  var limit = chars * 3;
+  var limit = bytes;
   var out = [];
   arr.forEach(function (e) {
     if (!e || !e.result) return;

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root { --line:#dde3dd; --muted:#6b7280; --accent:#35583f; --accent-2:#5b8465; --accent-soft:#e3ece4; --warn:#8f2f20; --warn-soft:#fbeae6; --ok:#2c6340; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; padding:14px 18px 18px; color:#16202a; font:13.5px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
+  .lead { background:var(--accent-soft); border-radius:8px; padding:9px 12px; font-size:12.5px; color:#1b3a2a; }
+  .grp { border:1px solid var(--line); border-radius:8px; margin-top:12px; overflow:hidden; }
+  .gh { display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; background:#f3f6f3; padding:8px 12px; border-bottom:1px solid var(--line); }
+  .gh b { font-size:13px; }
+  .gh .cap { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  table { width:100%; border-collapse:collapse; }
+  td { padding:6px 12px; border-bottom:1px solid #eef1ee; font-size:12.5px; vertical-align:middle; }
+  td.n { width:120px; } td.c { width:80px; color:var(--muted); font-variant-numeric:tabular-nums; } td.bar { width:150px; }
+  input[type=number] { width:100%; padding:5px 8px; border:1px solid #c9d1c9; border-radius:6px; font:12.5px inherit; font-variant-numeric:tabular-nums; text-align:right; }
+  .track { height:7px; border-radius:4px; background:#e6ebe6; overflow:hidden; }
+  .track i { display:block; height:100%; background:var(--accent-2); }
+  .foot { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:8px 12px; }
+  .sum { font-size:12.5px; font-variant-numeric:tabular-nums; }
+  .sum.over { color:var(--warn); font-weight:600; }
+  .sum.ok { color:var(--ok); }
+  .spacer { flex:1; }
+  .hint { font-size:11.5px; color:var(--muted); padding:0 12px 9px; line-height:1.55; }
+  button { font:inherit; font-size:12px; font-weight:600; cursor:pointer; padding:5px 11px; border:1px solid #c9d1c9; border-radius:6px; background:#fff; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-size:12.5px; padding:7px 14px; }
+  .actions { display:flex; gap:7px; align-items:center; margin-top:14px; }
+  .msg { font-size:12.5px; } .msg.ok { color:var(--ok); } .msg.err { color:var(--warn); }
+  .empty { color:var(--muted); padding:20px 4px; }
+</style>
+</head>
+<body>
+<div class="lead">같은 학생의 여러 활동 기록을 합쳐 <b>나이스 한 칸</b>에 넣는다면, 활동마다 바이트를 나눠 두세요. 생성할 때 그 활동의 몫만큼만 쓰고,
+  ⑦ 최종취합의 합본이 한 칸을 넘지 않아 압축(AI 한 번 더)이 필요 없습니다. 활동 중 하나만 골라 쓸 거라면 한 칸 전체를 그대로 두면 됩니다.
+  바이트는 나이스 기준(한글 3, 영문·숫자·공백 1, 줄바꿈 2)입니다.</div>
+<div id="list"><div class="empty">불러오는 중…</div></div>
+<div class="actions">
+  <button class="primary" id="bSave">저장</button>
+  <button id="bClose">닫기</button>
+  <span class="msg" id="msg"></span>
+</div>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var G = [];
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+function say(t, cls) { $('msg').className = 'msg ' + (cls || ''); $('msg').textContent = t || ''; }
+
+function render() {
+  if (!G.length) { $('list').innerHTML = '<div class="empty">아직 활동이 없습니다. 메뉴 ④ 활동 만들기로 먼저 만드세요.</div>'; return; }
+  $('list').innerHTML = G.map(function (g, gi) {
+    var rows = g.acts.map(function (a, ai) {
+      return '<tr><td>' + esc(a.name) + '</td>' +
+        '<td class="n"><input type="number" min="60" max="' + g.cap + '" id="b' + gi + '_' + ai + '" value="' + a.bytes + '" aria-label="' + esc(a.name) + ' 바이트"></td>' +
+        '<td class="c" id="c' + gi + '_' + ai + '"></td>' +
+        '<td class="bar"><div class="track"><i id="t' + gi + '_' + ai + '"></i></div></td></tr>';
+    }).join('');
+    var common = /과세특/.test(g.recordKey) ? '<div class="hint">2022 개정 공통과목(공통국어·공통수학·공통영어·통합사회·통합과학·한국사·과학탐구실험)은 1·2를 합산해 한 칸이므로, 학기 활동을 반씩(예: 750 + 750) 나누면 됩니다.</div>' : '';
+    return '<section class="grp"><div class="gh"><b>' + esc(g.title) + '</b><span class="cap">한 칸 ' + g.cap.toLocaleString() + '바이트 (' + g.chars + '자)</span></div>' +
+      '<table>' + rows + '</table>' +
+      '<div class="foot"><span class="sum" id="s' + gi + '"></span><span class="spacer"></span>' +
+      (g.acts.length > 1 ? '<button data-even="' + gi + '">똑같이 나누기</button>' : '') +
+      '<button data-full="' + gi + '">' + (g.acts.length > 1 ? '모두 한 칸 전체로' : '한 칸 전체로') + '</button></div>' + common + '</section>';
+  }).join('');
+  G.forEach(function (g, gi) {
+    g.acts.forEach(function (a, ai) { $('b' + gi + '_' + ai).addEventListener('input', function () { update(gi); }); });
+    update(gi);
+  });
+  [].forEach.call(document.querySelectorAll('[data-even]'), function (b) {
+    b.onclick = function () {
+      var gi = +b.getAttribute('data-even'), g = G[gi], n = g.acts.length, each = Math.floor(g.cap / n), rest = g.cap - each * n;
+      g.acts.forEach(function (a, ai) { $('b' + gi + '_' + ai).value = each + (ai < rest ? 1 : 0); });
+      update(gi);
+    };
+  });
+  [].forEach.call(document.querySelectorAll('[data-full]'), function (b) {
+    b.onclick = function () {
+      var gi = +b.getAttribute('data-full'), g = G[gi];
+      g.acts.forEach(function (a, ai) { $('b' + gi + '_' + ai).value = g.cap; });
+      update(gi);
+    };
+  });
+}
+
+function val(gi, ai) { var g = G[gi], v = Math.floor(Number($('b' + gi + '_' + ai).value) || 0); return v <= 0 || v > g.cap ? g.cap : v; }
+function update(gi) {
+  var g = G[gi], sum = 0;
+  g.acts.forEach(function (a, ai) {
+    var v = val(gi, ai); sum += v;
+    $('c' + gi + '_' + ai).textContent = '약 ' + Math.floor(v / 3) + '자';
+    $('t' + gi + '_' + ai).style.width = Math.round(v / g.cap * 100) + '%';
+  });
+  var el = $('s' + gi);
+  if (g.acts.length < 2) { el.className = 'sum'; el.textContent = '활동 1개 · ' + sum.toLocaleString() + '바이트'; return; }
+  var all = sum === g.cap * g.acts.length;
+  el.className = 'sum ' + (all ? '' : sum > g.cap ? 'over' : 'ok');
+  el.textContent = all ? '활동마다 한 칸 전체 — 하나만 골라 쓰거나, 합칠 때 압축'
+    : '합계 ' + sum.toLocaleString() + ' / ' + g.cap.toLocaleString() + '바이트' +
+      (sum > g.cap ? ' · ' + (sum - g.cap).toLocaleString() + ' 넘음 — 합치면 압축이 필요합니다' : ' · ' + (g.cap - sum).toLocaleString() + ' 남음');
+}
+
+google.script.run.withSuccessHandler(function (groups) { G = groups || []; render(); })
+  .withFailureHandler(function (e) { $('list').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }).bytesContext();
+
+$('bSave').onclick = function () {
+  var list = [];
+  G.forEach(function (g, gi) { g.acts.forEach(function (a, ai) { list.push({ key: a.key, bytes: val(gi, ai) }); }); });
+  var b = this; b.disabled = true; say('저장하는 중…');
+  google.script.run.withSuccessHandler(function (m) { b.disabled = false; say('✓ ' + m, 'ok'); })
+    .withFailureHandler(function (e) { b.disabled = false; say(e.message, 'err'); }).bytesSave(list);
+};
+$('bClose').onclick = function () { google.script.host.close(); };
+</script>
+</body>
+</html>

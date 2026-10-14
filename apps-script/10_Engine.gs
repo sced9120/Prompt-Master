@@ -13,7 +13,7 @@
  *   ③ 서술규칙  ← 공통규칙.WRITING_RULES
  *   ④ 기재요령  ← 공통규칙.NEIS_RULES
  *   ⑤ 관점·역량 ← 기록종류.view  +  교과영역.comp
- *   ⑥ 분량      ← 글자수(한 곳에서만 관리) → 문장 자동 생성 + BYTE_RULE
+ *   ⑥ 분량      ← 활동의 바이트 한도(없으면 기록종류 글자수×3) → 문장 자동 생성 + BYTE_RULE
  *   ⑦ 활동고유  ← 입력 형식 + 예시 + (성취수준 지침) + 마무리 지시문
  * ---------------------------------------------------------------
  * 이 파일은 Apps Script와 Node 양쪽에서 동작하도록 작성되어 있습니다.
@@ -56,6 +56,35 @@ function parseColumns(raw) {
     .filter(function (x) { return x.length > 0; });
 }
 
+/**
+ * 활동의 바이트 한도 — [🗂 활동목록]의 바이트 한도(예전 시트는 글자수×3), 비었으면 기록 항목 한도.
+ * 기록 항목 한도(나이스 한 칸)를 넘지 않는다. 한 기록 항목을 여러 활동이 나눠 쓸 때 활동마다 작게 정한다.
+ */
+function activityBytes(act, rec) {
+  var cap = Number(rec && rec.chars || 500) * 3;
+  var b = Number(act && act.bytes) || Number(act && act.chars || 0) * 3;
+  return b > 0 ? Math.min(Math.round(b), cap) : cap;
+}
+
+/** 한도를 n 개 활동에 똑같이 나누기(남는 바이트는 앞 활동부터 1씩) */
+function splitBytes(total, n) {
+  total = Math.max(0, Math.floor(Number(total) || 0)); n = Math.max(1, Math.floor(Number(n) || 1));
+  var each = Math.floor(total / n), rest = total - each * n, out = [];
+  for (var i = 0; i < n; i++) out.push(each + (i < rest ? 1 : 0));
+  return out;
+}
+
+/**
+ * 같은 기록 항목(과세특은 같은 교과까지)을 나눠 쓰는 활동들의 한도 합 — 나이스 한 칸을 넘는지
+ * @param {Array<{bytes?:number, chars?:number}>} acts
+ * @return {{cap:number, sum:number, left:number, over:boolean}}
+ */
+function byteBudget(acts, rec) {
+  var cap = Number(rec && rec.chars || 500) * 3, sum = 0;
+  (acts || []).forEach(function (a) { sum += activityBytes(a, rec); });
+  return { cap: cap, sum: sum, left: cap - sum, over: sum > cap };
+}
+
 /** 목록에서 key로 1건 찾기 */
 function findByKey(list, key) {
   key = String(key || '').trim();
@@ -75,7 +104,7 @@ function fillTokens(tpl, map) {
 /**
  * 프롬프트 조립
  * @param {Object} o
- *   o.activity  {key,name,recordKey,subjectKey,chars,columns,desc,mode,custom}
+ *   o.activity  {key,name,recordKey,subjectKey,bytes,columns,desc,mode,custom}  (bytes 대신 예전 chars 도 읽는다)
  *   o.record    기록종류 1건
  *   o.subject   교과영역 1건
  *   o.common    {WRITING_RULES, NEIS_RULES, BYTE_RULE, GRADE_RULE, INSTRUCTION}
@@ -92,8 +121,9 @@ function buildPrompt(o) {
   var rec = o.record || {};
   var sub = o.subject || {};
   var com = o.common || {};
-  var chars = Number(act.chars || rec.chars || 500);
-  var bytes = chars * 3;
+  var recBytes = Number(rec.chars || 500) * 3;
+  var bytes = activityBytes(act, rec);
+  var chars = Math.floor(bytes / 3);
   var cols = parseColumns(act.columns);
 
   // 직접 작성 모드: 교사가 쓴 본문을 토큰만 치환해서 사용
@@ -112,6 +142,7 @@ function buildPrompt(o) {
       EXAMPLES: o.examples || '',
       CHARS: chars,
       BYTES: bytes,
+      RECORD_BYTES: recBytes,
       COLUMNS: cols.join('|'),
       ACTIVITY: act.name || '',
       RECORD: rec.name || ''
@@ -149,7 +180,11 @@ function buildPrompt(o) {
   // ⑥ 분량 (단일 출처)
   // 2026 기재요령: 최대 글자 수 안에서 교사가 자율적으로 입력한다. 분량을 채우려 지어내면 허위·과장 기재가 된다.
   var len = ['# 분량'];
-  len.push('- ' + chars + '자(' + bytes + '바이트) 이내로 작성한다. 넘으면 안 된다.');
+  if (bytes < recBytes) {
+    len.push('- 이 활동은 ' + (rec.name || '이 기록 항목') + ' 한 칸(' + recBytes + '바이트) 가운데 한 부분이다. ' +
+             '같은 학생의 다른 활동 기록과 합쳐 들어가므로 이 활동의 몫만 쓴다.');
+  }
+  len.push('- ' + bytes + '바이트(한글 약 ' + chars + '자) 이내로 작성한다. 넘으면 안 된다.');
   len.push('- 자료가 충분하면 ' + Math.round(bytes * 0.9) + '바이트 안팎으로 충실하게 쓰되, 자료에 없는 내용으로 분량을 채우지 않는다. 자료가 적으면 짧게 쓴다.');
   if (com.BYTE_RULE) len.push(com.BYTE_RULE);
   P.push(len.join('\n'));
@@ -281,6 +316,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     byteLen: byteLen, trimToBytes: trimToBytes, parseColumns: parseColumns,
     findByKey: findByKey, fillTokens: fillTokens, buildPrompt: buildPrompt,
+    activityBytes: activityBytes, splitBytes: splitBytes, byteBudget: byteBudget,
     buildRole: buildRole, buildStudentBlock: buildStudentBlock,
     validateResult: validateResult, formatIssues: formatIssues
   };

@@ -118,7 +118,7 @@ function getActivities_() {
       name: String(r['활동명'] || '').trim(),
       recordKey: String(r['기록종류'] || '').trim(),
       subjectKey: String(r['교과영역'] || '').trim(),
-      chars: Number(r['글자수'] || 0) || 0,
+      bytes: Number(r['바이트 한도'] || 0) || (Number(r['글자수'] || 0) || 0) * 3,   // 예전 시트는 [글자수]
       columns: String(r['입력 항목'] || ''),
       desc: String(r['활동 개요'] || ''),
       mode: String(r['프롬프트 모드'] || '자동'),
@@ -179,12 +179,13 @@ function blockFor_(act, values, grade) {
     { grade: grade });
 }
 
-/** 활동의 글자수(활동값 > 기록종류 기본값) */
-function charsFor_(act) {
-  if (act.chars) return act.chars;
-  var rec = findByKey(getRecordTypes_(), act.recordKey);
-  return rec ? rec.chars : 500;
+/** 활동의 바이트 한도(활동값 > 기록종류 글자수×3). 기록종류 한도를 넘지 않는다 */
+function bytesFor_(act) {
+  return activityBytes(act, findByKey(getRecordTypes_(), act.recordKey));
 }
+
+/** 바이트 한도를 한글 글자 수로(안내 문구용) */
+function charsFor_(act) { return Math.floor(bytesFor_(act) / 3); }
 
 /** 예시 시트에서 채워진 예시들을 객체 배열로 읽기 */
 function readExampleRows_(act) {

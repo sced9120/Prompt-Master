@@ -18,19 +18,30 @@ function checkContext() {
   var recs = [];
   try { recs = getRecordTypes_().map(function (r) { return { key: r.key, name: r.name, chars: r.chars }; }); } catch (e) {}
   if (!recs.length) recs = PRESET_RECORD_TYPES.map(function (r) { return { key: r.key, name: r.name, chars: r.chars }; });
+  // 바이트 한도를 따로 정한(한 칸을 나눠 쓰는) 활동은 검사 한도로도 고를 수 있게
+  var acts = [];
+  try {
+    var rs = getRecordTypes_();
+    getActivities_().forEach(function (a) {
+      var rec = findByKey(rs, a.recordKey);
+      if (!rec) return;
+      var b = activityBytes(a, rec);
+      if (b < rec.chars * 3) acts.push({ key: a.key, name: a.name, bytes: b });
+    });
+  } catch (e) {}
   var model = '';
   try { model = apiModelForChecks_(); } catch (e) {}
   return {
-    records: recs, model: model, rules: currentPackInfo_(), aiNotice: AI_NOTICE_2026,
+    records: recs, activities: acts, model: model, rules: currentPackInfo_(), aiNotice: AI_NOTICE_2026,
     account: accountInfo_(), spellSystem: SPELL_SYSTEM, groundSystem: GROUND_SYSTEM
   };
 }
 
-/** 규칙 검사 — @param {{text:string, chars?:number}} p */
+/** 규칙 검사 — @param {{text:string, bytes?:number, chars?:number}} p  bytes(활동 한도)가 있으면 그것, 없으면 chars×3 */
 function checkTextNow(p) {
-  var chars = Number(p && p.chars) || 500;
-  var v = inspect_(String((p && p.text) || ''), chars * 3);
-  return { bytes: v.bytes, limit: chars * 3, chars: chars, ok: v.ok, issues: v.issues };
+  var limit = Math.round(Number(p && p.bytes) || (Number(p && p.chars) || 500) * 3);
+  var v = inspect_(String((p && p.text) || ''), limit);
+  return { bytes: v.bytes, limit: limit, chars: Math.floor(limit / 3), ok: v.ok, issues: v.issues };
 }
 
 /** AI 맞춤법 검사 — 고칠 목록과 고친 글 */
@@ -61,13 +72,13 @@ function readActiveCell() {
   if (!r) throw new Error('먼저 시트에서 셀 하나를 선택하세요.');
   var s = r.getSheet();
   var c = s.getRange(r.getRow(), r.getColumn());
-  var name = s.getName(), recordKey = '';
+  var name = s.getName(), recordKey = '', activityKey = '';
   try {
     var act = activityOfSheet_(name);
-    if (act) recordKey = act.recordKey;
+    if (act) { recordKey = act.recordKey; activityKey = act.key; }
     else if (recordKeyOfCompile_(name)) recordKey = recordKeyOfCompile_(name);
   } catch (e) {}
-  return { sheet: name, a1: c.getA1Notation(), text: String(c.getValue() === null ? '' : c.getValue()), recordKey: recordKey };
+  return { sheet: name, a1: c.getA1Notation(), text: String(c.getValue() === null ? '' : c.getValue()), recordKey: recordKey, activityKey: activityKey };
 }
 
 /** 가져왔던 바로 그 셀에 다시 넣는다 */

@@ -19,7 +19,7 @@ var RESERVED_NAMES = ['반', '번호', '이름', '성취수준', '생성', '모�
 
 /**
  * 활동 생성 (마법사·직접추가 공용)
- * def = {key, name, recordKey, subjectKey, chars, columns, desc, examples:[{values:[],result:''}],
+ * def = {key, name, recordKey, subjectKey, bytes(없으면 chars×3 → 기록종류 한도), columns, desc, examples:[{values:[],result:''}],
  *        mode?:'자동'|'바로쓰기'|'보고서', noExamples?:boolean}
  *   바로쓰기: 입력 항목을 정하지 않고 [관찰 메모] 한 칸에 자유롭게 적는 시트 (예시 시트 없이)
  */
@@ -40,15 +40,16 @@ function createActivity_(def) {
   var cols = validateColumns_(def.columns);
   var recs = getRecordTypes_();
   var rec = findByKey(recs, def.recordKey) || recs[0];
-  var chars = Number(def.chars || 0) || rec.chars;
+  var bytes = activityBytes({ bytes: def.bytes, chars: def.chars }, rec);
+  migrateActivityBytes_();   // 예전 시트의 [글자수] 칸에 바이트를 적지 않게
 
   var mode = (def.mode === '바로쓰기' || def.mode === '보고서') ? def.mode : '자동';
-  var inSheet = buildActivityInputSheet_(key, name, cols, rec, mode);
+  var inSheet = buildActivityInputSheet_(key, name, cols, rec, mode, bytes);
   var exSheet = def.noExamples ? null : buildActivityExampleSheet_(key, name, cols, def.examples || []);
 
   var s = shRequire_(APP.SH.ACTIVITY);
   var row = [key, name, rec.key, def.subjectKey || cfg_('기본 교과영역', '공통'),
-             chars, cols.join('|'), def.desc || '', mode, '',
+             bytes, cols.join('|'), def.desc || '', mode, '',
              inSheet.getName(), exSheet ? exSheet.getName() : ''];
   s.appendRow(row);
   refreshActivityValidation_();
@@ -57,12 +58,28 @@ function createActivity_(def) {
   return { key: key, inSheet: inSheet.getName(), exSheet: exSheet ? exSheet.getName() : '' };
 }
 
-function buildActivityInputSheet_(key, name, cols, rec, mode) {
-  return layoutInputSheet_(ss_().insertSheet(sheetNameIn_(key)), name, cols, rec, mode);
+function buildActivityInputSheet_(key, name, cols, rec, mode, bytes) {
+  return layoutInputSheet_(ss_().insertSheet(sheetNameIn_(key)), name, cols, rec, mode, bytes);
+}
+
+/** 입력 시트 왼쪽 위 제목 — 활동 이름과 분량(나눠 쓰면 "전체 ○ 중") */
+function inputTitle_(name, rec, mode, bytes) {
+  var cap = rec.chars * 3, b = Math.min(Number(bytes) || cap, cap);
+  var mark = mode === '바로쓰기' ? '✍️ ' : mode === '보고서' ? '📄 ' : '▶ ';
+  return mark + name + '\n' + rec.name + ' · ' +
+    (b < cap ? b + '바이트(전체 ' + cap + ' 중)' : rec.chars + '자(' + cap + '바이트)');
+}
+
+/** 바이트 한도를 바꾼 뒤 입력 시트 제목만 다시 쓰기 */
+function refreshInputTitle_(act) {
+  var s = act.inSheet && sh_(act.inSheet);
+  var rec = findByKey(getRecordTypes_(), act.recordKey);
+  if (!s || !rec) return;
+  try { s.getRange(1, 1).setValue(inputTitle_(act.name, rec, act.mode, bytesFor_(act))); } catch (e) {}
 }
 
 /** 입력 시트의 머리말·헤더·폭·서식 (활동 만들 때와 입력 항목 바꿀 때 함께 씀) */
-function layoutInputSheet_(s, name, cols, rec, mode) {
+function layoutInputSheet_(s, name, cols, rec, mode, bytes) {
   var quick = mode === '바로쓰기', report = mode === '보고서';
   var head = ['반', '번호', '이름', '성취수준']
     .concat(cols)
@@ -71,7 +88,7 @@ function layoutInputSheet_(s, name, cols, rec, mode) {
   var n = head.length;
 
   splitBanner_(s, 3, n,
-    (quick ? '✍️ ' : report ? '📄 ' : '▶ ') + name + '\n' + rec.name + ' · ' + rec.chars + '자',
+    inputTitle_(name, rec, mode, bytes),
     report
       ? '📄 보고서 세특 — ① [보고서]에 본문이나 드라이브 파일 링크(설문지 연결·폴더에서 가져오기)  →  ② 메뉴 ④⑤ [📄 보고서 요점 뽑기] 후 요점을 읽고 고치기, ' +
         '수업에서 본 것은 [교사 관찰 메모]  →  ③ 3~5명은 직접 써서 [⭐ 예시로 등록]  →  ④ 나머지 [생성] 체크 → 메뉴 ⑥ (요점이 빈 학생은 요점부터 뽑음)'
@@ -153,7 +170,7 @@ function updateActivity_(key, p) {
     rows = out.length;
 
     inS.clear();
-    layoutInputSheet_(inS, name, cols, rec, act.mode);
+    layoutInputSheet_(inS, name, cols, rec, act.mode, bytesFor_(act));
     if (out.length) {
       var n = 4 + cols.length + 6;
       ensureRows_(inS, first + out.length - 1);
@@ -340,7 +357,7 @@ function duplicateActivityDialog() {
     });
     var r2 = createActivity_({
       key: newName, name: newName, recordKey: src.recordKey, subjectKey: src.subjectKey,
-      chars: src.chars, columns: src.columns, desc: src.desc, examples: exs
+      bytes: src.bytes, columns: src.columns, desc: src.desc, examples: exs
     });
     ui_().alert(APP.MENU, '복제 완료: ' + r2.inSheet, ui_().ButtonSet.OK);
   } catch (e) { ui_().alert(APP.MENU, '오류: ' + e.message, ui_().ButtonSet.OK); }

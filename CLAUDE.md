@@ -7,22 +7,22 @@ Google Sheets + Apps Script로 학생부 세특(교과·창체·행발)을 AI AP
 ## 명령어
 
 ```
-npm test          # 7개 테스트 파일 전부 실행 (총 약 330개, 모두 mock 기반)
+npm test          # 9개 테스트 파일 전부 실행 (총 약 410개, 모두 mock 기반)
 npm run build     # apps-script/*.gs → dist/Code.gs 번들 + HTML/appsscript.json 복사 + rules/latest.json(규칙판)
-npm run kit       # dist → web/deploy-kit.html 재생성 (배포 키트)
+npm run kit       # dist → web/deploy-kit.html 재생성 (배포 키트) + web/prompt-studio.html 에 엔진 넣기(build-studio)
 ```
 
 수정 후 순서: `npm test` → `npm run build` → `npm run kit` → 커밋.
 
 ## 구조
 
-- `apps-script/NN_*.gs` — 모듈(번호순으로 번들). 00 Presets, 10 Engine(순수), 12 Models(순수), 14 RosterParse(순수), 16 Rules(순수: 규칙판·맞춤법·고쳐쓰기·근거·키 없이·내보내기), 18 Reports(순수: 보고서 요점·드라이브 링크·문체·설문지 머리글),
+- `apps-script/NN_*.gs` — 모듈(번호순으로 번들). 00 Presets, 10 Engine(순수), 12 Models(순수), 14 RosterParse(순수), 16 Rules(순수: 규칙판·맞춤법·고쳐쓰기·근거·키 없이·내보내기), 18 Reports(순수: 보고서 요점·드라이브 링크·문체·설문지 머리글), 19 Subjects(순수: 새 교과 요청문·답 읽기·나누는 글),
   20 Lib, 30 Setup(메뉴), 32 Onboard(시작하기 시트·버튼), 35 Help, 40 Roster, 45 Rules(📏 시트·원격 규칙판·SAETEUK_CHECK), 50 Activity, 52 Examples, 55 Wizard, 60 AI,
-  70 Generate(하네스 루프), 72 Manual(복사·붙여넣기), 74 Check(검사 사이드바), 76 Quick(바로 쓰기), 78 Export(Gem·스킬), 80 Compile, 82 Report(보고서 시트·드라이브 파일 읽기·폴더·예시 등록·내 문체), 90 Forms(설문지 연결·제출 트리거), 95 Observe, 96 Guide(OCR 설명서), 98 Assets(버튼 PNG base64)
-- `apps-script/UI_*.html` — 다이얼로그 (Onboard, ApiKey, Roster, Wizard, Observe, Manual, Check(사이드바), Quick(바로 쓰기·보고서), Export, OcrGuide, Form, Style)
+  70 Generate(하네스 루프), 72 Manual(복사·붙여넣기), 74 Check(검사 사이드바), 76 Quick(바로 쓰기), 78 Export(Gem·스킬), 80 Compile, 82 Report(보고서 시트·드라이브 파일 읽기·폴더·예시 등록·내 문체), 84 Subject(📚 새 교과 창·저장), 86 Bytes(📏 활동별 바이트 한도 창), 90 Forms(설문지 연결·제출 트리거), 95 Observe, 96 Guide(OCR 설명서), 98 Assets(버튼 PNG base64)
+- `apps-script/UI_*.html` — 다이얼로그 (Onboard, ApiKey, Roster, Wizard, Observe, Manual, Check(사이드바), Quick(바로 쓰기·보고서), Export, OcrGuide, Form, Style, Subject, Bytes)
 - `rules/latest.json` — 원격 규칙판. **빌드가 `16_Rules.gs` 의 RULES_2026 에서 만든다(직접 고치지 말 것)**. 해마다 고치는 법은 `rules/README.md`
 - `dist/` — 교사가 붙여 넣는 최종본 (Code.gs 1개 + HTML 5개 + appsscript.json). 직접 수정 금지, build로 생성
-- `web/prompt-studio.html`, `web/deploy-kit.html` — 아티팩트로 게시한 웹 도구
+- `web/prompt-studio.html`, `web/deploy-kit.html` — 아티팩트로 게시한 웹 도구. 공방의 `@@ENGINE` 사이는 `tools/build-studio.js` 가 00·10·16·19 모듈로 채운다(손으로 고치지 말 것)
 - `test/` — engine, schema, install, models, roster, activity 테스트 + `sheets-mock.js`(엄격 mock)
 - `docs/`, `PROMPT-ARCHITECTURE.md`, `MIGRATION-v2-to-v3.md`, `CHANGELOG.md`
 
@@ -46,6 +46,9 @@ npm run kit       # dist → web/deploy-kit.html 재생성 (배포 키트)
   드라이브는 `drive.readonly`만(매니페스트). 파일은 `readReportSource_` — 구글 문서는 Drive API 내보내기(실패 시 getAs PDF), PDF·사진은 parts(base64, 한 학생 13MB), docx·hwpx·pptx 는 unzip.
 - **내 문체(v3.7)**: [✒️ 내 문체] 시트 앞 3편 → buildPrompt styleSamples, 공통규칙 STYLE_CARD → 규칙 끝 + `styleTail_()` 로 학생 자료 뒤. 문체 검사 `styleDrift`(check).
 - **설문지(v3.7)**: 연결은 DocumentProperties FORM_LINKS. 머리글 이름으로 학생 칸·문항(`parseFormHeader`), 고친 칸 보존은 칸 메모의 `textHash`. 제출 트리거 `onFormSubmitInstalled` — 바로 생성은 값이 바뀐 줄(`rows`)만.
+- **바이트 한도(v3.8)**: 활동목록 5열 [바이트 한도](예전 [글자수]는 `migrateActivityBytes_` 가 ×3 으로 옮김 — createActivity_·구조 복구). 한도는 늘 `bytesFor_(act)` → `activityBytes(act, rec)`(기록 항목 한 칸을 넘지 않음). `charsFor_*3` 쓰지 말 것.
+  나눠 쓰면 buildPrompt 가 "한 칸 가운데 한 부분" 문장을 넣는다. 묶음: 교과(kind 교과)면 (기록종류, 교과영역), 아니면 기록종류.
+- **새 교과(v3.8)**: AI 답·공방·나누는 글이 모두 "이름: 값" 한 모양 → `parseSubjectAnswer`. `[교육과정 확인 필요]` 가 남으면 `subjectSave` 는 opts.confirmed 없이 거절.
 - 시작하기 버튼: `insertImage` + `assignScript` — 함수 이름 끝에 `_` 금지. 휴대폰 앱에선 동작 안 함(메뉴 안내 병기).
 
 ## 반드시 지킬 규칙

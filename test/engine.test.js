@@ -64,7 +64,8 @@ const mathPrompt = E.buildPrompt({
 });
 t('역할에 교과명 포함', () => ok(/수학 교과/.test(mathPrompt), mathPrompt.slice(0, 200)));
 t('경력 치환', () => ok(/9년간/.test(mathPrompt)));
-t('분량 문장 자동 생성', () => ok(/500자\(1500바이트\) 이내/.test(mathPrompt)));
+t('분량 문장 자동 생성', () => ok(/1500바이트\(한글 약 500자\) 이내/.test(mathPrompt), mathPrompt.match(/.*바이트.*이내.*/)));
+t('한 칸 전체를 쓰면 "나눠 쓴다" 문장 없음', () => ok(!/가운데 한 부분/.test(mathPrompt)));
 t('90% 안팎 문장 · 지어서 채우지 않기', () => ok(/1350바이트 안팎/.test(mathPrompt) && /분량을 채우지 않는다/.test(mathPrompt)));
 t('기재 금지사항 포함', () => ok(/공인어학시험/.test(mathPrompt)));
 t('수학 역량 포함', () => ok(/문제해결, 추론, 의사소통/.test(mathPrompt)));
@@ -93,7 +94,7 @@ const hPrompt = E.buildPrompt({
   subject: E.findByKey(PRESET_SUBJECTS, '공통'),
   common
 });
-t('행발 기본 300자 적용', () => ok(/300자\(900바이트\) 이내/.test(hPrompt), hPrompt.match(/.*자\(.*바이트\) 이내/)));
+t('행발 기본 300자 적용', () => ok(/900바이트\(한글 약 300자\) 이내/.test(hPrompt), hPrompt.match(/.*바이트.* 이내/)));
 t('담임 관점', () => ok(/담임교사/.test(hPrompt)));
 
 console.log('\n[buildPrompt — 직접작성 모드]');
@@ -104,6 +105,32 @@ const custom = E.buildPrompt({
   common, examples: 'EX'
 });
 t('직접 모드 토큰 치환', () => ok(/한도 1200바이트/.test(custom) && /EX/.test(custom) && /공인어학시험/.test(custom), custom));
+
+console.log('\n[활동별 바이트 한도]');
+const rec과세특 = E.findByKey(PRESET_RECORD_TYPES, '과세특');
+t('바이트 한도가 있으면 그 값', () => eq(E.activityBytes({ bytes: 600 }, rec과세특), 600));
+t('예전 글자수(chars)는 ×3', () => eq(E.activityBytes({ chars: 200 }, rec과세특), 600));
+t('비었으면 기록 항목 한 칸 전체', () => eq(E.activityBytes({}, rec과세특), 1500));
+t('한 칸보다 크게 적어도 한 칸까지만', () => eq(E.activityBytes({ bytes: 2100 }, E.findByKey(PRESET_RECORD_TYPES, '진로')), 1500));
+t('똑같이 나누기 — 남는 바이트는 앞에서부터', () => {
+  eq(E.splitBytes(1500, 2), [750, 750]); eq(E.splitBytes(1500, 4), [375, 375, 375, 375]);
+  eq(E.splitBytes(900, 7).reduce((a, b) => a + b, 0), 900); eq(E.splitBytes(10, 3), [4, 3, 3]);
+});
+t('합계가 한 칸을 넘는지', () => {
+  const b = E.byteBudget([{ bytes: 750 }, { bytes: 450 }, { bytes: 300 }], rec과세특);
+  eq([b.cap, b.sum, b.left, b.over], [1500, 1500, 0, false]);
+  ok(E.byteBudget([{ bytes: 900 }, {}], rec과세특).over, '900 + 한 칸 전체는 넘음');
+});
+const partPrompt = E.buildPrompt({
+  activity: { key: '발표', name: '수학 발표', recordKey: '과세특', subjectKey: '수학', bytes: 450, columns: '주제|과정', mode: '자동' },
+  record: rec과세특, subject: E.findByKey(PRESET_SUBJECTS, '수학'), common
+});
+t('나눠 쓰는 활동은 그 몫으로 분량 문장', () => ok(/450바이트\(한글 약 150자\) 이내/.test(partPrompt) && /405바이트 안팎/.test(partPrompt), partPrompt.match(/# 분량[\s\S]*?\n\n/)));
+t('나눠 쓰는 활동은 한 칸 가운데 일부라고 알려 줌', () => ok(/과목별 세부능력 및 특기사항 한 칸\(1500바이트\) 가운데 한 부분/.test(partPrompt)));
+const partCustom = E.buildPrompt({
+  activity: { mode: '직접작성', custom: '{BYTES}/{RECORD_BYTES}/{CHARS}', bytes: 450, recordKey: '과세특' }, record: rec과세특, subject: {}, common
+});
+t('직접작성 토큰 — 활동 한도·한 칸 전체·글자', () => eq(partCustom, '450/1500/150'));
 
 console.log('\n[buildStudentBlock]');
 t('빈 값 제외', () => eq(

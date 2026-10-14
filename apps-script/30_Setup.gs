@@ -23,6 +23,8 @@ function onOpen() {
     .addItem('   학생 명단 동기화', 'syncRoster'));
   m.addSubMenu(ui.createMenu('④⑤ 활동 · 예시 · 보고서')
     .addItem('④ 활동 만들기 · 입력 항목 바꾸기 ★', 'openWizard')
+    .addItem('📚 새 교과 만들기 (교과 역량 · 입력 항목 초안)', 'openSubjectDialog')
+    .addItem('📏 활동별 바이트 한도 (한 칸을 여러 활동이 나눌 때)', 'openBytesDialog')
     .addItem('   활동 직접 추가 (질문에 답하기)', 'addActivityDialog')
     .addItem('   활동 복제', 'duplicateActivityDialog')
     .addItem('   활동 삭제', 'deleteActivityDialog')
@@ -298,23 +300,47 @@ function buildCommonRules() {
 }
 
 /* ------------------------------------------------------------ 활동목록 */
+var ACTIVITY_BANNER = ['🗂 활동목록 — 세특을 만들 활동의 정의',
+  '직접 채우는 칸은 [활동명·기록종류·교과영역·입력 항목·활동 개요] 다섯 개뿐입니다. 프롬프트 본문은 엔진이 조립합니다. ' +
+  '[바이트 한도]를 비우면 기록종류 글자수×3(나이스 한 칸 전체)이 쓰입니다. 한 기록 항목을 여러 활동이 나눠 쓰면 메뉴 [📏 활동별 바이트 한도]에서 나누세요. ' +
+  '통째로 직접 쓰려면 [프롬프트 모드]를 "직접작성"으로 바꾸고 I열에 작성하세요. 새 활동은 메뉴 ④ 마법사로 만드는 것을 권장합니다.'];
+var BYTES_NOTE = '나이스 바이트(한글 3, 영문·숫자·공백 1, 줄바꿈 2). 비우면 기록종류 글자수×3. ' +
+  '기록종류 한도보다 크게 적어도 기록종류 한도까지만 씁니다.';
+
 function buildActivityList() {
   var s = shOrCreate_(APP.SH.ACTIVITY);
-  if (s.getLastRow() > 2) { refreshActivityValidation_(); return; }
+  if (s.getLastRow() > 2) { migrateActivityBytes_(); refreshActivityValidation_(); return; }
   s.clear();
-  var head = ['활동키', '활동명', '기록종류', '교과영역', '글자수', '입력 항목',
+  var head = ['활동키', '활동명', '기록종류', '교과영역', '바이트 한도', '입력 항목',
               '활동 개요', '프롬프트 모드', '직접 작성 프롬프트', '입력 시트', '예시 시트'];
-  banner_(s, head.length, '🗂 활동목록 — 세특을 만들 활동의 정의',
-    '직접 채우는 칸은 [활동명·기록종류·교과영역·입력 항목·활동 개요] 다섯 개뿐입니다. 프롬프트 본문은 엔진이 조립합니다. ' +
-    '글자수를 비우면 기록종류 기본값이 쓰입니다. 통째로 직접 쓰려면 [프롬프트 모드]를 "직접작성"으로 바꾸고 I열에 작성하세요. ' +
-    '새 활동은 메뉴 ④ 마법사로 만드는 것을 권장합니다.');
+  banner_(s, head.length, ACTIVITY_BANNER[0], ACTIVITY_BANNER[1]);
   s.getRange(2, 1, 1, head.length).setValues([head]);
   styleHeader_(s, 2, head.length);
+  s.getRange(2, 5).setNote(BYTES_NOTE);
   [110, 200, 100, 110, 80, 320, 340, 120, 300, 150, 150]
     .forEach(function (w, i) { s.setColumnWidth(i + 1, w); });
   s.setFrozenRows(2);
   s.getRange(3, 1, 300, head.length).setWrap(true).setVerticalAlignment('top');
   refreshActivityValidation_();
+}
+
+/**
+ * v3.8 이전 [🗂 활동목록]의 [글자수] → [바이트 한도](값 ×3). 바꿨으면 true.
+ * 읽을 때는 두 머리글을 다 알아듣지만(getActivities_), 새 활동을 적기 전에 꼭 바꿔 둔다(createActivity_).
+ */
+function migrateActivityBytes_() {
+  var s = sh_(APP.SH.ACTIVITY);
+  if (!s || s.getLastRow() < 2) return false;
+  var c = colOf_(s, 2, '글자수');
+  if (!c) return false;
+  var n = s.getLastRow() - 2;
+  if (n > 0) {
+    var rg = s.getRange(3, c, n, 1);
+    rg.setValues(rg.getValues().map(function (x) { var k = Number(x[0]); return [k > 0 ? k * 3 : x[0]]; }));
+  }
+  s.getRange(2, c).setValue('바이트 한도').setNote(BYTES_NOTE);
+  try { banner_(s, Math.max(s.getLastColumn(), 11), ACTIVITY_BANNER[0], ACTIVITY_BANNER[1]); } catch (e) {}
+  return true;
 }
 
 /** 활동목록의 드롭다운을 현재 기록종류/교과영역으로 갱신 */

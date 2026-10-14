@@ -49,7 +49,7 @@
 </div>
 <div class="hint" id="src">시트의 [최종본]·[AI 결과] 칸을 고르고 가져오거나, 아래에 바로 붙여 넣으세요.</div>
 
-<label>기록 항목 (글자 수 한도)</label>
+<label>기록 항목 · 활동 (바이트 한도)</label>
 <select id="rec"></select>
 
 <label>검사할 글</label>
@@ -101,11 +101,16 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function 
 function say(id, t, cls) { var e = $(id); e.className = 'msg ' + (cls || ''); e.textContent = t || ''; }
 /** NEIS 바이트 — 한글 3, 그 밖 1, 줄바꿈 2 (서버와 같은 셈) */
 function bytes(s) { var n = 0; for (var i = 0; i < s.length; i++) { var c = s.charCodeAt(i); n += (c === 10 || c === 13) ? 2 : (c > 127 ? 3 : 1); } return n; }
-function chars() { var r = CTX && CTX.records.filter(function (x) { return x.key === $('rec').value; })[0]; return r ? r.chars : 500; }
+/** 고른 것의 바이트 한도 — 기록 항목은 글자수×3, '▸활동키'는 그 활동에 정한 바이트 */
+function limit() {
+  var v = $('rec').value;
+  if (CTX && v.charAt(0) === '▸') { var a = (CTX.activities || []).filter(function (x) { return '▸' + x.key === v; })[0]; if (a) return a.bytes; }
+  var r = CTX && CTX.records.filter(function (x) { return x.key === v; })[0]; return r ? r.chars * 3 : 1500;
+}
 function count() {
-  var t = $('text').value, b = bytes(t), lim = chars() * 3;
+  var t = $('text').value, b = bytes(t), lim = limit();
   $('cnt').innerHTML = t.length + '자 · <b class="' + (b > lim ? 'over' : '') + '">' + b + '바이트</b>';
-  $('lim').textContent = '한도 ' + chars() + '자(' + lim + '바이트)';
+  $('lim').textContent = '한도 ' + lim + '바이트(한글 약 ' + Math.floor(lim / 3) + '자)';
 }
 function copyText(text, msgId) {
   var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
@@ -159,12 +164,15 @@ function check() {
   $('bCheck').disabled = true;
   google.script.run.withSuccessHandler(function (r) { $('bCheck').disabled = false; LAST = r; showResult(r, text); })
     .withFailureHandler(function (e) { $('bCheck').disabled = false; $('out').innerHTML = '<div class="msg err">' + esc(e.message) + '</div>'; })
-    .checkTextNow({ text: text, chars: chars() });
+    .checkTextNow({ text: text, bytes: limit() });
 }
 
 google.script.run.withSuccessHandler(function (c) {
   CTX = c;
-  $('rec').innerHTML = c.records.map(function (r) { return '<option value="' + esc(r.key) + '">' + esc(r.key + ' — ' + r.name + ' · ' + r.chars + '자') + '</option>'; }).join('');
+  $('rec').innerHTML = '<optgroup label="기록 항목 (나이스 한 칸)">' +
+    c.records.map(function (r) { return '<option value="' + esc(r.key) + '">' + esc(r.key + ' — ' + r.name + ' · ' + r.chars + '자') + '</option>'; }).join('') + '</optgroup>' +
+    ((c.activities || []).length ? '<optgroup label="한도를 나눠 정한 활동">' +
+      c.activities.map(function (a) { return '<option value="▸' + esc(a.key) + '">' + esc(a.name + ' · ' + a.bytes + '바이트') + '</option>'; }).join('') + '</optgroup>' : '');
   $('aiOn').hidden = !c.model; $('aiOff').hidden = !!c.model; $('bGround').hidden = !c.model;
   $('aiModel').textContent = c.model || '';
   $('ruleInfo').textContent = '규칙판 ' + c.rules.id + ' · ' + c.rules.year + '학년도 기재요령';
@@ -182,7 +190,8 @@ $('bRead').onclick = function () {
   google.script.run.withSuccessHandler(function (r) {
     btn.disabled = false; SRC = r;
     $('text').value = r.text;
-    if (r.recordKey && CTX && CTX.records.some(function (x) { return x.key === r.recordKey; })) $('rec').value = r.recordKey;
+    if (r.activityKey && CTX && (CTX.activities || []).some(function (x) { return x.key === r.activityKey; })) $('rec').value = '▸' + r.activityKey;
+    else if (r.recordKey && CTX && CTX.records.some(function (x) { return x.key === r.recordKey; })) $('rec').value = r.recordKey;
     $('src').textContent = '가져온 셀: ' + r.sheet + ' ' + r.a1 + ' — 고친 뒤 [그 셀에 다시 넣기]';
     $('bBack').disabled = false;
     count(); check();

@@ -134,7 +134,7 @@ function runGeneration_(act, sheet, rows, opt) {
     var cModel = colOf_(sheet, head, '모델');
     var cAi = colOf_(sheet, head, 'AI 결과');
     var cValid = colOf_(sheet, head, '검증');
-    var limit = charsFor_(act) * 3;
+    var limit = bytesFor_(act);
     var system = promptFor_(act);
     var defModel = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
     var autoValidate = cfgBool_('결과 자동검증', true);
@@ -281,7 +281,7 @@ function runGeneration_(act, sheet, rows, opt) {
   if (manualJobs.length) {
     openManualDialog_({
       kind: 'generate', sheet: sheet.getName(), target: 'AI 결과', check: '생성',
-      title: act.name, limit: charsFor_(act) * 3, system: promptFor_(act), jobs: manualJobs, note: manualNote
+      title: act.name, limit: bytesFor_(act), system: promptFor_(act), jobs: manualJobs, note: manualNote
     });
   }
 }
@@ -425,7 +425,7 @@ function revalidateAll() {
     var cnt = last - APP.DATA_ROW + 1;
     var ai = s.getRange(APP.DATA_ROW, cAi, cnt, 1).getValues();
     var fin = cFinal ? s.getRange(APP.DATA_ROW, cFinal, cnt, 1).getValues() : ai;
-    var limit = charsFor_(a) * 3;
+    var limit = bytesFor_(a);
     var out = [];
     for (var i = 0; i < cnt; i++) {
       var t = String(fin[i][0] || '').trim() || String(ai[i][0] || '').trim();
@@ -465,7 +465,7 @@ function recheckOnEdit_(e) {
   var name = s.getName();
   var limit = 0, act = null;
   if (name.indexOf(APP.SH.COMPILE_PREFIX) === 0) limit = compileLimitOf_(name);
-  else if (name.slice(-APP.SUFFIX.IN.length) === APP.SUFFIX.IN) { act = activityOfSheet_(name); if (act) limit = charsFor_(act) * 3; }
+  else if (name.slice(-APP.SUFFIX.IN.length) === APP.SUFFIX.IN) { act = activityOfSheet_(name); if (act) limit = bytesFor_(act); }
   if (!limit) return false;
   var r1 = e.range.getRow(), nr = e.range.getNumRows();
   if (r1 + nr - 1 < APP.DATA_ROW) return false;
