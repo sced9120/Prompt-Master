@@ -235,5 +235,47 @@ t('🔍 검사 — 한도를 나눈 활동을 고를 수 있고, 그 활동 시�
   eq([cell.recordKey, cell.activityKey], ['과세특', '발표']);
 });
 
+console.log('\n[🧪 공방 — 시트 안에서]');
+t('예시 글 "항목: 값" → 입력 항목 순서 (안 맞으면 첫 칸에 통째로)', () => {
+  eq(P.exampleValuesFrom(['주제', '과정', '배운 점'], '과정: 표를 그림\n주제: 함수\n기타: 무시\n과정: 그래프로 확인'), ['함수', '표를 그림 그래프로 확인', '']);
+  eq(P.exampleValuesFrom(['관찰 메모'], '수업 중 질문이 많음'), ['수업 중 질문이 많음']);
+  eq(P.exampleValuesFrom(['주제'], ''), ['']);
+});
+t('공방 페이지가 시트에 들어 있고(UI_Studio), 웹 페이지와 같은 내용', () => {
+  const ui = fs.readFileSync(path.join(dir, 'UI_Studio.html'), 'utf8');
+  const web = fs.readFileSync(path.join(__dirname, '..', 'web', 'prompt-studio.html'), 'utf8');
+  ok(/^<meta charset="utf-8">/.test(ui), 'meta charset');
+  ok(ui.endsWith(web), '웹 페이지 그대로여야 함(빌드를 다시 돌리세요)');
+  ok(/var ENGINE = \(function/.test(ui) && /studioContext\(\)/.test(ui) && /studioCreateActivity\(/.test(ui), '엔진·시트 호출');
+  ok(/\[hidden\]\{display:none!important\}/.test(ui), '[hidden] 규칙');
+});
+t('공방 창 — 이 시트의 기록종류 · 교과영역(새로 저장한 교과 포함) · 공통규칙 · 기재요령', () => {
+  const D = boot();
+  D.openStudio();
+  D.subjectSave(D.parseSubjectAnswer(AI_ANSWER), { confirmed: true });
+  const c = JSON.parse(JSON.stringify(D.studioContext()));
+  ok(c.subjects.some(x => x.key === '화학'), '화학');
+  ok(c.records.length === 6 && c.records.filter(r => r.key === '동아리')[0].rules.length > 0, '기록종류·기재 주의');
+  ok(/명사형 어미/.test(c.common.WRITING_RULES) && c.common.NEIS_RULES, '공통규칙');
+  ok(c.rules.length >= 50 && c.rules.every(r => r.re && r.label), '기재요령 규칙: ' + c.rules.length);
+  eq(c.version, D.APP.VERSION);
+});
+t('공방에서 [이 설계로 활동 시트 만들기] — 바이트 한도·예시 1편까지', () => {
+  const D = boot();
+  D.onboardSaveRoster('1\t1\t김하늘\n1\t2\t박서준');
+  const r = D.studioCreateActivity({ name: '수학 발표', recordKey: '과세특', subjectKey: '수학', bytes: 450, columns: ['주제', '과정'],
+    desc: '함수 발표', exIn: '주제: 함수의 극한\n과정: 그래프로 설명', exOut: '극한의 뜻을 그래프로 설명함.' });
+  ok(/수학 발표 ▸입력/.test(r.message) && /예시 1편/.test(r.message), r.message);
+  const act = D.getActivity_('수학 발표');
+  eq([act.bytes, act.columns, act.desc], [450, '주제|과정', '함수 발표']);
+  const ex = D.readExampleRows_(act);
+  eq([ex.length, ex[0].values.join('/'), ex[0].result], [1, '함수의 극한/그래프로 설명', '극한의 뜻을 그래프로 설명함.']);
+  eq(D.__ss.getSheetByName(r.inSheet).getLastRow(), 5, '명단 2명');
+  ok(D.studioOpenSheet(r.inSheet));
+  throws(() => D.studioCreateActivity({ name: '수학 발표', recordKey: '과세특', subjectKey: '수학', columns: ['주제'] }), /같은 활동/);
+  throws(() => D.studioCreateActivity({ name: ' ', columns: ['주제'] }), /활동 이름/);
+  throws(() => D.studioCreateActivity({ name: '빈 항목', columns: [] }), /1개 이상/);
+});
+
 console.log('\n' + (fail ? '실패 ' + fail + '개 / ' : '') + '통과 ' + pass + '개');
 if (fail) process.exit(1);

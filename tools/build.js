@@ -19,6 +19,7 @@ const OUT = path.join(__dirname, '..', 'dist');
 function line(ch, n) { return ch.repeat(n); }
 
 function build() {
+  require('./build-studio')();   // 공방 페이지(웹·UI_Studio.html)에 엔진을 먼저 넣는다
   if (!fs.existsSync(OUT)) fs.mkdirSync(OUT, { recursive: true });
 
   const gs = fs.readdirSync(SRC).filter(f => f.endsWith('.gs')).sort();

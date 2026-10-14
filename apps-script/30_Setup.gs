@@ -25,6 +25,7 @@ function onOpen() {
     .addItem('④ 활동 만들기 · 입력 항목 바꾸기 ★', 'openWizard')
     .addItem('📚 새 교과 만들기 (교과 역량 · 입력 항목 초안)', 'openSubjectDialog')
     .addItem('📏 활동별 바이트 한도 (한 칸을 여러 활동이 나눌 때)', 'openBytesDialog')
+    .addItem('🧪 세특 프롬프트 공방 (설계하며 프롬프트 보기 · 복사)', 'openStudio')
     .addItem('   활동 직접 추가 (질문에 답하기)', 'addActivityDialog')
     .addItem('   활동 복제', 'duplicateActivityDialog')
     .addItem('   활동 삭제', 'deleteActivityDialog')

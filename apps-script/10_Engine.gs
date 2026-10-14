@@ -66,6 +66,22 @@ function activityBytes(act, rec) {
   return b > 0 ? Math.min(Math.round(b), cap) : cap;
 }
 
+/**
+ * 예시 학생 자료 글("항목: 값" 줄들) → 입력 항목 순서의 값 배열 (공방에서 만든 예시를 예시 시트로 옮길 때)
+ * 항목 이름이 하나도 안 맞으면 글 전체를 첫 항목에 넣는다.
+ */
+function exampleValuesFrom(cols, text) {
+  var vals = [], hit = false;
+  for (var i = 0; i < cols.length; i++) vals.push('');
+  String(text || '').replace(/\r/g, '').split('\n').forEach(function (line) {
+    var m = /^\s*([^:：]{1,30}?)\s*[:：]\s*(.*)$/.exec(line);
+    var at = m ? cols.indexOf(m[1].trim()) : -1;
+    if (at >= 0) { vals[at] = (vals[at] ? vals[at] + ' ' : '') + m[2].trim(); hit = true; }
+  });
+  if (!hit && cols.length && String(text || '').trim()) vals[0] = String(text).trim();
+  return vals;
+}
+
 /** 한도를 n 개 활동에 똑같이 나누기(남는 바이트는 앞 활동부터 1씩) */
 function splitBytes(total, n) {
   total = Math.max(0, Math.floor(Number(total) || 0)); n = Math.max(1, Math.floor(Number(n) || 1));
@@ -316,7 +332,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     byteLen: byteLen, trimToBytes: trimToBytes, parseColumns: parseColumns,
     findByKey: findByKey, fillTokens: fillTokens, buildPrompt: buildPrompt,
-    activityBytes: activityBytes, splitBytes: splitBytes, byteBudget: byteBudget,
+    activityBytes: activityBytes, splitBytes: splitBytes, byteBudget: byteBudget, exampleValuesFrom: exampleValuesFrom,
     buildRole: buildRole, buildStudentBlock: buildStudentBlock,
     validateResult: validateResult, formatIssues: formatIssues
   };

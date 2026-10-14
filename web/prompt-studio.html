@@ -38,6 +38,7 @@
   }
 
   *{box-sizing:border-box}
+  [hidden]{display:none!important}
   body{background:var(--ground); color:var(--ink); font-family:var(--sans);
        font-size:15px; line-height:1.65; margin:0; padding:0 16px; -webkit-font-smoothing:antialiased}
   .wrap{max-width:1180px; margin:0 auto; padding-block:28px 64px}
@@ -154,6 +155,10 @@
   .steps .t{font-size:13px; font-weight:600; margin-top:2px}
   .steps .d{font-size:11.5px; color:var(--ink-3); line-height:1.5}
 
+  .sheetnote{margin-top:10px!important; font-size:13px!important; color:var(--accent)!important; font-weight:500}
+  dl.sum{display:grid; grid-template-columns:max-content minmax(0,1fr); gap:6px 14px; margin:0 0 4px; font-size:13px}
+  dl.sum dt{color:var(--ink-3); font-size:12px; padding-top:1px}
+  dl.sum dd{margin:0; min-width:0; overflow-wrap:anywhere}
   #newSubject{margin-top:26px; scroll-margin-top:16px}
   #newSubject .lead{margin:0 0 16px; color:var(--ink-2); font-size:13.5px; max-width:78ch}
   .stage{font-family:var(--mono); font-size:11px; color:var(--accent); font-weight:500; letter-spacing:.04em; margin-bottom:8px}
@@ -174,6 +179,7 @@
   <div class="kicker">학교생활기록부 특기사항 · 2026학년도 기재요령</div>
   <h1>세특 프롬프트 공방</h1>
   <p>활동 하나를 정의하면 그에 맞는 프롬프트가 조립됩니다. 교과·창체·행동특성을 같은 방식으로 다루고, 기재요령 금지사항과 분량 규칙은 자동으로 붙습니다. 목록에 없는 교과는 교육과정 자료로 직접 만들어 쓰고, 한 칸을 여러 활동이 나눠 쓰면 활동마다 바이트를 정합니다. 스프레드시트 도구와 같은 엔진이라 시트에서 만든 프롬프트와 똑같습니다.</p>
+  <p class="sheetnote" id="sheetNote" hidden></p>
 </header>
 
 <ol class="steps">
@@ -279,12 +285,23 @@
       </div>
 
       <div id="p-row" role="tabpanel" aria-labelledby="tab-row" hidden>
+        <div id="rowSheet" hidden>
+          <p class="note" style="margin:0 0 12px">지금 설계 그대로 이 시트에 활동을 만듭니다. 입력 시트와 예시 시트가 생기고 학생 명단이 채워집니다. 예시를 적었다면 예시 시트에 1편이 들어갑니다.</p>
+          <dl class="sum" id="rowSummary"></dl>
+          <div class="bar">
+            <button class="act primary" id="mkAct">이 설계로 활동 시트 만들기</button>
+            <button class="act" id="openAct" hidden>만든 시트 열기</button>
+          </div>
+          <p class="note" id="mkMsg" role="status" style="margin-top:8px"></p>
+        </div>
+        <div id="rowWeb">
         <pre class="out" id="rowOut"></pre>
         <div class="bar">
           <span class="spacer"></span>
           <button class="act primary" data-copy="rowOut">한 줄 복사</button>
         </div>
         <p class="note" style="margin-top:10px">스프레드시트 도구(v3.8 이상)의 <b>🗂 활동목록</b> 시트 맨 아래 빈 행 A열을 클릭하고 붙여넣으면 탭으로 열이 나뉩니다. 다섯째 칸이 <b>바이트 한도</b>입니다. 붙여넣은 뒤 메뉴에서 활동 시트를 만들거나, 마법사로 만든 활동의 설정을 이 값으로 맞추면 됩니다. 직접 만든 교과는 시트의 <b>📚 새 교과 만들기</b>에 나누는 글을 먼저 붙여 넣어 저장하세요.</p>
+        </div>
       </div>
 
       <div id="p-check" role="tabpanel" aria-labelledby="tab-check" hidden>
@@ -365,12 +382,13 @@
           <div class="warnbox" id="nsUnsure" hidden>[교육과정 확인 필요] 표시가 있습니다. 교과 역량 이름과 관찰 모습을 교육과정 문서와 맞춰 보세요. 쓰기를 누르면 표시는 지워집니다.
             <label><input type="checkbox" id="nsConfirm"> 교육과정과 맞춰 보았습니다</label>
           </div>
+          <label class="checkline" style="margin-top:12px" id="nsOverBox" hidden><input type="checkbox" id="nsOver"> 이 시트에 같은 키의 교과가 있습니다 — 덮어쓰기</label>
           <label class="checkline" style="margin-top:12px"><input type="checkbox" id="nsUseCols" checked> 추천 입력 항목을 위 활동 설계에도 넣기</label>
           <div class="bar">
             <button class="act primary" id="nsSave">이 교과 쓰기</button>
             <button class="act" id="nsShare">나누는 글 복사</button>
           </div>
-          <p class="note" style="margin-top:8px">나누는 글을 시트의 <b>📚 새 교과 만들기</b> 창에 붙여 넣으면 시트에도 저장되고, 같은 교과 선생님께 보내면 그대로 쓸 수 있습니다.</p>
+          <p class="note" style="margin-top:8px" id="nsSaveNote">나누는 글을 시트의 <b>📚 새 교과 만들기</b> 창에 붙여 넣으면 시트에도 저장되고, 같은 교과 선생님께 보내면 그대로 쓸 수 있습니다.</p>
         </div>
       </div>
     </div>
@@ -403,7 +421,7 @@ var ENGINE = (function () {
  */
 
 var APP = {
-  VERSION: 'v3.8.0',
+  VERSION: 'v3.8.1',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -925,6 +943,22 @@ function activityBytes(act, rec) {
   var cap = Number(rec && rec.chars || 500) * 3;
   var b = Number(act && act.bytes) || Number(act && act.chars || 0) * 3;
   return b > 0 ? Math.min(Math.round(b), cap) : cap;
+}
+
+/**
+ * 예시 학생 자료 글("항목: 값" 줄들) → 입력 항목 순서의 값 배열 (공방에서 만든 예시를 예시 시트로 옮길 때)
+ * 항목 이름이 하나도 안 맞으면 글 전체를 첫 항목에 넣는다.
+ */
+function exampleValuesFrom(cols, text) {
+  var vals = [], hit = false;
+  for (var i = 0; i < cols.length; i++) vals.push('');
+  String(text || '').replace(/\r/g, '').split('\n').forEach(function (line) {
+    var m = /^\s*([^:：]{1,30}?)\s*[:：]\s*(.*)$/.exec(line);
+    var at = m ? cols.indexOf(m[1].trim()) : -1;
+    if (at >= 0) { vals[at] = (vals[at] ? vals[at] + ' ' : '') + m[2].trim(); hit = true; }
+  });
+  if (!hit && cols.length && String(text || '').trim()) vals[0] = String(text).trim();
+  return vals;
 }
 
 /** 한도를 n 개 활동에 똑같이 나누기(남는 바이트는 앞 활동부터 1씩) */
@@ -1785,9 +1819,13 @@ return {
 </script>
 <script>
 /* ────────── 데이터 — 엔진(시트와 같은 것)에서 ────────── */
-const RECORDS = ENGINE.records;
-const BUILTIN = ENGINE.subjects;
-const DEFAULT_RULES = { write: ENGINE.common.WRITING_RULES, neis: ENGINE.common.NEIS_RULES };
+// 시트 안(구글 Apps Script 창)에서 열리면 그 시트의 기록종류·교과·공통규칙·기재요령을 받아 바꿔 끼운다
+const SHEET = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
+let RECORDS = ENGINE.records;
+let BUILTIN = ENGINE.subjects;
+let COMMON = ENGINE.common;
+let RULESET = ENGINE.rules;
+let DEFAULT_RULES = { write: COMMON.WRITING_RULES, neis: COMMON.NEIS_RULES };
 const UNSURE = ENGINE.SUBJECT_UNSURE;
 // 2026 기재요령 이전 공방의 기본 문구 — 손대지 않은 채 저장돼 있으면 새 문구로 바꾼다
 const OLD_NEIS_HEAD = '다음은 학교생활기록부에 기재할 수 없다. 결과물에 절대 포함하지 않는다.\n- 교외 대회·경시대회 수상 실적, 교내외 수상 사실 및 등수';
@@ -1833,23 +1871,29 @@ function buildPrompt(){
     activity: { key, name: ST.name, recordKey: ST.recKey, subjectKey: ST.subKey, bytes: limitOf(),
                 columns: ST.cols.join('|'), desc: ST.desc, mode: '자동' },
     record: recOf(), subject: subOf(),
-    common: Object.assign({}, ENGINE.common, { WRITING_RULES: ST.rWrite, NEIS_RULES: ST.rNeis, STYLE_CARD: '' }),
+    common: Object.assign({}, COMMON, { WRITING_RULES: ST.rWrite, NEIS_RULES: ST.rNeis, STYLE_CARD: '' }),
     examples: examplesBlock(), years: ST.years || 15
   });
 }
-const validate = (text, limit) => ENGINE.validateResult(text, limit, ENGINE.rules, []);
+const validate = (text, limit) => ENGINE.validateResult(text, limit, RULESET, []);
 
 /* ────────── 렌더 ────────── */
-RECORDS.forEach(r => {
-  const o = document.createElement('option');
-  o.value = r.key; o.textContent = r.name + ' · ' + r.chars + '자';
-  $('rec').appendChild(o);
-});
+function fillRecords(){
+  $('rec').textContent = '';
+  RECORDS.forEach(r => {
+    const o = document.createElement('option');
+    o.value = r.key; o.textContent = r.name + ' · ' + r.chars + '자';
+    $('rec').appendChild(o);
+  });
+  if (!RECORDS.some(r => r.key === ST.recKey)) { ST.recKey = RECORDS[0].key; ST.bytes = capOf(RECORDS[0]); }
+  $('rec').value = ST.recKey;
+}
+fillRecords();
 
 function fillSubjects(){
   const sel = $('sub');
   sel.textContent = '';
-  const groups = [['내가 만든 교과', MINE], ['기본', BUILTIN.filter(b => !MINE.some(m => m.key === b.key))]];
+  const groups = [['내가 만든 교과', MINE], [SHEET ? '이 시트의 교과영역' : '기본', BUILTIN.filter(b => !MINE.some(m => m.key === b.key))]];
   groups.forEach(([label, list]) => {
     if (!list.length) return;
     const g = document.createElement('optgroup');
@@ -1908,6 +1952,7 @@ function render(){
   $('promptOut').textContent = prompt;
   $('promptBytes').textContent = fmt(ENGINE.byteLen(prompt));
   $('rowOut').textContent = tsvRow();
+  if (SHEET) renderSheetRow();
 
   const limit = limitOf();
   $('checkLimit').textContent = fmt(limit);
@@ -1942,7 +1987,6 @@ function bind(id, key){
   el.value = ST[key] ?? '';
   el.addEventListener('input', () => { ST[key] = el.value; render(); });
 }
-$('rec').value = ST.recKey;
 bind('name', 'name');
 bind('desc', 'desc');
 bind('exIn', 'exIn');
@@ -2002,6 +2046,8 @@ function readFields(){
 }
 function showSubject(s, msg){
   EDIT = s;
+  $('nsOver').checked = false;
+  $('nsOverBox').hidden = !(SHEET && BUILTIN.some(b => b.key === s.key));
   $('fKey').value = s.key; $('fName').value = s.name; $('fRole').value = s.role;
   $('fComp').value = s.comp; $('fCols').value = (s.columns || []).join('|');
   $('nsConfirm').checked = false;
@@ -2053,8 +2099,12 @@ $('nsSave').addEventListener('click', () => {
   s.comp = s.comp.split(UNSURE).join('').replace(/[ \t]+(\n|$)/g, '$1').trim();
   if (!s.name) s.name = s.key;
   if (!s.role) s.role = '고등학교 ' + s.name.replace(/\(.*?\)/g, '').trim() + '교사';
+  if (SHEET) { saveToSheet(s); return; }
   MINE = [s].concat(MINE.filter(m => m.key !== s.key));
   store.set('saeteuk-studio-subjects', MINE);
+  useSubject(s);
+});
+function useSubject(s){
   ST.subKey = s.key;
   if ($('nsUseCols').checked && s.columns.length) { ST.cols = s.columns.slice(0, 12); renderChips(); }
   if (ST.recKey === '행발' || ST.recKey === '자율' || ST.recKey === '동아리' || ST.recKey === '진로') { ST.recKey = '과세특'; $('rec').value = ST.recKey; ST.bytes = capOf(recOf()); }
@@ -2063,12 +2113,80 @@ $('nsSave').addEventListener('click', () => {
   render();
   toast('"' + s.name + '" 교과로 프롬프트를 다시 조립했습니다');
   window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-});
+}
+function saveToSheet(s){
+  const b = $('nsSave');
+  b.disabled = true; $('nsMsg').textContent = '시트에 저장하는 중…';
+  SHEET.withSuccessHandler(r => {
+    b.disabled = false;
+    BUILTIN = [Object.assign({}, s, { key: r.key })].concat(BUILTIN.filter(x => x.key !== r.key));
+    MINE = MINE.filter(m => m.key !== r.key);
+    store.set('saeteuk-studio-subjects', MINE);
+    useSubject(Object.assign({}, s, { key: r.key }));
+    $('nsMsg').textContent = '✓ ' + r.message;
+  }).withFailureHandler(e => {
+    b.disabled = false; $('nsMsg').textContent = e.message;
+    if (/이미/.test(e.message)) $('nsOverBox').hidden = false;
+  }).subjectSave(s, { confirmed: true, overwrite: $('nsOver').checked });
+}
 $('nsShare').addEventListener('click', () => {
   const s = readFields();
   if (!s.key || !s.comp) { toast('먼저 교과를 읽거나 채워 주세요'); return; }
   copy(ENGINE.formatSubjectBlock(s), '나누는 글을 복사했습니다');
 });
+
+/* ────────── 시트 안에서 ────────── */
+let MADE = '';
+function renderSheetRow(){
+  const rec = recOf(), sub = subOf(), lim = limitOf();
+  const rows = [
+    ['활동 이름', ST.name || '(비었음 — 왼쪽에서 적어 주세요)'],
+    ['기록 종류', rec.name],
+    ['교과 · 영역', sub.key + ' — ' + sub.name],
+    ['바이트 한도', fmt(lim) + '바이트 (약 ' + fmt(Math.floor(lim / 3)) + '자' + (lim < capOf(rec) ? ', 한 칸 ' + fmt(capOf(rec)) + ' 가운데' : ', 한 칸 전체') + ')'],
+    ['입력 항목', ST.cols.length ? ST.cols.join(' · ') : '(없음 — 1개 이상 필요)'],
+    ['예시', ST.exOut && ST.exOut.trim() ? '1편 (예시 시트로)' : '없음']
+  ];
+  const dl = $('rowSummary');
+  dl.textContent = '';
+  rows.forEach(([k, v]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl.append(dt, dd); });
+  $('mkAct').disabled = !ST.name || !ST.name.trim() || !ST.cols.length;
+}
+function startSheetMode(){
+  $('tab-row').textContent = '시트에 만들기';
+  $('rowWeb').hidden = true; $('rowSheet').hidden = false;
+  $('nsSaveNote').textContent = '이 교과 쓰기를 누르면 이 시트의 [📚 교과영역]에 바로 저장됩니다. 나누는 글은 같은 교과 선생님께 보낼 때 쓰세요.';
+  $('sheetNote').hidden = false;
+  $('sheetNote').textContent = '이 시트의 기록종류 · 교과영역 · 공통규칙 · 기재요령을 불러오는 중…';
+  document.querySelector('details.rules summary').textContent = '공통 규칙 손보기 — 이 시트의 [📐 공통규칙]을 불러옵니다(여기서 고친 것은 이 창의 프롬프트에만)';
+  $('mkAct').addEventListener('click', () => {
+    const b = $('mkAct');
+    b.disabled = true; $('mkMsg').textContent = '활동 시트를 만드는 중…';
+    SHEET.withSuccessHandler(r => {
+      $('mkMsg').textContent = '✓ ' + r.message;
+      MADE = r.inSheet; $('openAct').hidden = false; renderSheetRow();
+    }).withFailureHandler(e => { $('mkMsg').textContent = e.message; renderSheetRow(); })
+      .studioCreateActivity({ name: ST.name, recordKey: ST.recKey, subjectKey: ST.subKey, bytes: limitOf(),
+                              columns: ST.cols, desc: ST.desc, exIn: ST.exIn, exOut: ST.exOut });
+  });
+  $('openAct').addEventListener('click', () => {
+    SHEET.withSuccessHandler(() => google.script.host.close()).withFailureHandler(e => { $('mkMsg').textContent = e.message; }).studioOpenSheet(MADE);
+  });
+  SHEET.withSuccessHandler(c => {
+    if (c.records && c.records.length) RECORDS = c.records;
+    if (c.subjects && c.subjects.length) BUILTIN = c.subjects;
+    COMMON = Object.assign({}, ENGINE.common, c.common || {});
+    if (c.rules && c.rules.length) RULESET = c.rules;
+    DEFAULT_RULES = { write: COMMON.WRITING_RULES, neis: COMMON.NEIS_RULES };
+    ST.rWrite = DEFAULT_RULES.write; ST.rNeis = DEFAULT_RULES.neis;
+    $('rWrite').value = ST.rWrite; $('rNeis').value = ST.rNeis;
+    if (c.years) ST.years = c.years;
+    fillRecords(); fillSubjects();
+    $('sheetNote').textContent = '이 시트의 기록종류 ' + RECORDS.length + '개 · 교과영역 ' + BUILTIN.length + '개 · 기재요령 규칙 ' + RULESET.length +
+      '개를 쓰고 있습니다. 활동은 [시트에 만들기] 탭에서, 새 교과는 아래에서 이 시트에 바로 저장됩니다.';
+    render();
+  }).withFailureHandler(e => { $('sheetNote').textContent = '시트 자료를 불러오지 못해 기본값으로 보여 줍니다: ' + e.message; }).studioContext();
+}
 
 /* ────────── 공통 ────────── */
 let toastTimer;
@@ -2108,4 +2226,5 @@ $('foot').innerHTML = '';
 fillSubjects();
 renderChips();
 render();
+if (SHEET) startSheetMode();
 </script>

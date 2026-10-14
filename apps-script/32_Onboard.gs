@@ -363,7 +363,9 @@ var START_BUTTONS = [
   { img: 'style', fn: 'openStyleDialog', alt: '내 문체 카드', row: 2, col: 0 },
   { img: 'ocr', fn: 'openOcrGuide', alt: '스캔 문서 → 엑셀 사용 설명서', row: 2, col: 1 },
   { img: 'subject', fn: 'openSubjectDialog', alt: '새 교과 만들기', row: 3, col: 0 },
-  { img: 'bytes', fn: 'openBytesDialog', alt: '활동별 바이트 한도', row: 3, col: 1 }
+  { img: 'bytes', fn: 'openBytesDialog', alt: '활동별 바이트 한도', row: 3, col: 1 },
+  { img: 'studio', fn: 'openStudio', alt: '세특 프롬프트 공방', row: 4, col: 0 },
+  { img: 'help', fn: 'openHelpSheet', alt: '사용법 시트', row: 4, col: 1 }
 ];
 
 function buildStart() {
@@ -375,6 +377,7 @@ function buildStart() {
 
   L.push(['#', '세특 작성 도우미 ' + APP.VERSION]);
   P('학생부 특기사항을 활동 단위로 모으고, 프롬프트를 자동으로 조립해 AI에게 맡기는 도구입니다. 과목별 세특 · 자율 · 동아리 · 진로 · 행발까지 같은 방식으로 씁니다.');
+  L.push(['btn', '']);
   L.push(['btn', '']);
   L.push(['btn', '']);
   L.push(['btn', '']);
@@ -416,6 +419,7 @@ function buildStart() {
   P('· ✒️ 내 문체 — 예전에 쓴 세특을 넣으면 "나처럼" 쓰도록 문체 카드를 만들어 모든 학생에게 똑같이 적용');
   P('· 📚 새 교과 만들기 — 목록에 없는 교과(화학 · 공통국어1 · 인공지능 기초 …)의 교과 역량과 입력 항목을 교육과정 자료로 AI가 초안, 선생님끼리 글로 나누기');
   P('· 📏 활동별 바이트 한도 — 한 칸(예: 수학 과세특 1500바이트)을 탐구 · 발표 · 수업 태도처럼 여러 활동이 나눠 쓰게');
+  P('· 🧪 세특 프롬프트 공방 — 활동을 설계하면서 조립되는 프롬프트를 바로 보고 복사(어느 AI에든), 마음에 들면 그대로 활동 시트로');
   P('· 🔍 맞춤법 · 금지어 검사 — 2026 기재요령 금지어, 어미 · 특수문자, 맞춤법 · 띄어쓰기, 나이스 바이트');
   P('· 생성 직후 자동 검사 → [수정]이 나온 학생만 걸린 점을 짚어 한 번 더 고쳐 쓰기, 원하면 근거 확인(학생 자료에 없는 내용 찾기)');
   P('· 📏 기재요령 규칙판은 해마다 저절로 업데이트 — 직접 고친 칸은 그대로 둡니다');
