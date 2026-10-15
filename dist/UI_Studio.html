@@ -161,6 +161,12 @@
   dl.sum{display:grid; grid-template-columns:max-content minmax(0,1fr); gap:6px 14px; margin:0 0 4px; font-size:13px}
   dl.sum dt{color:var(--ink-3); font-size:12px; padding-top:1px}
   dl.sum dd{margin:0; min-width:0; overflow-wrap:anywhere}
+  .exlist{display:flex; flex-direction:column; gap:12px}
+  .excard{display:flex; flex-direction:column; gap:6px; background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:12px}
+  .excard textarea{min-height:56px}
+  .sublab{font-size:12px; font-weight:600; color:var(--ink-3)}
+  .dsex{margin-top:10px}
+  .dsex .sublab{display:block; margin-bottom:4px}
   #newSubject{margin-top:26px; scroll-margin-top:16px}
   #newSubject .lead{margin:0 0 16px; color:var(--ink-2); font-size:13.5px; max-width:78ch}
   .stage{font-family:var(--mono); font-size:11px; color:var(--accent); font-weight:500; letter-spacing:.04em; margin-bottom:8px}
@@ -187,7 +193,7 @@
 <ol class="steps">
   <li><div class="n">01</div><div class="t">기록 종류 · 바이트</div><div class="d">한 칸의 바이트와 관점·기재 주의가 따라오고, 나눠 쓰면 이 활동의 몫만</div></li>
   <li><div class="n">02</div><div class="t">교과 · 영역</div><div class="d">교과 역량 문단이 들어갑니다. 없는 교과는 새로 만듭니다</div></li>
-  <li><div class="n">03</div><div class="t">활동 정의</div><div class="d">선생님이 쓰는 건 입력 항목과 개요 한두 줄뿐</div></li>
+  <li><div class="n">03</div><div class="t">활동 정의</div><div class="d">입력 항목, 개요 한두 줄, 예시. 결과 예시만 넣고 AI로 채워도 됩니다</div></li>
   <li><div class="n">04</div><div class="t">복사 · 검증</div><div class="d">프롬프트를 쓰고, 나온 문장을 여기서 점검합니다</div></li>
 </ol>
 
@@ -242,13 +248,12 @@
       </div>
 
       <div class="field">
-        <label for="exIn">예시 — 학생 자료</label>
-        <textarea id="exIn" rows="3" placeholder="항목별로 한 줄씩 (비워 두어도 됩니다)"></textarea>
-      </div>
-      <div class="field">
-        <label for="exOut">예시 — 이렇게 써 주길 바라는 문장</label>
-        <textarea id="exOut" rows="3"></textarea>
-        <div class="note">예시 한 개만 넣어도 결과의 톤과 구조가 눈에 띄게 안정됩니다.</div>
+        <div class="labrow"><span class="lab">예시 <span style="font-weight:400;color:var(--ink-3)">— 이렇게 나왔으면 하는 결과</span></span><button type="button" class="linkbtn" id="toDesign">🪄 결과만 넣고 나머지 칸 채우기</button></div>
+        <div class="exlist" id="exList"></div>
+        <div class="bar" style="margin-top:4px">
+          <button type="button" class="act" id="exAdd">＋ 예시 추가</button>
+          <span class="note">수준이 다른 예시 3~5편이 가장 좋습니다. 한 편만 넣어도 톤이 안정됩니다. 학생 이름은 지우고 넣으세요.</span>
+        </div>
       </div>
 
       <details class="rules">
@@ -271,6 +276,7 @@
   <section class="panel">
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" id="tab-prompt" aria-selected="true" aria-controls="p-prompt">조립된 프롬프트</button>
+      <button class="tab" role="tab" id="tab-design" aria-selected="false" aria-controls="p-design">AI로 칸 채우기</button>
       <button class="tab" role="tab" id="tab-row" aria-selected="false" aria-controls="p-row">활동목록 한 줄</button>
       <button class="tab" role="tab" id="tab-check" aria-selected="false" aria-controls="p-check">결과 검증</button>
     </div>
@@ -284,6 +290,30 @@
           <button class="act primary" data-copy="promptOut">프롬프트 복사</button>
         </div>
         <p class="note" style="margin-top:10px">이 프롬프트를 ChatGPT·Gemini·Claude 어디에 붙여넣든 됩니다. 그 아래에 <code># 학생 자료</code>를 적고 <code>항목: 내용</code> 형태로 한 줄씩 이어 붙이세요. 학생 이름은 넣지 마세요.</p>
+      </div>
+
+      <div id="p-design" role="tabpanel" aria-labelledby="tab-design" hidden>
+        <p class="note" style="margin:0 0 10px">왼쪽 <b>예시</b>의 결과 칸에 “이렇게 나왔으면” 하는 세특을 1~5편 넣으세요. 학생 자료는 비워도 됩니다. AI가 그 글을 거꾸로 읽어 <b>활동 개요 · 입력 항목 · 예시마다의 학생 자료</b>를 채우고, 예시 길이로 <b>바이트 한도</b>를 맞춥니다. 기록 종류와 교과는 지금 고른 것을 씁니다.</p>
+        <p class="note" id="dsState" style="margin:0"></p>
+        <div class="bar">
+          <button class="act primary" id="dsAuto" hidden>AI로 채우기</button>
+          <button class="act" id="dsCopy">요청문 복사</button>
+          <a class="act" href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini 열기</a>
+        </div>
+        <div class="field" style="margin-top:14px">
+          <label for="dsAnswer">AI 답 붙여 넣기</label>
+          <textarea id="dsAnswer" class="mono" rows="4" placeholder="활동 이름: …&#10;활동 개요: …&#10;입력 항목: 항목1|항목2|항목3&#10;[예시1]&#10;항목1: …"></textarea>
+        </div>
+        <div class="bar" style="margin-top:-6px"><button class="act" id="dsParse">읽기</button><span class="note" id="dsMsg" role="status"></span></div>
+        <div id="dsPreview" hidden style="margin-top:14px">
+          <dl class="sum" id="dsSum"></dl>
+          <div id="dsEx"></div>
+          <div class="bar">
+            <button class="act primary" id="dsApply">왼쪽 칸에 모두 넣기</button>
+            <button class="act" id="dsUndo" hidden>되돌리기</button>
+          </div>
+          <p class="note" style="margin-top:8px">넣은 뒤에도 왼쪽에서 직접 고칠 수 있습니다. 선생님이 정한 활동 이름은 바꾸지 않습니다.</p>
+        </div>
       </div>
 
       <div id="p-row" role="tabpanel" aria-labelledby="tab-row" hidden>
@@ -423,7 +453,7 @@ var ENGINE = (function () {
  */
 
 var APP = {
-  VERSION: 'v3.8.1',
+  VERSION: 'v3.8.2',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -1644,6 +1674,130 @@ function buildSkillMd(o) {
 
 /* Node 테스트용 export (Apps Script에서는 무시됨) */
 
+/* ── apps-script/17_Design.gs ── */
+/**
+ * 세특 작성 도우미 v3 — 🪄 예시로 칸 채우기 (순수 함수: 시트·네트워크 없음, Node 시험 가능)
+ * ---------------------------------------------------------------
+ * 교사가 "이렇게 나왔으면" 하는 결과(세특 예시)를 1~5편 주면, 같은 활동의 다른 학생도 그런 글이 나오도록
+ * 프롬프트의 빈칸을 거꾸로 채운다 — 활동 이름 · 활동 개요 · 입력 항목 · 예시마다의 학생 자료.
+ * 바이트 한도는 AI 가 아니라 예시 길이로 셈한다(suggestBytes).
+ *
+ * 세특 프롬프트 공방(웹·시트 안)의 [AI로 칸 채우기] 탭이 쓴다. 웹은 요청문 복사 → 답 붙여 넣기,
+ * 시트 안에서 API 키가 있으면 studioDesign()(88_Studio.gs)이 바로 부른다. 답은 같은 parseDesignAnswer 로 읽는다.
+ */
+
+var DESIGN_SYSTEM = [
+  '당신은 학교생활기록부 특기사항(세특) 프롬프트를 설계하는 조수입니다.',
+  '교사가 "이렇게 나오면 좋겠다"는 완성된 특기사항 예시를 줍니다. 같은 활동의 다른 학생에게도 이런 글이 나오도록,',
+  '프롬프트의 빈칸(활동 개요, 입력 항목, 예시마다의 학생 자료)을 채웁니다.',
+  '',
+  '# 지킬 것',
+  '- 예시 글에 있는 내용만 근거로 한다. 예시에 없는 활동 내용이나 학생 정보를 지어내지 않는다.',
+  '- 활동 개요: 이 활동이 무엇이고, 이 활동의 세특에서 무엇이 드러나야 하는지 1~2문장.',
+  '- 입력 항목: 교사가 학생마다 적을 칸 이름 3~6개. 예시 글의 문장들이 어느 칸의 메모에서 왔을지 거꾸로 생각해,',
+  '  과정이 드러나게 정한다(예: 탐구 주제, 고른 까닭, 방법, 알게 된 점, 교사 관찰). 짧은 명사구로 쓰고 | 로 나눈다.',
+  '  반·번호·이름·성취수준·최종본·AI 결과·바이트·검증은 쓰지 않는다. 교사가 정해 둔 입력 항목이 있으면 되도록 그대로 쓴다.',
+  '- 예시마다: 그 글을 쓰기 위해 교사가 적었을 법한 학생 자료를 입력 항목별로 짧게(한 칸에 한두 문장, 메모체) 쓴다.',
+  '  예시 글에 있는 사실만 옮기고, "우수함", "뛰어남" 같은 평가 말은 빼고 관찰한 사실만 남긴다.',
+  '  교사가 이미 적어 둔 학생 자료가 있으면 내용은 바꾸지 말고 입력 항목에 맞게 나누기만 한다.',
+  '- 학생 이름, 대학명·기관명, 수상, 자격증, 공인어학시험처럼 학생부에 쓸 수 없는 것은 옮기지 않는다.',
+  '',
+  '# 출력 — 아래 모양 그대로. 머리말·설명·마크다운 없이',
+  '활동 이름: (짧게, 20자 이내)',
+  '활동 개요: (1~2문장)',
+  '입력 항목: 항목1|항목2|항목3',
+  '[예시1]',
+  '항목1: …',
+  '항목2: …',
+  '항목3: …',
+  '[예시2]',
+  '항목1: …',
+  '(예시 수만큼)'
+].join('\n');
+
+/**
+ * AI 에게 보낼 사용자 글
+ * @param {{record?:{name,chars}, subject?:{key,name,kind}, name?:string, desc?:string, columns?:string[],
+ *          bytes?:number, examples:Array<{in?:string, out:string}>}} p
+ */
+function buildDesignUser(p) {
+  p = p || {};
+  var rec = p.record || {}, sub = p.subject || {};
+  var L = [];
+  L.push('기록 항목: ' + (rec.name || '학교생활기록부 특기사항') + (p.bytes ? ' (이 활동은 ' + p.bytes + '바이트 이내)' : ''));
+  if (sub.kind === '교과' && (sub.name || sub.key)) L.push('교과: ' + String(sub.name || sub.key).replace(/\(.*?\)/g, '').trim());
+  if (String(p.name || '').trim()) L.push('교사가 정한 활동 이름: ' + String(p.name).trim());
+  if (String(p.desc || '').trim()) L.push('교사가 적은 활동 개요: ' + String(p.desc).trim().replace(/\s*\n\s*/g, ' '));
+  var cols = (p.columns || []).map(function (c) { return String(c).trim(); }).filter(String);
+  if (cols.length) L.push('교사가 정한 입력 항목(되도록 그대로): ' + cols.join('|'));
+  var ex = (p.examples || []).filter(function (e) { return e && String(e.out || '').trim(); });
+  ex.forEach(function (e, i) {
+    L.push('');
+    L.push('# 예시' + (i + 1));
+    if (String(e.in || '').trim()) {
+      L.push('## 교사가 적어 둔 학생 자료 (내용은 그대로, 입력 항목에 맞게 나누기만)');
+      L.push(String(e.in).trim());
+    }
+    L.push('## 이렇게 나오면 좋겠다는 결과');
+    L.push(String(e.out).trim());
+  });
+  L.push('');
+  L.push('예시는 ' + ex.length + '편이다. [예시1]부터 [예시' + ex.length + ']까지 모두 쓴다.');
+  return L.join('\n');
+}
+
+var DESIGN_RESERVED = ['반', '번호', '이름', '성취수준', '생성', '모델', 'AI 결과', '최종본', '바이트', '검증'];
+
+/**
+ * AI 답 → 칸 채우기 제안
+ * @param {string} text
+ * @param {number} n 보낸 예시 수(모자라면 missing 에 적는다)
+ * @return {{name:string, desc:string, columns:string[], examples:string[], missing:string[]}}
+ *   examples[i] = "항목: 값" 줄들(입력 항목 순서) — 공방의 예시 학생 자료 칸에 그대로 넣는다
+ */
+function parseDesignAnswer(text, n) {
+  var t = String(text || '').replace(/\r/g, '').replace(/^\s*```[a-z]*\s*$/gim, '').replace(/\*\*/g, '');
+  var head = {}, blocks = [], cur = null;
+  t.split('\n').forEach(function (raw) {
+    var line = raw.replace(/\s+$/, '');
+    var mb = /^\s*(?:#+\s*)?\[?\s*예시\s*(\d+)\s*\]?\s*:?\s*$/.exec(line);
+    if (mb) { cur = []; blocks[Number(mb[1]) - 1] = cur; return; }
+    var mh = /^\s*(?:[-*•]\s*)?(활동\s*이름|활동명|활동\s*개요|입력\s*항목)\s*[:：]\s*(.*)$/.exec(line);
+    if (mh && !cur) { head[mh[1].replace(/\s+/g, '')] = mh[2].trim(); return; }
+    if (cur && line.trim()) cur.push(line.trim().replace(/^[-*•]\s*/, ''));
+  });
+  var name = String(head['활동이름'] || head['활동명'] || '').trim().slice(0, 30);
+  var desc = String(head['활동개요'] || '').trim();
+  var seen = {};
+  var columns = String(head['입력항목'] || '').split(/[|,]/).map(function (x) { return x.trim(); })
+    .filter(function (x) { if (!x || seen[x] || DESIGN_RESERVED.indexOf(x) >= 0) return false; seen[x] = 1; return true; }).slice(0, 12);
+  var examples = [];
+  for (var i = 0; i < Math.max(n || 0, blocks.length); i++) {
+    var lines = blocks[i] || [];
+    if (!columns.length) { examples.push(lines.join('\n')); continue; }
+    var vals = exampleValuesFrom(columns, lines.join('\n'));
+    examples.push(columns.map(function (c, k) { return vals[k] ? c + ': ' + vals[k] : ''; }).filter(String).join('\n'));
+  }
+  var missing = [];
+  if (!columns.length) missing.push('입력 항목');
+  if (!desc) missing.push('활동 개요');
+  for (var k = 0; k < (n || 0); k++) if (!examples[k]) missing.push('예시' + (k + 1) + ' 학생 자료');
+  return { name: name, desc: desc, columns: columns, examples: examples.slice(0, Math.max(n || 0, 0) || examples.length), missing: missing };
+}
+
+/**
+ * 예시 결과 길이로 바이트 한도 제안 — 엔진이 한도의 90% 안팎을 쓰게 하므로 가장 긴 예시 ÷ 0.9, 10 단위 올림.
+ * 한 칸(cap)을 넘지 않고, 150바이트보다 작게 하지 않는다. 예시가 없으면 0.
+ */
+function suggestBytes(texts, cap) {
+  var max = 0;
+  (texts || []).forEach(function (t) { var b = byteLen(String(t || '').trim()); if (b > max) max = b; });
+  if (!max) return 0;
+  var s = Math.ceil(max / 0.9 / 10) * 10;
+  return Math.max(150, Math.min(Number(cap) || s, s));
+}
+
+
 /* ── apps-script/19_Subjects.gs ── */
 /**
  * 세특 작성 도우미 v3 — 📚 새 교과 만들기 (순수 함수: 시트·네트워크 없음, Node 시험 가능)
@@ -1812,7 +1966,8 @@ return {
   }),
   subjects: PRESET_SUBJECTS, common: COMMON, rules: RULES_2026.rules,
   byteLen: byteLen, buildPrompt: buildPrompt, activityBytes: activityBytes, splitBytes: splitBytes,
-  validateResult: validateResult, parseColumns: parseColumns,
+  validateResult: validateResult, parseColumns: parseColumns, exampleValuesFrom: exampleValuesFrom,
+  DESIGN_SYSTEM: DESIGN_SYSTEM, buildDesignUser: buildDesignUser, parseDesignAnswer: parseDesignAnswer, suggestBytes: suggestBytes,
   SUBJECT_SYSTEM: SUBJECT_SYSTEM, SUBJECT_UNSURE: SUBJECT_UNSURE, buildSubjectUser: buildSubjectUser,
   parseSubjectAnswer: parseSubjectAnswer, formatSubjectBlock: formatSubjectBlock, subjectKeyOf: subjectKeyOf
 };
@@ -1843,12 +1998,18 @@ const SEED = {
   recKey:'동아리', subKey:'공통', bytes:1500, name:'전기전자 데이터 탐구',
   cols:['탐구 주제','주제를 고른 이유','자료와 분석 방법','알게 된 점','한계와 다음 계획'],
   desc:'노트북과 공공데이터만으로 진행한 학생 주도 탐구. 장비 실험 없이 데이터와 AI 도구로 검증하게 했다.',
-  exIn:'탐구 주제: 여름철 시간대별 전력 수요와 기온의 관계\n주제를 고른 이유: 정전 뉴스를 보고 수요 예측이 어떻게 이루어지는지 궁금해짐\n자료와 분석 방법: 전력거래소 공개 데이터와 기상청 기온 자료를 시간 단위로 결합해 산점도와 상관계수로 비교\n알게 된 점: 기온이 28도를 넘는 구간부터 수요 증가폭이 급격히 커지는 비선형 구간이 나타남\n한계와 다음 계획: 습도와 요일 효과를 넣지 못해 설명력이 낮았고, 다음에는 변수를 늘려 다시 볼 계획',
-  exOut:'여름철 전력 수급 기사에서 출발하여 기온과 시간대별 전력 수요의 관계를 탐구 주제로 설정함. 전력거래소와 기상청의 공개 자료를 시간 단위로 결합하는 과정에서 두 자료의 기준 시각이 다르다는 점을 스스로 발견하고 기준을 맞추어 재구성함. 산점도와 상관계수로 비교한 뒤 기온 28도 부근부터 수요 증가폭이 커지는 비선형 구간을 찾아내어, 단순 비례 관계로 설명하려던 처음의 가정을 스스로 수정함. 습도와 요일 효과를 반영하지 못해 설명력이 낮았다는 한계를 먼저 밝히고 변수를 늘려 다시 분석하겠다는 계획을 세우는 등, 자료에 근거해 자신의 결론을 검토하는 태도가 뚜렷함.',
+  examples:[{ in:'탐구 주제: 여름철 시간대별 전력 수요와 기온의 관계\n주제를 고른 이유: 정전 뉴스를 보고 수요 예측이 어떻게 이루어지는지 궁금해짐\n자료와 분석 방법: 전력거래소 공개 데이터와 기상청 기온 자료를 시간 단위로 결합해 산점도와 상관계수로 비교\n알게 된 점: 기온이 28도를 넘는 구간부터 수요 증가폭이 급격히 커지는 비선형 구간이 나타남\n한계와 다음 계획: 습도와 요일 효과를 넣지 못해 설명력이 낮았고, 다음에는 변수를 늘려 다시 볼 계획',
+  out:'여름철 전력 수급 기사에서 출발하여 기온과 시간대별 전력 수요의 관계를 탐구 주제로 설정함. 전력거래소와 기상청의 공개 자료를 시간 단위로 결합하는 과정에서 두 자료의 기준 시각이 다르다는 점을 스스로 발견하고 기준을 맞추어 재구성함. 산점도와 상관계수로 비교한 뒤 기온 28도 부근부터 수요 증가폭이 커지는 비선형 구간을 찾아내어, 단순 비례 관계로 설명하려던 처음의 가정을 스스로 수정함. 습도와 요일 효과를 반영하지 못해 설명력이 낮았다는 한계를 먼저 밝히고 변수를 늘려 다시 분석하겠다는 계획을 세우는 등, 자료에 근거해 자신의 결론을 검토하는 태도가 뚜렷함.' }],
   years:15, rWrite:DEFAULT_RULES.write, rNeis:DEFAULT_RULES.neis
 };
-let ST = Object.assign({}, SEED, store.get('saeteuk-studio') || {});
-if (!ST.bytes && ST.chars) ST.bytes = Number(ST.chars) * 3;              // 예전 공방은 글자수로 저장
+const SAVED = store.get('saeteuk-studio') || {};
+let ST = Object.assign({}, SEED, SAVED);
+if (!Array.isArray(SAVED.examples) && (SAVED.exIn || SAVED.exOut)) ST.examples = [{ in: SAVED.exIn || '', out: SAVED.exOut || '' }];   // 예전 공방은 예시 한 편
+delete ST.exIn; delete ST.exOut;
+ST.examples = (Array.isArray(ST.examples) ? ST.examples : []).filter(e => e && typeof e === 'object').slice(0, 5)
+  .map(e => ({ in: String(e.in || ''), out: String(e.out || '') }));
+if (!ST.examples.length) ST.examples = [{ in: '', out: '' }];
+if (SAVED.bytes === undefined && Number(SAVED.chars)) ST.bytes = Number(SAVED.chars) * 3;              // 예전 공방은 글자수로 저장
 delete ST.chars;
 if (String(ST.rNeis || '').indexOf(OLD_NEIS_HEAD) === 0) ST.rNeis = DEFAULT_RULES.neis;
 if (String(ST.rWrite || '').indexOf(OLD_WRITE_HEAD) === 0) ST.rWrite = DEFAULT_RULES.write;
@@ -1863,9 +2024,9 @@ const limitOf = () => ENGINE.activityBytes({ bytes: ST.bytes }, recOf());
 const fmt = n => Number(n).toLocaleString('ko-KR');
 
 /* ────────── 엔진 호출 ────────── */
+const filledExamples = () => ST.examples.filter(e => e.out && e.out.trim());
 function examplesBlock(){
-  if (!ST.exOut || !ST.exOut.trim()) return '';
-  return '## 예시1 입력\n' + (ST.exIn || '').trim() + '\n## 예시1 결과\n' + ST.exOut.trim();
+  return filledExamples().map((e, i) => '## 예시' + (i + 1) + ' 입력\n' + (e.in || '').trim() + '\n## 예시' + (i + 1) + ' 결과\n' + e.out.trim()).join('\n\n');
 }
 function buildPrompt(){
   const key = (ST.name || '활동').replace(/[\[\]*\/\\?:']/g, '').trim().slice(0, 20);
@@ -1955,6 +2116,7 @@ function render(){
   $('promptBytes').textContent = fmt(ENGINE.byteLen(prompt));
   $('rowOut').textContent = tsvRow();
   if (SHEET) renderSheetRow();
+  renderDesignState();
 
   const limit = limitOf();
   $('checkLimit').textContent = fmt(limit);
@@ -1991,8 +2153,6 @@ function bind(id, key){
 }
 bind('name', 'name');
 bind('desc', 'desc');
-bind('exIn', 'exIn');
-bind('exOut', 'exOut');
 bind('rWrite', 'rWrite');
 bind('rNeis', 'rNeis');
 
@@ -2027,6 +2187,119 @@ $('resetRules').addEventListener('click', () => {
   render(); toast('기본 규칙으로 되돌렸습니다');
 });
 
+function renderExamples(){
+  const box = $('exList');
+  box.textContent = '';
+  ST.examples.forEach((e, i) => {
+    const card = document.createElement('div');
+    card.className = 'excard';
+    const top = document.createElement('div');
+    top.className = 'labrow';
+    const t = document.createElement('span'); t.className = 'lab'; t.textContent = '예시 ' + (i + 1);
+    top.appendChild(t);
+    if (ST.examples.length > 1) {
+      const del = document.createElement('button');
+      del.type = 'button'; del.className = 'linkbtn'; del.textContent = '지우기';
+      del.setAttribute('aria-label', '예시 ' + (i + 1) + ' 지우기');
+      del.onclick = () => { ST.examples.splice(i, 1); renderExamples(); render(); };
+      top.appendChild(del);
+    }
+    const area = (id, label, rows, key, ph) => {
+      const l = document.createElement('label'); l.className = 'sublab'; l.htmlFor = id; l.textContent = label;
+      const ta = document.createElement('textarea'); ta.id = id; ta.rows = rows; ta.value = e[key] || ''; ta.placeholder = ph;
+      ta.addEventListener('input', () => { e[key] = ta.value; render(); });
+      return [l, ta];
+    };
+    card.append(top,
+      ...area('exIn' + i, '학생 자료', 3, 'in', '항목: 내용 — 비워 두면 [AI로 칸 채우기]가 만들어 줍니다'),
+      ...area('exOut' + i, '이렇게 나왔으면 하는 결과', 4, 'out', '완성된 세특 한 편'));
+    box.appendChild(card);
+  });
+  $('exAdd').disabled = ST.examples.length >= 5;
+}
+$('exAdd').addEventListener('click', () => {
+  if (ST.examples.length >= 5) return;
+  ST.examples.push({ in: '', out: '' });
+  renderExamples(); render();
+  $('exOut' + (ST.examples.length - 1)).focus();
+});
+
+/* ────────── AI로 칸 채우기 ────────── */
+let DESIGN = null, BEFORE = null, SHEET_MODEL = '';
+const designInput = () => ({ record: recOf(), subject: subOf(), name: ST.name, desc: ST.desc, columns: ST.cols, bytes: limitOf(), examples: filledExamples() });
+function renderDesignState(){
+  const n = filledExamples().length;
+  $('dsState').textContent = n
+    ? '결과 예시 ' + n + '편 · ' + (ST.cols.length ? '정해 둔 입력 항목 ' + ST.cols.length + '개는 되도록 그대로 씁니다' : '입력 항목은 AI가 정합니다')
+    : '왼쪽 [예시]의 결과 칸이 비었습니다. 먼저 한 편 이상 넣어 주세요.';
+  $('dsCopy').disabled = !n; $('dsAuto').disabled = !n;
+}
+function showDesign(d, msg){
+  const fx = filledExamples();
+  DESIGN = d;
+  DESIGN.bytes = ENGINE.suggestBytes(fx.map(e => e.out), capOf(recOf()));
+  const longest = Math.max(0, ...fx.map(e => ENGINE.byteLen(e.out)));
+  const rows = [
+    ['활동 이름', (ST.name || '').trim() ? '그대로 — ' + ST.name : (d.name || '(제안 없음)')],
+    ['활동 개요', d.desc || '(그대로)'],
+    ['입력 항목', d.columns.join(' · ')],
+    ['바이트 한도', DESIGN.bytes ? fmt(limitOf()) + ' → ' + fmt(DESIGN.bytes) + '바이트 (가장 긴 예시 ' + fmt(longest) + '바이트를 90%로 보고)' : '(그대로)']
+  ];
+  const dl = $('dsSum');
+  dl.textContent = '';
+  rows.forEach(([k, v]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl.append(dt, dd); });
+  const box = $('dsEx');
+  box.textContent = '';
+  fx.forEach((e, i) => {
+    const w = document.createElement('div'); w.className = 'dsex';
+    const l = document.createElement('span'); l.className = 'sublab'; l.textContent = '예시 ' + (i + 1) + ' 학생 자료';
+    const pre = document.createElement('pre'); pre.className = 'out'; pre.textContent = d.examples[i] || '(못 읽음 — 넣은 뒤 직접 채우세요)';
+    w.append(l, pre); box.appendChild(w);
+  });
+  $('dsPreview').hidden = false; $('dsUndo').hidden = true;
+  $('dsMsg').textContent = msg || (d.missing.length ? '못 채운 것: ' + d.missing.join(', ') + ' — 넣은 뒤 직접 고치세요.' : '읽었습니다. 아래를 확인하고 [왼쪽 칸에 모두 넣기].');
+}
+$('dsCopy').addEventListener('click', () => {
+  if (!filledExamples().length) { toast('왼쪽 예시의 결과 칸을 먼저 채워 주세요'); return; }
+  copy(ENGINE.DESIGN_SYSTEM + '\n\n' + ENGINE.buildDesignUser(designInput()), '요청문을 복사했습니다 · AI 대화창에 붙여 넣으세요');
+});
+$('dsParse').addEventListener('click', () => {
+  const d = ENGINE.parseDesignAnswer($('dsAnswer').value, filledExamples().length);
+  if (!d.columns.length) { $('dsMsg').textContent = '읽지 못했습니다 — "입력 항목:" 줄과 [예시1] … 이 든 답을 통째로 붙여 넣으세요.'; return; }
+  showDesign(d);
+});
+$('dsAuto').addEventListener('click', () => {
+  if (!SHEET) return;
+  const b = $('dsAuto');
+  b.disabled = true; $('dsMsg').textContent = '예시를 읽고 칸을 채우는 중… (20~40초)';
+  const p = designInput();
+  SHEET.withSuccessHandler(r => { b.disabled = false; showDesign(r.design, '✓ 채웠습니다. 아래를 확인하고 [왼쪽 칸에 모두 넣기]. ' + (r.usage || '')); })
+    .withFailureHandler(e => { b.disabled = false; $('dsMsg').textContent = e.message; })
+    .studioDesign({ recordKey: ST.recKey, subjectKey: ST.subKey, name: p.name, desc: p.desc, columns: p.columns, bytes: p.bytes, examples: p.examples });
+});
+$('dsApply').addEventListener('click', () => {
+  if (!DESIGN) return;
+  BEFORE = JSON.parse(JSON.stringify({ name: ST.name, desc: ST.desc, cols: ST.cols, bytes: ST.bytes, examples: ST.examples }));
+  if (DESIGN.name && !(ST.name || '').trim()) ST.name = DESIGN.name;
+  if (DESIGN.desc) ST.desc = DESIGN.desc;
+  if (DESIGN.columns.length) ST.cols = DESIGN.columns.slice(0, 12);
+  if (DESIGN.bytes) ST.bytes = DESIGN.bytes;
+  let k = 0;
+  ST.examples.forEach(e => { if (e.out && e.out.trim()) { if (DESIGN.examples[k]) e.in = DESIGN.examples[k]; k++; } });
+  $('name').value = ST.name; $('desc').value = ST.desc; $('bytes').value = limitOf();
+  renderChips(); renderExamples(); render();
+  $('dsUndo').hidden = false;
+  toast('왼쪽 칸에 넣었습니다 · 프롬프트를 다시 조립했습니다');
+});
+$('dsUndo').addEventListener('click', () => {
+  if (!BEFORE) return;
+  Object.assign(ST, { name: BEFORE.name, desc: BEFORE.desc, cols: BEFORE.cols, bytes: BEFORE.bytes, examples: BEFORE.examples });
+  $('name').value = ST.name; $('desc').value = ST.desc; $('bytes').value = limitOf();
+  renderChips(); renderExamples(); render();
+  $('dsUndo').hidden = true; BEFORE = null;
+  toast('넣기 전으로 되돌렸습니다');
+});
+
 const tabs = [...document.querySelectorAll('.tab')];
 tabs.forEach(t => t.addEventListener('click', () => {
   tabs.forEach(o => {
@@ -2035,6 +2308,8 @@ tabs.forEach(t => t.addEventListener('click', () => {
     $(o.getAttribute('aria-controls')).hidden = !on;
   });
 }));
+
+$('toDesign').addEventListener('click', () => { $('tab-design').click(); $('tab-design').scrollIntoView({ block: 'nearest' }); });
 
 /* ────────── 새 교과 ────────── */
 let EDIT = null;   // 지금 고치는 교과
@@ -2147,7 +2422,7 @@ function renderSheetRow(){
     ['교과 · 영역', sub.key + ' — ' + sub.name],
     ['바이트 한도', fmt(lim) + '바이트 (약 ' + fmt(Math.floor(lim / 3)) + '자' + (lim < capOf(rec) ? ', 한 칸 ' + fmt(capOf(rec)) + ' 가운데' : ', 한 칸 전체') + ')'],
     ['입력 항목', ST.cols.length ? ST.cols.join(' · ') : '(없음 — 1개 이상 필요)'],
-    ['예시', ST.exOut && ST.exOut.trim() ? '1편 (예시 시트로)' : '없음']
+    ['예시', filledExamples().length ? filledExamples().length + '편 (예시 시트로)' : '없음']
   ];
   const dl = $('rowSummary');
   dl.textContent = '';
@@ -2169,7 +2444,7 @@ function startSheetMode(){
       MADE = r.inSheet; $('openAct').hidden = false; renderSheetRow();
     }).withFailureHandler(e => { $('mkMsg').textContent = e.message; renderSheetRow(); })
       .studioCreateActivity({ name: ST.name, recordKey: ST.recKey, subjectKey: ST.subKey, bytes: limitOf(),
-                              columns: ST.cols, desc: ST.desc, exIn: ST.exIn, exOut: ST.exOut });
+                              columns: ST.cols, desc: ST.desc, examples: filledExamples() });
   });
   $('openAct').addEventListener('click', () => {
     SHEET.withSuccessHandler(() => google.script.host.close()).withFailureHandler(e => { $('mkMsg').textContent = e.message; }).studioOpenSheet(MADE);
@@ -2183,6 +2458,8 @@ function startSheetMode(){
     ST.rWrite = DEFAULT_RULES.write; ST.rNeis = DEFAULT_RULES.neis;
     $('rWrite').value = ST.rWrite; $('rNeis').value = ST.rNeis;
     if (c.years) ST.years = c.years;
+    SHEET_MODEL = c.model || '';
+    $('dsAuto').hidden = !SHEET_MODEL;
     fillRecords(); fillSubjects();
     $('sheetNote').textContent = '이 시트의 기록종류 ' + RECORDS.length + '개 · 교과영역 ' + BUILTIN.length + '개 · 기재요령 규칙 ' + RULESET.length +
       '개를 쓰고 있습니다. 활동은 [시트에 만들기] 탭에서, 새 교과는 아래에서 이 시트에 바로 저장됩니다.';
@@ -2227,6 +2504,7 @@ $('foot').innerHTML = '';
 
 fillSubjects();
 renderChips();
+renderExamples();
 render();
 if (SHEET) startSheetMode();
 </script>

@@ -277,5 +277,72 @@ t('공방에서 [이 설계로 활동 시트 만들기] — 바이트 한도·�
   throws(() => D.studioCreateActivity({ name: '빈 항목', columns: [] }), /1개 이상/);
 });
 
+console.log('\n[🪄 예시로 칸 채우기]');
+const DESIGN_ANSWER = [
+  '```',
+  '**활동 이름**: 함수 탐구 발표',
+  '활동 개요: 실생활 자료로 함수 모델을 세우고 발표하는 활동. 자료를 다루는 과정과 스스로 고친 점이 드러나야 함.',
+  '입력 항목: 탐구 주제 | 자료와 방법 | 알게 된 점 | 이름',
+  '[예시1]',
+  '탐구 주제: 기온과 전력 수요',
+  '- 자료와 방법: 공개 자료를 시간 단위로 합쳐 산점도',
+  '알게 된 점: 28도 넘으면 증가폭이 커짐',
+  '## 예시 2',
+  '탐구 주제: 버스 배차와 대기 시간',
+  '자료와 방법: 정류장 도착 기록으로 평균 대기 시간 계산',
+  '```'
+].join('\n');
+t('답 읽기 — 굵게·코드펜스·[예시1]/## 예시 2 모두, 예시는 입력 항목 순서의 "항목: 값"으로', () => {
+  const d = P.parseDesignAnswer(DESIGN_ANSWER, 2);
+  eq([d.name, d.columns], ['함수 탐구 발표', ['탐구 주제', '자료와 방법', '알게 된 점']], '시스템 이름(이름)은 뺌');
+  ok(/^실생활 자료로/.test(d.desc), d.desc);
+  eq(d.examples, ['탐구 주제: 기온과 전력 수요\n자료와 방법: 공개 자료를 시간 단위로 합쳐 산점도\n알게 된 점: 28도 넘으면 증가폭이 커짐',
+                  '탐구 주제: 버스 배차와 대기 시간\n자료와 방법: 정류장 도착 기록으로 평균 대기 시간 계산']);
+  eq(d.missing, []);
+});
+t('모자라면 무엇이 빠졌는지', () => {
+  const d = P.parseDesignAnswer('활동 개요: 무엇\n입력 항목: 주제|과정\n[예시1]\n주제: 함수', 2);
+  eq(d.missing, ['예시2 학생 자료']);
+  eq(P.parseDesignAnswer('좋은 예시네요!', 1).missing, ['입력 항목', '활동 개요', '예시1 학생 자료']);
+});
+t('요청문 — 결과 예시와 교사가 적은 자료·항목을 함께, 예시 수를 못박음', () => {
+  const u = P.buildDesignUser({ record: { name: '과목별 세부능력 및 특기사항' }, subject: { key: '수학', name: '수학', kind: '교과' }, bytes: 750,
+    name: '함수 발표', columns: ['주제', '과정'], examples: [{ in: '', out: '결과 하나.' }, { in: '주제: 함수', out: '결과 둘.' }, { out: ' ' }] });
+  ok(/750바이트 이내/.test(u) && /교과: 수학/.test(u) && /교사가 정한 입력 항목\(되도록 그대로\): 주제\|과정/.test(u), u);
+  ok(/# 예시1\n## 이렇게 나오면 좋겠다는 결과\n결과 하나\./.test(u) && /# 예시2\n## 교사가 적어 둔 학생 자료[^\n]*\n주제: 함수/.test(u), u);
+  ok(/예시는 2편이다/.test(u) && !/# 예시3/.test(u), '빈 결과는 빼고 셈');
+  ok(/지어내지 않는다/.test(P.DESIGN_SYSTEM) && /\[예시1\]/.test(P.DESIGN_SYSTEM));
+});
+t('바이트 한도 제안 — 가장 긴 예시 ÷ 0.9, 10 단위 올림, 한 칸·150 사이', () => {
+  eq(P.suggestBytes(['가'.repeat(200), '가'.repeat(100)], 1500), 670);   // 600 / 0.9 = 666.7 → 670
+  eq(P.suggestBytes(['가'.repeat(480)], 1500), 1500, '한 칸을 넘지 않음');
+  eq(P.suggestBytes(['짧음.'], 1500), 150, '너무 짧으면 150');
+  eq(P.suggestBytes(['', '  '], 1500), 0);
+});
+t('시트 안 [AI로 채우기] — 키가 있으면 바로, 이 시트의 기록 항목·교과로', () => {
+  const D = boot();
+  throws(() => D.studioDesign({ examples: [{ out: '결과.' }] }), /API 키가 없습니다/);
+  D.setKey_('gemini', 'AIza');
+  ok(D.studioContext().model, '공방이 [AI로 채우기]를 보여 줄 수 있게 모델을 알려 줌');
+  throws(() => D.studioDesign({ examples: [{ out: ' ' }] }), /한 편 이상/);
+  let sent = null;
+  D.__fetch.handler = (url, opt) => { sent = JSON.parse(opt.payload); return gem(DESIGN_ANSWER); };
+  const r = D.studioDesign({ recordKey: '과세특', subjectKey: '수학', bytes: 750, columns: [], examples: [{ out: '기온과 전력 수요의 관계를 탐구함.' }, { out: '버스 대기 시간을 계산함.' }] });
+  eq(r.design.columns.length, 3); eq(r.design.examples.length, 2);
+  ok(/프롬프트를 설계하는 조수/.test(sent.systemInstruction.parts[0].text));
+  ok(/과목별 세부능력 및 특기사항 \(이 활동은 750바이트 이내\)/.test(sent.contents[0].parts[0].text) && /교과: 수학/.test(sent.contents[0].parts[0].text));
+});
+t('공방에서 예시 여러 편 → 예시 시트에 모두 (예전 한 편 방식도)', () => {
+  const D = boot();
+  D.onboardSaveRoster('1\t1\t김하늘');
+  const r = D.studioCreateActivity({ name: '함수 발표', recordKey: '과세특', subjectKey: '수학', columns: ['탐구 주제', '알게 된 점'],
+    examples: [{ in: '탐구 주제: 전력\n알게 된 점: 비선형', out: '전력 수요를 탐구함.' }, { in: '', out: '버스 대기 시간을 계산함.' }, { in: '탐구 주제: 빈 결과', out: '' }] });
+  ok(/예시 2편/.test(r.message), r.message);
+  const ex = D.readExampleRows_(D.getActivity_('함수 발표'));
+  eq(ex.map(e => e.values.join('/') + '=' + e.result), ['전력/비선형=전력 수요를 탐구함.', '/=버스 대기 시간을 계산함.']);
+  const r2 = D.studioCreateActivity({ name: '옛 방식', recordKey: '과세특', subjectKey: '수학', columns: ['주제'], exIn: '주제: 함수', exOut: '함수를 탐구함.' });
+  ok(/예시 1편/.test(r2.message), r2.message);
+});
+
 console.log('\n' + (fail ? '실패 ' + fail + '개 / ' : '') + '통과 ' + pass + '개');
 if (fail) process.exit(1);

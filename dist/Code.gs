@@ -1,5 +1,5 @@
 /******************************************************************************
- * 세특 작성 도우미 v3.8.1 — 설치용 합본
+ * 세특 작성 도우미 v3.8.2 — 설치용 합본
  *
  * 이 파일 하나에 모든 스크립트가 들어 있습니다.
  * Apps Script 편집기에서 Code.gs 의 내용을 전부 지우고 이 파일을 통째로 붙여넣으세요.
@@ -10,7 +10,7 @@
  * 고칠 때는 apps-script/ 의 해당 파일을 고치고 node tools/build.js 를 다시 돌리세요.
  * 이 파일을 직접 고치면 다음 빌드 때 덮어써집니다.
  *
- * 빌드: 2026-10-14  ·  원본 31개 파일
+ * 빌드: 2026-10-15  ·  원본 32개 파일
  *****************************************************************************/
 
 /* ==========================================================================
@@ -27,7 +27,7 @@
  */
 
 var APP = {
-  VERSION: 'v3.8.1',
+  VERSION: 'v3.8.2',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -1761,6 +1761,140 @@ if (typeof module !== 'undefined' && module.exports) {
     parseSpellResult: parseSpellResult, applyChanges: applyChanges,
     buildManualUser: buildManualUser, parseManualAnswer: parseManualAnswer,
     skillName: skillName, buildGemText: buildGemText, buildSkillMd: buildSkillMd
+  };
+}
+
+
+/* ==========================================================================
+   17_Design.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 🪄 예시로 칸 채우기 (순수 함수: 시트·네트워크 없음, Node 시험 가능)
+ * ---------------------------------------------------------------
+ * 교사가 "이렇게 나왔으면" 하는 결과(세특 예시)를 1~5편 주면, 같은 활동의 다른 학생도 그런 글이 나오도록
+ * 프롬프트의 빈칸을 거꾸로 채운다 — 활동 이름 · 활동 개요 · 입력 항목 · 예시마다의 학생 자료.
+ * 바이트 한도는 AI 가 아니라 예시 길이로 셈한다(suggestBytes).
+ *
+ * 세특 프롬프트 공방(웹·시트 안)의 [AI로 칸 채우기] 탭이 쓴다. 웹은 요청문 복사 → 답 붙여 넣기,
+ * 시트 안에서 API 키가 있으면 studioDesign()(88_Studio.gs)이 바로 부른다. 답은 같은 parseDesignAnswer 로 읽는다.
+ */
+
+var DESIGN_SYSTEM = [
+  '당신은 학교생활기록부 특기사항(세특) 프롬프트를 설계하는 조수입니다.',
+  '교사가 "이렇게 나오면 좋겠다"는 완성된 특기사항 예시를 줍니다. 같은 활동의 다른 학생에게도 이런 글이 나오도록,',
+  '프롬프트의 빈칸(활동 개요, 입력 항목, 예시마다의 학생 자료)을 채웁니다.',
+  '',
+  '# 지킬 것',
+  '- 예시 글에 있는 내용만 근거로 한다. 예시에 없는 활동 내용이나 학생 정보를 지어내지 않는다.',
+  '- 활동 개요: 이 활동이 무엇이고, 이 활동의 세특에서 무엇이 드러나야 하는지 1~2문장.',
+  '- 입력 항목: 교사가 학생마다 적을 칸 이름 3~6개. 예시 글의 문장들이 어느 칸의 메모에서 왔을지 거꾸로 생각해,',
+  '  과정이 드러나게 정한다(예: 탐구 주제, 고른 까닭, 방법, 알게 된 점, 교사 관찰). 짧은 명사구로 쓰고 | 로 나눈다.',
+  '  반·번호·이름·성취수준·최종본·AI 결과·바이트·검증은 쓰지 않는다. 교사가 정해 둔 입력 항목이 있으면 되도록 그대로 쓴다.',
+  '- 예시마다: 그 글을 쓰기 위해 교사가 적었을 법한 학생 자료를 입력 항목별로 짧게(한 칸에 한두 문장, 메모체) 쓴다.',
+  '  예시 글에 있는 사실만 옮기고, "우수함", "뛰어남" 같은 평가 말은 빼고 관찰한 사실만 남긴다.',
+  '  교사가 이미 적어 둔 학생 자료가 있으면 내용은 바꾸지 말고 입력 항목에 맞게 나누기만 한다.',
+  '- 학생 이름, 대학명·기관명, 수상, 자격증, 공인어학시험처럼 학생부에 쓸 수 없는 것은 옮기지 않는다.',
+  '',
+  '# 출력 — 아래 모양 그대로. 머리말·설명·마크다운 없이',
+  '활동 이름: (짧게, 20자 이내)',
+  '활동 개요: (1~2문장)',
+  '입력 항목: 항목1|항목2|항목3',
+  '[예시1]',
+  '항목1: …',
+  '항목2: …',
+  '항목3: …',
+  '[예시2]',
+  '항목1: …',
+  '(예시 수만큼)'
+].join('\n');
+
+/**
+ * AI 에게 보낼 사용자 글
+ * @param {{record?:{name,chars}, subject?:{key,name,kind}, name?:string, desc?:string, columns?:string[],
+ *          bytes?:number, examples:Array<{in?:string, out:string}>}} p
+ */
+function buildDesignUser(p) {
+  p = p || {};
+  var rec = p.record || {}, sub = p.subject || {};
+  var L = [];
+  L.push('기록 항목: ' + (rec.name || '학교생활기록부 특기사항') + (p.bytes ? ' (이 활동은 ' + p.bytes + '바이트 이내)' : ''));
+  if (sub.kind === '교과' && (sub.name || sub.key)) L.push('교과: ' + String(sub.name || sub.key).replace(/\(.*?\)/g, '').trim());
+  if (String(p.name || '').trim()) L.push('교사가 정한 활동 이름: ' + String(p.name).trim());
+  if (String(p.desc || '').trim()) L.push('교사가 적은 활동 개요: ' + String(p.desc).trim().replace(/\s*\n\s*/g, ' '));
+  var cols = (p.columns || []).map(function (c) { return String(c).trim(); }).filter(String);
+  if (cols.length) L.push('교사가 정한 입력 항목(되도록 그대로): ' + cols.join('|'));
+  var ex = (p.examples || []).filter(function (e) { return e && String(e.out || '').trim(); });
+  ex.forEach(function (e, i) {
+    L.push('');
+    L.push('# 예시' + (i + 1));
+    if (String(e.in || '').trim()) {
+      L.push('## 교사가 적어 둔 학생 자료 (내용은 그대로, 입력 항목에 맞게 나누기만)');
+      L.push(String(e.in).trim());
+    }
+    L.push('## 이렇게 나오면 좋겠다는 결과');
+    L.push(String(e.out).trim());
+  });
+  L.push('');
+  L.push('예시는 ' + ex.length + '편이다. [예시1]부터 [예시' + ex.length + ']까지 모두 쓴다.');
+  return L.join('\n');
+}
+
+var DESIGN_RESERVED = ['반', '번호', '이름', '성취수준', '생성', '모델', 'AI 결과', '최종본', '바이트', '검증'];
+
+/**
+ * AI 답 → 칸 채우기 제안
+ * @param {string} text
+ * @param {number} n 보낸 예시 수(모자라면 missing 에 적는다)
+ * @return {{name:string, desc:string, columns:string[], examples:string[], missing:string[]}}
+ *   examples[i] = "항목: 값" 줄들(입력 항목 순서) — 공방의 예시 학생 자료 칸에 그대로 넣는다
+ */
+function parseDesignAnswer(text, n) {
+  var t = String(text || '').replace(/\r/g, '').replace(/^\s*```[a-z]*\s*$/gim, '').replace(/\*\*/g, '');
+  var head = {}, blocks = [], cur = null;
+  t.split('\n').forEach(function (raw) {
+    var line = raw.replace(/\s+$/, '');
+    var mb = /^\s*(?:#+\s*)?\[?\s*예시\s*(\d+)\s*\]?\s*:?\s*$/.exec(line);
+    if (mb) { cur = []; blocks[Number(mb[1]) - 1] = cur; return; }
+    var mh = /^\s*(?:[-*•]\s*)?(활동\s*이름|활동명|활동\s*개요|입력\s*항목)\s*[:：]\s*(.*)$/.exec(line);
+    if (mh && !cur) { head[mh[1].replace(/\s+/g, '')] = mh[2].trim(); return; }
+    if (cur && line.trim()) cur.push(line.trim().replace(/^[-*•]\s*/, ''));
+  });
+  var name = String(head['활동이름'] || head['활동명'] || '').trim().slice(0, 30);
+  var desc = String(head['활동개요'] || '').trim();
+  var seen = {};
+  var columns = String(head['입력항목'] || '').split(/[|,]/).map(function (x) { return x.trim(); })
+    .filter(function (x) { if (!x || seen[x] || DESIGN_RESERVED.indexOf(x) >= 0) return false; seen[x] = 1; return true; }).slice(0, 12);
+  var examples = [];
+  for (var i = 0; i < Math.max(n || 0, blocks.length); i++) {
+    var lines = blocks[i] || [];
+    if (!columns.length) { examples.push(lines.join('\n')); continue; }
+    var vals = exampleValuesFrom(columns, lines.join('\n'));
+    examples.push(columns.map(function (c, k) { return vals[k] ? c + ': ' + vals[k] : ''; }).filter(String).join('\n'));
+  }
+  var missing = [];
+  if (!columns.length) missing.push('입력 항목');
+  if (!desc) missing.push('활동 개요');
+  for (var k = 0; k < (n || 0); k++) if (!examples[k]) missing.push('예시' + (k + 1) + ' 학생 자료');
+  return { name: name, desc: desc, columns: columns, examples: examples.slice(0, Math.max(n || 0, 0) || examples.length), missing: missing };
+}
+
+/**
+ * 예시 결과 길이로 바이트 한도 제안 — 엔진이 한도의 90% 안팎을 쓰게 하므로 가장 긴 예시 ÷ 0.9, 10 단위 올림.
+ * 한 칸(cap)을 넘지 않고, 150바이트보다 작게 하지 않는다. 예시가 없으면 0.
+ */
+function suggestBytes(texts, cap) {
+  var max = 0;
+  (texts || []).forEach(function (t) { var b = byteLen(String(t || '').trim()); if (b > max) max = b; });
+  if (!max) return 0;
+  var s = Math.ceil(max / 0.9 / 10) * 10;
+  return Math.max(150, Math.min(Number(cap) || s, s));
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    DESIGN_SYSTEM: DESIGN_SYSTEM, buildDesignUser: buildDesignUser,
+    parseDesignAnswer: parseDesignAnswer, suggestBytes: suggestBytes
   };
 }
 
@@ -3611,6 +3745,9 @@ function buildHelp() {
   P('· [프롬프트 복사] → ChatGPT · Gemini · Claude 어디에든 붙여 넣어 쓸 수 있습니다(시트 없이 프롬프트만 필요한 선생님께도).');
   P('· [시트에 만들기] 탭 → 그 설계 그대로 이 시트에 활동 시트(입력 · 예시)를 만듭니다. [결과 검증] 탭은 이 시트의 기재요령 규칙으로 검사합니다.');
   P('· 아래 [새 교과 만들기]에서 만든 교과는 이 시트의 [📚 교과영역]에 바로 저장됩니다. 시트 안의 공방은 GitHub나 다른 사이트에 들어갈 필요가 없습니다.');
+  P('· 🪄 [AI로 칸 채우기] 탭: 예시의 결과 칸에 “이렇게 나왔으면” 하는 세특을 1~5편 넣으면, AI가 활동 개요 · 입력 항목 · 예시마다의 학생 자료를 거꾸로 채우고');
+  P('  예시 길이로 바이트 한도를 맞춥니다. 미리보기 → [왼쪽 칸에 모두 넣기](되돌리기 있음). API 키가 있으면 버튼 한 번, 없으면 요청문 복사 → Gemini → 답 붙여 넣기.');
+  P('· 시트에는 프롬프트 글이 아니라 재료(입력 항목 · 개요 · 바이트 · 예시)가 저장되고, 생성할 때마다 같은 엔진이 다시 조립합니다. 그래서 기재요령이 바뀌어도 저절로 따라갑니다.');
 
   H('3. 예시 채우기 — 품질을 가장 크게 좌우합니다');
   P('「활동명 ▸예시」 시트에 모범 예시를 채웁니다. 예시가 한 개라도 있으면 결과의 톤과 구조가 눈에 띄게 안정됩니다.');
@@ -7651,6 +7788,10 @@ function bytesSave(list) {
  * 웹 공방(web/prompt-studio.html)과 같은 파일이 UI_Studio.html 로 들어온다(tools/build-studio.js 가 만듦).
  * 시트 안에서 열면 페이지가 studioContext() 로 이 시트의 [🧩 기록종류]·[📚 교과영역]·[📐 공통규칙]·[📏 기재요령]을 받아 쓰고,
  * 복사·붙여넣기 대신 [활동 시트 만들기]·[교과영역에 저장](subjectSave)으로 바로 시트에 넣는다.
+ * [AI로 칸 채우기]는 API 키가 있으면 studioDesign() 이 바로 부르고(17_Design.gs), 없으면 페이지가 요청문 복사로 한다.
+ *
+ * 시트는 프롬프트 글을 저장하지 않는다 — 활동의 재료(입력 항목·개요·바이트·예시)만 저장하고, 생성할 때마다 같은 엔진이
+ * 다시 조립한다. 그래야 기재요령 규칙판·공통규칙·교과영역이 바뀌면 모든 활동이 저절로 따라간다.
  * GitHub 나 다른 사이트에 들어갈 필요가 없고, 사본마다 그대로 따라간다.
  */
 
@@ -7667,7 +7808,10 @@ function studioContext() {
     if (String(com[k] || '').trim()) common[k] = com[k];
   });
   var info = currentPackInfo_();
+  var model = '';
+  try { model = apiModelForChecks_(); } catch (e) {}
   return {
+    model: model,
     records: getRecordTypes_(),
     subjects: getSubjects_(),
     common: common,
@@ -7682,7 +7826,8 @@ function studioContext() {
 
 /**
  * 공방에서 설계한 활동을 이 시트에 만든다 (입력 시트 + 예시 시트 + 명단).
- * @param {{name:string, recordKey:string, subjectKey:string, bytes:number, columns:string[], desc?:string, exIn?:string, exOut?:string}} p
+ * @param {{name:string, recordKey:string, subjectKey:string, bytes:number, columns:string[], desc?:string,
+ *          examples?:Array<{in?:string, out:string}>, exIn?:string, exOut?:string}} p  (exIn/exOut 은 예시 한 편이던 v3.8.1 페이지)
  * @return {{inSheet:string, exSheet:string, message:string}}
  */
 function studioCreateActivity(p) {
@@ -7690,15 +7835,16 @@ function studioCreateActivity(p) {
   var name = String(p.name || '').trim();
   if (!name) throw new Error('활동 이름을 적어 주세요.');
   var cols = validateColumns_(p.columns);
-  var examples = [];
-  if (String(p.exOut || '').trim()) examples.push({ values: exampleValuesFrom(cols, p.exIn), result: cleanResult_(p.exOut) });
+  var given = Array.isArray(p.examples) ? p.examples : [{ in: p.exIn, out: p.exOut }];
+  var examples = given.filter(function (e) { return e && String(e.out || '').trim(); }).slice(0, EXAMPLE_MAX)
+    .map(function (e) { return { values: exampleValuesFrom(cols, e.in), result: cleanResult_(e.out) }; });
   var made = createActivity_({
     key: name, name: name, recordKey: p.recordKey, subjectKey: p.subjectKey,
     bytes: Number(p.bytes) || 0, columns: cols, desc: String(p.desc || '').trim(), examples: examples
   });
   return {
     inSheet: made.inSheet, exSheet: made.exSheet,
-    message: '[' + made.inSheet + '] 시트를 만들었습니다' + (examples.length ? ' (예시 1편은 [' + made.exSheet + ']에)' : '') + '.'
+    message: '[' + made.inSheet + '] 시트를 만들었습니다' + (examples.length ? ' (예시 ' + examples.length + '편은 [' + made.exSheet + ']에)' : '') + '.'
   };
 }
 
@@ -7708,6 +7854,29 @@ function studioOpenSheet(name) {
   if (!s) throw new Error('시트를 찾을 수 없습니다: ' + name);
   ss_().setActiveSheet(s);
   return true;
+}
+
+/**
+ * [AI로 칸 채우기] — 공방 왼쪽의 예시 결과로 활동 개요 · 입력 항목 · 예시 학생 자료를 거꾸로 채운 제안 (저장은 안 함)
+ * @param {{recordKey:string, subjectKey:string, name?:string, desc?:string, columns?:string[], bytes?:number,
+ *          examples:Array<{in?:string, out:string}>}} p
+ */
+function studioDesign(p) {
+  p = p || {};
+  var model = apiModelForChecks_();
+  if (!model) throw new Error('API 키가 없습니다. [요청문 복사]로 Gemini 앱에서 만들어 답을 붙여 넣으세요.');
+  var ex = (p.examples || []).filter(function (e) { return e && String(e.out || '').trim(); });
+  if (!ex.length) throw new Error('왼쪽 [예시]의 결과 칸에 "이렇게 나왔으면" 하는 세특을 한 편 이상 넣어 주세요.');
+  var recs = getRecordTypes_(), subs = getSubjects_();
+  var rec = findByKey(recs, p.recordKey) || recs[0];
+  var sub = findByKey(subs, p.subjectKey) || findByKey(subs, '공통');
+  usageReset_();
+  var res = callWithBackup_(DESIGN_SYSTEM, buildDesignUser({
+    record: rec, subject: sub, name: p.name, desc: p.desc, columns: p.columns, bytes: p.bytes, examples: ex
+  }), model);
+  var d = parseDesignAnswer(res.text, ex.length);
+  if (!d.columns.length) throw new Error('AI 답을 읽지 못했습니다(입력 항목 없음). 한 번 더 누르거나 [요청문 복사]로 해 보세요.');
+  return { design: d, model: res.model, usage: usageText_() };
 }
 
 

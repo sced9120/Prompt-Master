@@ -16,13 +16,13 @@ npm run kit       # build + dist → web/deploy-kit.html 재생성 (배포 키�
 
 ## 구조
 
-- `apps-script/NN_*.gs` — 모듈(번호순으로 번들). 00 Presets, 10 Engine(순수), 12 Models(순수), 14 RosterParse(순수), 16 Rules(순수: 규칙판·맞춤법·고쳐쓰기·근거·키 없이·내보내기), 18 Reports(순수: 보고서 요점·드라이브 링크·문체·설문지 머리글), 19 Subjects(순수: 새 교과 요청문·답 읽기·나누는 글),
+- `apps-script/NN_*.gs` — 모듈(번호순으로 번들). 00 Presets, 10 Engine(순수), 12 Models(순수), 14 RosterParse(순수), 16 Rules(순수: 규칙판·맞춤법·고쳐쓰기·근거·키 없이·내보내기), 17 Design(순수: 예시로 칸 채우기), 18 Reports(순수: 보고서 요점·드라이브 링크·문체·설문지 머리글), 19 Subjects(순수: 새 교과 요청문·답 읽기·나누는 글),
   20 Lib, 30 Setup(메뉴), 32 Onboard(시작하기 시트·버튼), 35 Help, 40 Roster, 45 Rules(📏 시트·원격 규칙판·SAETEUK_CHECK), 50 Activity, 52 Examples, 55 Wizard, 60 AI,
   70 Generate(하네스 루프), 72 Manual(복사·붙여넣기), 74 Check(검사 사이드바), 76 Quick(바로 쓰기), 78 Export(Gem·스킬), 80 Compile, 82 Report(보고서 시트·드라이브 파일 읽기·폴더·예시 등록·내 문체), 84 Subject(📚 새 교과 창·저장), 86 Bytes(📏 활동별 바이트 한도 창), 88 Studio(🧪 공방을 시트 안에서·studioContext), 90 Forms(설문지 연결·제출 트리거), 95 Observe, 96 Guide(OCR 설명서), 98 Assets(버튼 PNG base64)
 - `apps-script/UI_*.html` — 다이얼로그 (Onboard, ApiKey, Roster, Wizard, Observe, Manual, Check(사이드바), Quick(바로 쓰기·보고서), Export, OcrGuide, Form, Style, Subject, Bytes, Studio — **UI_Studio 는 web/prompt-studio.html 에서 빌드가 만든다. 직접 고치지 말 것**)
 - `rules/latest.json` — 원격 규칙판. **빌드가 `16_Rules.gs` 의 RULES_2026 에서 만든다(직접 고치지 말 것)**. 해마다 고치는 법은 `rules/README.md`
 - `dist/` — 교사가 붙여 넣는 최종본 (Code.gs 1개 + HTML 5개 + appsscript.json). 직접 수정 금지, build로 생성
-- `web/prompt-studio.html`, `web/deploy-kit.html` — 아티팩트로 게시한 웹 도구. 공방의 `@@ENGINE` 사이는 `tools/build-studio.js` 가 00·10·16·19 모듈로 채운다(손으로 고치지 말 것)
+- `web/prompt-studio.html`, `web/deploy-kit.html` — 아티팩트로 게시한 웹 도구. 공방의 `@@ENGINE` 사이는 `tools/build-studio.js` 가 00·10·16·17·19 모듈로 채운다(손으로 고치지 말 것)
 - `test/` — engine, schema, install, models, roster, activity 테스트 + `sheets-mock.js`(엄격 mock)
 - `docs/`, `PROMPT-ARCHITECTURE.md`, `MIGRATION-v2-to-v3.md`, `CHANGELOG.md`
 
@@ -48,6 +48,7 @@ npm run kit       # build + dist → web/deploy-kit.html 재생성 (배포 키�
 - **설문지(v3.7)**: 연결은 DocumentProperties FORM_LINKS. 머리글 이름으로 학생 칸·문항(`parseFormHeader`), 고친 칸 보존은 칸 메모의 `textHash`. 제출 트리거 `onFormSubmitInstalled` — 바로 생성은 값이 바뀐 줄(`rows`)만.
 - **바이트 한도(v3.8)**: 활동목록 5열 [바이트 한도](예전 [글자수]는 `migrateActivityBytes_` 가 ×3 으로 옮김 — createActivity_·구조 복구). 한도는 늘 `bytesFor_(act)` → `activityBytes(act, rec)`(기록 항목 한 칸을 넘지 않음). `charsFor_*3` 쓰지 말 것.
   나눠 쓰면 buildPrompt 가 "한 칸 가운데 한 부분" 문장을 넣는다. 묶음: 교과(kind 교과)면 (기록종류, 교과영역), 아니면 기록종류.
+- **공방 칸 채우기(v3.8.2)**: 예시 결과 → `buildDesignUser` → `parseDesignAnswer`(입력 항목 순서의 "항목: 값"), 바이트는 `suggestBytes`. 시트는 프롬프트 글을 저장하지 않고 재료(입력 항목·개요·바이트·예시)만 저장한다.
 - **공방(v3.8.1)**: 한 파일(web/prompt-studio.html)이 웹·시트 둘 다. `google.script.run` 이 있으면 시트 모드 — studioContext 로 RECORDS·BUILTIN·COMMON·RULESET 을 바꿔 끼우고, 활동은 studioCreateActivity, 교과는 subjectSave.
 - **새 교과(v3.8)**: AI 답·공방·나누는 글이 모두 "이름: 값" 한 모양 → `parseSubjectAnswer`. `[교육과정 확인 필요]` 가 남으면 `subjectSave` 는 opts.confirmed 없이 거절.
 - 시작하기 버튼: `insertImage` + `assignScript` — 함수 이름 끝에 `_` 금지. 휴대폰 앱에선 동작 안 함(메뉴 안내 병기).

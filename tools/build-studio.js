@@ -14,7 +14,7 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.join(__dirname, '..');
-const SRC = ['00_Presets.gs', '10_Engine.gs', '16_Rules.gs', '19_Subjects.gs'];
+const SRC = ['00_Presets.gs', '10_Engine.gs', '16_Rules.gs', '17_Design.gs', '19_Subjects.gs'];
 const PAGE = path.join(root, 'web', 'prompt-studio.html');
 const BEGIN = '/* @@ENGINE — tools/build-studio.js 가 넣는 자리. 손으로 고치지 마세요. */';
 const END = '/* @@ENGINE-END */';
@@ -36,7 +36,8 @@ return {
   }),
   subjects: PRESET_SUBJECTS, common: COMMON, rules: RULES_2026.rules,
   byteLen: byteLen, buildPrompt: buildPrompt, activityBytes: activityBytes, splitBytes: splitBytes,
-  validateResult: validateResult, parseColumns: parseColumns,
+  validateResult: validateResult, parseColumns: parseColumns, exampleValuesFrom: exampleValuesFrom,
+  DESIGN_SYSTEM: DESIGN_SYSTEM, buildDesignUser: buildDesignUser, parseDesignAnswer: parseDesignAnswer, suggestBytes: suggestBytes,
   SUBJECT_SYSTEM: SUBJECT_SYSTEM, SUBJECT_UNSURE: SUBJECT_UNSURE, buildSubjectUser: buildSubjectUser,
   parseSubjectAnswer: parseSubjectAnswer, formatSubjectBlock: formatSubjectBlock, subjectKeyOf: subjectKeyOf
 };`;
