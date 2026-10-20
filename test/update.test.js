@@ -1,4 +1,4 @@
-/* v3.9 — 🔄 새 버전 알림 · 📥 이전 파일에서 가져오기
+/* v3.8.3 — 🔄 새 버전 알림 · 📥 이전 파일에서 가져오기
    (node test/update.test.js) */
 const fs = require('fs');
 const path = require('path');
@@ -63,7 +63,7 @@ const P = boot();
 
 console.log('\n[새 버전 — 순수]');
 t('버전 비교', () => {
-  eq(P.compareVersions('v3.9.0', 'v3.8.2'), 1); eq(P.compareVersions('v3.8.2', 'v3.8.2'), 0);
+  eq(P.compareVersions('v3.8.3', 'v3.8.2'), 1); eq(P.compareVersions('v3.8.2', 'v3.8.2'), 0);
   eq(P.compareVersions('3.8.10', 'v3.8.9'), 1); eq(P.compareVersions('v3.10.0', 'v3.9.9'), 1); eq(P.compareVersions('v3.8', 'v3.8.1'), -1);
 });
 t('version.json 읽기 — 이상한 사본 주소는 원본 /copy 로', () => {
@@ -74,7 +74,7 @@ t('version.json 읽기 — 이상한 사본 주소는 원본 /copy 로', () => {
   ok(/1AbCdEf/.test(ok2.copyUrl));
 });
 t('지금 판과 비교', () => {
-  const s = P.updateState('v3.9.0', P.parseVersionInfo({ version: 'v3.9.1', notes: ['고침'] }));
+  const s = P.updateState('v3.8.3', P.parseVersionInfo({ version: 'v3.9.1', notes: ['고침'] }));
   ok(s.available); eq(s.latest, 'v3.9.1');
   ok(!P.updateState('v3.9.1', P.parseVersionInfo({ version: 'v3.9.1' })).available);
   ok(!P.updateState('v3.9.1', null).available);
