@@ -13,6 +13,7 @@ function boot() {
   const ctx = vm.createContext(Object.assign({ module: { exports: {} } }, g));
   files.forEach(f => vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f }));
   g.__docProps.setProperty('RULES_CHECKED_AT', String(Date.now()));
+  g.__docProps.setProperty('UPDATE_CHECKED_AT', String(Date.now()));   // 새 버전 확인도 건너뜀(호출 수를 세는 시험)
   return ctx;
 }
 

@@ -13,6 +13,7 @@ function boot(opts) {
   const ctx = vm.createContext(Object.assign({ module: { exports: {} } }, g));
   files.forEach(f => vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f }));
   if (!(opts && opts.remote)) g.__docProps.setProperty('RULES_CHECKED_AT', String(Date.now()));
+  g.__docProps.setProperty('UPDATE_CHECKED_AT', String(Date.now()));
   return ctx;
 }
 

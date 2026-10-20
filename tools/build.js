@@ -75,6 +75,10 @@ function build() {
   fs.writeFileSync(path.join(rulesDir, 'latest.json'), JSON.stringify(pack, null, 2) + '\n', 'utf8');
   console.log('rules/latest.json  규칙판 ' + pack.id + ' · 규칙 ' + pack.rules.length + '줄');
 
+  // 새 버전 알림 version.json — 사본들이 하루 한 번 UPDATE_URL 에서 읽는다(34_Update.gs).
+  // 바뀐 점은 CHANGELOG.md 맨 위 판의 "- **굵은 글씨.**" 줄에서 뽑는다. 이 파일을 main 에 올려야 알림이 나간다.
+  writeVersionJson(version);
+
   const bytes = fs.statSync(path.join(OUT, 'Code.gs')).size;
   const lines = fs.readFileSync(path.join(OUT, 'Code.gs'), 'utf8').split('\n').length;
 
@@ -84,6 +88,25 @@ function build() {
   console.log('dist/appsscript.json');
   console.log('\n마스터 사본을 만들 때 붙여넣을 파일: ' + (1 + html.length) + '개');
   return { gs, html, bytes };
+}
+
+function writeVersionJson(version) {
+  const root = path.join(__dirname, '..');
+  const log = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
+  const sec = log.split(/\n(?=## v)/).find(s => s.startsWith('## v')) || '';
+  const head = sec.match(/^## (v[\d.]+)\s*[—-]\s*([\d-]+)/) || [];
+  if (head[1] && head[1] !== version) {
+    throw new Error('CHANGELOG.md 맨 위 판(' + head[1] + ')과 APP.VERSION(' + version + ')이 다릅니다. 둘을 맞춘 뒤 다시 빌드하세요.');
+  }
+  const title = (sec.split('\n').slice(1).find(l => l.trim() && !l.startsWith('-') && !l.startsWith('#')) || '').trim();
+  const notes = sec.split('\n').map(l => l.match(/^- \*\*(.+?)\*\*/)).filter(Boolean).map(m => m[1].replace(/[.。]$/, '')).slice(0, 8);
+  const vm = require('vm');
+  const ctx = vm.createContext({ module: { exports: {} } });
+  vm.runInContext(fs.readFileSync(path.join(SRC, '15_Update.gs'), 'utf8'), ctx, { filename: '15_Update.gs' });
+  const info = { version, date: head[2] || new Date().toISOString().slice(0, 10), title, notes,
+                 copyUrl: vm.runInContext('MASTER_COPY_URL', ctx) };
+  fs.writeFileSync(path.join(root, 'version.json'), JSON.stringify(info, null, 2) + '\n', 'utf8');
+  console.log('version.json      ' + version + ' · 바뀐 점 ' + notes.length + '줄');
 }
 
 if (require.main === module) build();

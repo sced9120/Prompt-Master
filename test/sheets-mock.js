@@ -178,6 +178,9 @@ function makeSpreadsheet() {
     __toasts: toasts,
     __activeRange: null,
     __setActiveRange(r) { ss.__activeRange = r; },
+    getId: () => ss.__id || 'CURRENT_SHEET_ID_0000000000000',
+    getUrl: () => 'https://docs.google.com/spreadsheets/d/' + (ss.__id || 'CURRENT_SHEET_ID_0000000000000') + '/edit',
+    __id: '',
     getSheetByName: n => sheets.find(s => s.getName() === n) || null,
     getSheets: () => sheets.slice(),
     insertSheet(n) {
@@ -295,7 +298,9 @@ function makeGlobals() {
       fetch(url, opt) {
         fetchBox.calls.push({ url, opt });
         const r = fetchBox.handler(url, opt || {});
-        return { getResponseCode: () => r.code, getContentText: () => (typeof r.body === 'string' ? r.body : JSON.stringify(r.body)) };
+        return { getResponseCode: () => r.code, getContentText: () => (typeof r.body === 'string' ? r.body : JSON.stringify(r.body)),
+                 // xlsx 내려받기 시험용: r.entries {경로: XML} 를 그대로 zip 처럼 풀어 준다
+                 getBlob: () => { const b = blob(Array.from(Buffer.from('PK')), 'application/octet-stream', 'x.xlsx'); b.__entries = r.entries || {}; b.setContentType = () => b; return b; } };
       }
     },
     console

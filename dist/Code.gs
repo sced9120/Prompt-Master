@@ -1,16 +1,16 @@
 /******************************************************************************
- * 세특 작성 도우미 v3.8.2 — 설치용 합본
+ * 세특 작성 도우미 v3.9.0 — 설치용 합본
  *
  * 이 파일 하나에 모든 스크립트가 들어 있습니다.
  * Apps Script 편집기에서 Code.gs 의 내용을 전부 지우고 이 파일을 통째로 붙여넣으세요.
- * HTML 파일 15개는 각각 같은 이름으로 따로 만들어야 합니다:
- *   UI_ApiKey, UI_Bytes, UI_Check, UI_Export, UI_Form, UI_Manual, UI_Observe, UI_OcrGuide, UI_Onboard, UI_Quick, UI_Roster, UI_Studio, UI_Style, UI_Subject, UI_Wizard
+ * HTML 파일 16개는 각각 같은 이름으로 따로 만들어야 합니다:
+ *   UI_ApiKey, UI_Bytes, UI_Check, UI_Export, UI_Form, UI_Manual, UI_Observe, UI_OcrGuide, UI_Onboard, UI_Quick, UI_Roster, UI_Studio, UI_Style, UI_Subject, UI_Update, UI_Wizard
  *
  * 원본은 모듈별로 나뉘어 있습니다: github.com/sced9120/Prompt-Master
  * 고칠 때는 apps-script/ 의 해당 파일을 고치고 node tools/build.js 를 다시 돌리세요.
  * 이 파일을 직접 고치면 다음 빌드 때 덮어써집니다.
  *
- * 빌드: 2026-10-15  ·  원본 32개 파일
+ * 빌드: 2026-10-20  ·  원본 34개 파일
  *****************************************************************************/
 
 /* ==========================================================================
@@ -27,7 +27,7 @@
  */
 
 var APP = {
-  VERSION: 'v3.8.2',
+  VERSION: 'v3.9.0',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -1311,6 +1311,307 @@ if (typeof module !== 'undefined' && module.exports) {
     ROSTER_HEAD: ROSTER_HEAD, rosterHeadKind: rosterHeadKind, splitStudentId: splitStudentId,
     rosterTextToRows: rosterTextToRows, parseRosterRows: parseRosterRows, rosterRowOf: rosterRowOf,
     classLabel: classLabel, studentLabel: studentLabel
+  };
+}
+
+
+/* ==========================================================================
+   15_Update.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 새 버전 알림 · 이전 파일에서 가져오기 (순수 함수)
+ * ---------------------------------------------------------------
+ * 사본은 만든 순간의 코드로 굳는다. 그래서
+ *   1) 만든이의 GitHub 에 올린 version.json 을 읽어 "새 버전이 나왔어요"를 알리고
+ *   2) 새 버전 사본에서 예전 사본의 링크를 붙여 넣으면 학생명단·활동·예시·결과·문체·설정을 옮겨 온다.
+ * 예전 파일은 xlsx 로 내려받아(drive.readonly 권한 안에서) 이 파일의 함수로 읽는다 — 시트 API 를 켜지 않아도 된다.
+ * 머리글 이름으로 옮기므로 버전이 달라 열 순서가 바뀌어도 따라간다.
+ * (node test/update.test.js)
+ */
+
+var UPDATE_URL = 'https://raw.githubusercontent.com/sced9120/Prompt-Master/main/version.json';
+var MASTER_COPY_URL = 'https://docs.google.com/spreadsheets/d/11FNX77xBegfn1lw0GhkBAFvLtyxm8NS1ktfbs309vZM/copy';
+
+/**
+ * 예전 판의 기본 문구 — 기본값을 고칠 때 바뀌기 전 문구를 여기에 더해 두면,
+ * 예전 사본에서 가져올 때 "선생님이 고친 칸"으로 잘못 보고 새 문구를 덮어쓰지 않는다.
+ */
+var OLD_PRESET_TEXTS = [];
+
+/* ------------------------------------------------------------ 버전 */
+/** 'v3.8.2' → [3, 8, 2] (모르는 글자는 0) */
+function versionParts(v) {
+  var m = String(v || '').match(/(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
+  return m ? [Number(m[1]), Number(m[2] || 0), Number(m[3] || 0)] : [0, 0, 0];
+}
+
+/** a 가 b 보다 새로우면 1, 같으면 0, 오래되면 -1 */
+function compareVersions(a, b) {
+  var x = versionParts(a), y = versionParts(b);
+  for (var i = 0; i < 3; i++) { if (x[i] !== y[i]) return x[i] > y[i] ? 1 : -1; }
+  return 0;
+}
+
+/** version.json 글 → {version, date, copyUrl, title, notes[]} (모양이 이상하면 null) */
+function parseVersionInfo(text) {
+  var o;
+  try { o = typeof text === 'string' ? JSON.parse(text) : text; } catch (e) { return null; }
+  if (!o || !/\d+\.\d+/.test(String(o.version || ''))) return null;
+  var url = String(o.copyUrl || '');
+  if (!/^https:\/\/docs\.google\.com\/spreadsheets\/d\/[\w-]{20,}\/copy/.test(url)) url = MASTER_COPY_URL;
+  return {
+    version: 'v' + versionParts(o.version).join('.'),
+    date: String(o.date || ''),
+    title: String(o.title || ''),
+    copyUrl: url,
+    notes: (Array.isArray(o.notes) ? o.notes : []).map(String).filter(function (s) { return s.trim(); }).slice(0, 12)
+  };
+}
+
+/** 지금 판과 최신 판 비교 → {available, current, latest, ...} */
+function updateState(current, info) {
+  if (!info) return { available: false, current: current, latest: '', notes: [], copyUrl: MASTER_COPY_URL };
+  return { available: compareVersions(info.version, current) > 0, current: current, latest: info.version,
+           date: info.date, title: info.title, notes: info.notes, copyUrl: info.copyUrl };
+}
+
+/** 스프레드시트 링크(또는 ID)에서 파일 ID */
+function spreadsheetIdIn(text) {
+  var t = String(text || '').trim();
+  var m = t.match(/\/spreadsheets\/(?:u\/\d+\/)?d\/([\w-]{20,})/) || t.match(/[?&]id=([\w-]{20,})/);
+  if (m) return m[1];
+  return /^[\w-]{25,}$/.test(t) ? t : '';
+}
+
+/* ------------------------------------------------------- xlsx 읽기 */
+function xmlUnescape(s) {
+  return String(s).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, function (m, h) { return String.fromCodePoint(parseInt(h, 16)); })
+    .replace(/&#(\d+);/g, function (m, d) { return String.fromCodePoint(Number(d)); })
+    .replace(/&amp;/g, '&');
+}
+
+/** <t> 조각을 모두 이어 붙인 글 (서식 있는 글자 run 포함) */
+function xmlTexts_(xml) {
+  var out = '', re = /<t(?:\s[^>]*)?>([\s\S]*?)<\/t>|<t(?:\s[^>]*)?\/>/g, m;
+  while ((m = re.exec(xml))) out += m[1] ? xmlUnescape(m[1]) : '';
+  return out;
+}
+
+/** 'AB12' → 열 번호(0부터) */
+function colIndexOf(ref) {
+  var letters = String(ref || '').replace(/[^A-Z]/gi, '').toUpperCase(), n = 0;
+  for (var i = 0; i < letters.length; i++) n = n * 26 + (letters.charCodeAt(i) - 64);
+  return n - 1;
+}
+
+function parseSharedStrings(xml) {
+  var out = [], re = /<si>([\s\S]*?)<\/si>|<si\/>/g, m;
+  while ((m = re.exec(String(xml || '')))) out.push(m[1] ? xmlTexts_(m[1]) : '');
+  return out;
+}
+
+/** 시트 XML → 행 배열(1행이 [0]). 빈 칸은 '' */
+function parseSheetXml(xml, shared) {
+  var rows = [], width = 0;
+  var rowRe = /<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g, rm;
+  while ((rm = rowRe.exec(String(xml || '')))) {
+    var rAttr = (rm[1].match(/\br="(\d+)"/) || [])[1];
+    var ri = rAttr ? Number(rAttr) - 1 : rows.length;
+    var row = [];
+    var cellRe = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g, cm, ci = 0;
+    while ((cm = cellRe.exec(rm[2] || ''))) {
+      var attr = cm[1], body = cm[2] || '';
+      var ref = (attr.match(/\br="([A-Z]+)\d*"/i) || [])[1];
+      if (ref) ci = colIndexOf(ref);
+      var t = (attr.match(/\bt="(\w+)"/) || [])[1] || 'n';
+      var vm = body.match(/<v>([\s\S]*?)<\/v>/);
+      var raw = vm ? xmlUnescape(vm[1]) : '';
+      var val;
+      if (t === 's') val = (shared || [])[Number(raw)] || '';
+      else if (t === 'inlineStr') val = xmlTexts_(body);
+      else if (t === 'b') val = raw === '1';
+      else if (t === 'str' || t === 'e') val = raw;
+      else val = raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw));
+      while (row.length < ci) row.push('');
+      row[ci] = val;
+      ci++;
+    }
+    while (rows.length < ri) rows.push([]);
+    rows[ri] = row;
+    if (row.length > width) width = row.length;
+  }
+  return rows.map(function (r) { while (r.length < width) r.push(''); return r; });
+}
+
+/** zip 안 파일들 {경로: XML} → {시트 이름: 행 배열} */
+function readXlsxParts(parts) {
+  var p = {};
+  Object.keys(parts || {}).forEach(function (k) { p[String(k).replace(/^\/+/, '')] = parts[k]; });
+  var wb = p['xl/workbook.xml'];
+  if (!wb) throw new Error('엑셀 파일 모양이 아닙니다(workbook.xml 없음).');
+  var rels = {}, rm, relRe = /<Relationship\b([^>]*)\/?>/g;
+  while ((rm = relRe.exec(p['xl/_rels/workbook.xml.rels'] || ''))) {
+    var id = (rm[1].match(/\bId="([^"]+)"/) || [])[1], target = (rm[1].match(/\bTarget="([^"]+)"/) || [])[1];
+    if (id && target) rels[id] = target.charAt(0) === '/' ? target.slice(1) : 'xl/' + target.replace(/^\.\//, '');
+  }
+  var shared = parseSharedStrings(p['xl/sharedStrings.xml'] || '');
+  var out = {}, sm, shRe = /<sheet\b([^>]*)\/?>/g, n = 0;
+  while ((sm = shRe.exec(wb))) {
+    n++;
+    var name = xmlUnescape((sm[1].match(/\bname="([^"]*)"/) || [])[1] || ('Sheet' + n));
+    var rid = (sm[1].match(/\br:id="([^"]+)"/) || sm[1].match(/\bid="([^"]+)"/) || [])[1];
+    var path = rels[rid] || ('xl/worksheets/sheet' + n + '.xml');
+    out[name] = parseSheetXml(p[path] || '', shared);
+  }
+  return out;
+}
+
+/* ------------------------------------------------------- 표 다루기 */
+/** 행 배열에서 headRow(0부터) 를 머리글로 → {head:[], rows:[{머리글:값, __i}]} (빈 줄 제외) */
+function tableOf(rows, headRow) {
+  var head = ((rows || [])[headRow] || []).map(function (h) { return String(h).trim(); });
+  var out = [];
+  for (var i = headRow + 1; i < (rows || []).length; i++) {
+    var r = rows[i] || [], o = { __i: i }, empty = true;
+    head.forEach(function (h, c) {
+      if (!h) return;
+      var v = r[c] === undefined ? '' : r[c];
+      o[h] = v;
+      if (v !== '' && v !== false && v !== null) empty = false;
+    });
+    if (!empty) out.push(o);
+  }
+  return { head: head, rows: out };
+}
+
+/** 같은 글인지 (줄바꿈·공백 차이 무시) */
+function sameText_(a, b) { return String(a === null || a === undefined ? '' : a).replace(/\s+/g, ' ').trim() === String(b === null || b === undefined ? '' : b).replace(/\s+/g, ' ').trim(); }
+
+/**
+ * 키로 맞춰 보는 표 합치기 — [🧩 기록종류]·[📚 교과영역]·[📐 공통규칙]·[⚙️ 설정] 공용.
+ *   · 예전에만 있는 키 → 새 줄(append)
+ *   · 둘 다 있는 키 → 예전 값이 기본값과 다르고(선생님이 고침) 지금 값은 아직 기본값이면 예전 값으로(update)
+ *     예전 값이 OLD_PRESET_TEXTS(옛 기본 문구)면 고친 것으로 보지 않는다.
+ * @param {Array<Object>} oldRows  예전 표 줄
+ * @param {Array<Object>} curRows  지금 표 줄
+ * @param {Object} presets  {키: {열: 기본값}} — 없으면 지금 값을 기본값으로 본다
+ * @param {string} keyCol  @param {string[]} cols 옮길 열
+ * @return {{appends:Array<Object>, updates:Array<{key:string, col:string, value:*}>}}
+ */
+function mergeKeyed(oldRows, curRows, presets, keyCol, cols) {
+  var cur = {}, out = { appends: [], updates: [] };
+  (curRows || []).forEach(function (r) { var k = String(r[keyCol] || '').trim(); if (k) cur[k] = r; });
+  var seen = {};
+  (oldRows || []).forEach(function (r) {
+    var k = String(r[keyCol] || '').trim();
+    if (!k || seen[k]) return;
+    seen[k] = 1;
+    if (!cur[k]) { out.appends.push(r); return; }
+    var pre = (presets || {})[k];
+    cols.forEach(function (c) {
+      if (!r.hasOwnProperty(c) || !cur[k].hasOwnProperty(c)) return;
+      var ov = r[c], cv = cur[k][c];
+      if (sameText_(ov, cv)) return;
+      var base = pre && pre.hasOwnProperty(c) ? pre[c] : undefined;
+      if (base === undefined) {                                // 기본값을 모르면: 지금 칸이 비었을 때만 채운다
+        if (String(cv === null || cv === undefined ? '' : cv).trim() === '') out.updates.push({ key: k, col: c, value: ov });
+        return;
+      }
+      if (sameText_(ov, base)) return;                         // 예전 것은 손대지 않은 기본값
+      if (OLD_PRESET_TEXTS.some(function (t) { return sameText_(t, ov); })) return;
+      if (!sameText_(cv, base)) return;                        // 새 파일에서 이미 고친 칸
+      out.updates.push({ key: k, col: c, value: ov });
+    });
+  });
+  return out;
+}
+
+/** 학생 줄 열쇠 — "A열-번호" (활동·취합 시트 공용) */
+function studentKeyOf(row, head) {
+  var a = row[head[0]], no = row['번호'];
+  return String(a === undefined ? '' : a).trim() + '-' + String(no === undefined ? '' : no).trim();
+}
+
+/**
+ * 예전 사본의 활동 한 줄 → createActivity_ 에 넘길 정의.
+ * @param {Object} row  [🗂 활동목록] 한 줄
+ * @param {Array<Array>} exRows  예전 예시 시트(행 배열) 또는 null
+ */
+function activityDefFromOld(row, exRows) {
+  var cols = String(row['입력 항목'] || '').split(/\s*[|,]\s*/).map(function (s) { return s.trim(); }).filter(String);
+  var mode = String(row['프롬프트 모드'] || '자동').trim() || '자동';
+  var bytes = Number(row['바이트 한도'] || 0) || (Number(row['글자수'] || 0) * 3) || 0;
+  var examples = [];
+  if (exRows) {
+    var t = tableOf(exRows, 2);
+    t.rows.forEach(function (r) {
+      var values = cols.map(function (c) { return String(r.hasOwnProperty(c) ? r[c] : '').trim(); });
+      var result = String(r['결과'] || '').trim();
+      if (result || values.some(String)) examples.push({ values: values, result: result });
+    });
+  }
+  return {
+    key: String(row['활동키'] || '').trim(), name: String(row['활동명'] || row['활동키'] || '').trim(),
+    recordKey: String(row['기록종류'] || '').trim(), subjectKey: String(row['교과영역'] || '').trim(),
+    bytes: bytes, columns: cols, desc: String(row['활동 개요'] || ''),
+    mode: mode, custom: String(row['직접 작성 프롬프트'] || ''),
+    inSheet: String(row['입력 시트'] || '').trim(), exSheet: String(row['예시 시트'] || '').trim(),
+    examples: examples
+  };
+}
+
+/**
+ * 예전 시트의 학생 줄 → 새 시트 머리글 순서의 줄. 수식으로 채우는 열(바이트·합본 바이트)은 비운다.
+ * @param {Array<Array>} oldRows 예전 시트(행 배열)  @param {string[]} newHead 새 시트 머리글
+ * @param {number} headRow 머리글 행(0부터)
+ * @return {Array<Array>}
+ */
+function remapStudentRows(oldRows, newHead, headRow) {
+  var t = tableOf(oldRows, headRow);
+  var skip = ['바이트'];
+  var aliases = { '반': ['학년-반'], '학년-반': ['반'] };
+  return t.rows.filter(function (r) {
+    var a = r[t.head[0]], nm = r['이름'];
+    return String(a === undefined ? '' : a).trim() !== '' || String(nm === undefined ? '' : nm).trim() !== '';
+  }).map(function (r) {
+    return newHead.map(function (h, i) {
+      if (skip.indexOf(h) >= 0) return '';
+      if (i === 0) return r[t.head[0]];
+      if (r.hasOwnProperty(h)) return r[h];
+      var al = (aliases[h] || []).filter(function (x) { return r.hasOwnProperty(x); })[0];
+      return al ? r[al] : (h === '생성' || h === '압축' ? false : '');
+    });
+  });
+}
+
+/** 가져오기 결과 → 사람이 읽는 줄들 */
+function importReportLines(rep) {
+  var L = [];
+  if (rep.roster) L.push('👤 학생 ' + rep.roster + '명');
+  if (rep.activities.length) L.push('🗂 활동 ' + rep.activities.length + '개 — ' + rep.activities.map(function (a) {
+    return a.name + '(학생 ' + a.rows + '줄' + (a.examples ? ' · 예시 ' + a.examples + '편' : '') + ')';
+  }).join(', '));
+  if (rep.compile.length) L.push('📦 최종취합 ' + rep.compile.join(', ') + ' — 다듬어 둔 [최종본] 포함');
+  if (rep.style) L.push('✒️ 내 문체 ' + rep.style + '편');
+  if (rep.settings.length) L.push('⚙️ 설정 ' + rep.settings.length + '개 — ' + rep.settings.join(', '));
+  if (rep.models) L.push('🤖 모델 목록에 직접 넣은 모델 ' + rep.models + '개');
+  if (rep.records.length) L.push('🧩 기록종류 ' + rep.records.join(', '));
+  if (rep.subjects.length) L.push('📚 교과영역 ' + rep.subjects.join(', '));
+  if (rep.common.length) L.push('📐 공통규칙 ' + rep.common.join(', '));
+  if (rep.rules) L.push('📏 우리 학교 규칙 ' + rep.rules + '줄');
+  if (rep.extra.length) L.push('📄 그 밖의 시트(값만) ' + rep.extra.join(', '));
+  return L;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    UPDATE_URL: UPDATE_URL, MASTER_COPY_URL: MASTER_COPY_URL, versionParts: versionParts, compareVersions: compareVersions,
+    parseVersionInfo: parseVersionInfo, updateState: updateState, spreadsheetIdIn: spreadsheetIdIn,
+    xmlUnescape: xmlUnescape, colIndexOf: colIndexOf, parseSharedStrings: parseSharedStrings, parseSheetXml: parseSheetXml,
+    readXlsxParts: readXlsxParts, tableOf: tableOf, mergeKeyed: mergeKeyed, studentKeyOf: studentKeyOf,
+    activityDefFromOld: activityDefFromOld, remapStudentRows: remapStudentRows, importReportLines: importReportLines
   };
 }
 
@@ -2728,7 +3029,9 @@ function onOpen() {
     .addItem('② AI 연결 · 모델 설정', 'openApiDialog')
     .addItem('   모델 연결 테스트', 'testAllModels')
     .addItem('③ 학생 명단 불러오기 (엑셀·붙여넣기)', 'openRosterDialog')
-    .addItem('   학생 명단 동기화', 'syncRoster'));
+    .addItem('   학생 명단 동기화', 'syncRoster')
+    .addSeparator()
+    .addItem('📥 이전 파일에서 가져오기 (새 버전으로 옮길 때)', 'openImportDialog'));
   m.addSubMenu(ui.createMenu('④⑤ 활동 · 예시 · 보고서')
     .addItem('④ 활동 만들기 · 입력 항목 바꾸기 ★', 'openWizard')
     .addItem('📚 새 교과 만들기 (교과 역량 · 입력 항목 초안)', 'openSubjectDialog')
@@ -2765,6 +3068,8 @@ function onOpen() {
     .addItem('📏 기재요령 규칙 보기 · 고치기', 'openRulesSheet')
     .addItem('   기재요령 규칙 업데이트 확인', 'checkRulesUpdate'));
   m.addSubMenu(ui.createMenu('도움말 · 부가 기능')
+    .addItem('🔄 새 버전 확인 · 이전 파일에서 가져오기', 'openUpdateDialog')
+    .addSeparator()
     .addItem('📄 스캔 문서 → 엑셀 사용 설명서 (업무 대시보드)', 'openOcrGuide')
     .addItem('📖 사용법 시트 열기', 'openHelpSheet')
     .addSeparator()
@@ -3164,6 +3469,7 @@ function isOnboardDone_() {
 
 function openOnboard() {
   try { if (sh_(APP.SH.RULES)) autoRulesCheck_(); } catch (e) {}
+  try { autoUpdateCheck_(); } catch (e) {}
   var html = HtmlService.createHtmlOutputFromFile('UI_Onboard')
     .setWidth(660).setHeight(720);
   ui_().showModelessDialog(html, '시작하기 — ' + APP.MENU);
@@ -3181,8 +3487,11 @@ function onboardStatus() {
     rosterCount: 0, activities: [], exampleCount: 0, done: isOnboardDone_(),
     models: [], defaultModel: '', compileModel: '',
     providerDefaults: PROVIDER_DEFAULT_MODEL, presets: presetModelRows_(), links: MODEL_LINKS,
-    manual: false, manualModel: MANUAL_MODEL, account: accountInfo_(), aiNotice: AI_NOTICE_2026
+    manual: false, manualModel: MANUAL_MODEL, account: accountInfo_(), aiNotice: AI_NOTICE_2026,
+    version: APP.VERSION, update: null, imported: false
   };
+  try { st.update = updateState(APP.VERSION, cachedVersionInfo_()); } catch (e) {}
+  try { st.imported = !!PropertiesService.getDocumentProperties().getProperty('IMPORTED_FROM'); } catch (e) {}
   try { st.manual = manualOn_(); } catch (e) {}
   try {
     st.installed = !!(sh_(APP.SH.CONFIG) && sh_(APP.SH.RECORD) && sh_(APP.SH.ACTIVITY) && sh_(APP.SH.ROSTER));
@@ -3527,6 +3836,7 @@ function buildStart() {
 
   H('2단계.  위 초록 버튼 [▶ 시작하기] 를 누르세요');
   P('또는 상단 메뉴  [' + APP.MENU + ']  >  [🚀 시작하기].  팝업이 순서대로 안내합니다. 중간에 닫아도 다시 누르면 이어서 진행됩니다.');
+  P('예전에 쓰던 세특 도우미 파일이 있다면: 시작하기 1단계의 [📥 이전 파일에서 가져오기]에 예전 파일 링크를 붙여 넣으면 학생명단 · 활동 · 결과가 그대로 옮겨집니다.');
   P('');
 
   H('⚠️ 처음 한 번만 — 권한 승인 화면 넘는 법');
@@ -3538,10 +3848,11 @@ function buildStart() {
   P('이 경고는 개인이 만든 스크립트라서 뜨는 것입니다. 코드는 이 파일 안에 그대로 있고 [확장 프로그램] > [Apps Script] 에서 볼 수 있습니다.');
   P('');
 
-  H('API 키가 없어도 됩니다 — 세 가지 방법 중 하나');
-  P('①  키 없이 (복사·붙여넣기) — 처음이라면 이것부터.  시트가 요청문을 만들어 주면 Gemini 앱(gemini.google.com)에 붙여 넣고, 받은 답을 다시 붙여 넣습니다.');
+  H('AI 연결 — API 키가 있으면 ①, 없으면 ②');
+  P('①  API 키가 있다면 — 생성 · 검사가 버튼 한 번.  Gemini 키는 aistudio.google.com/apikey 에서 1분이면 무료로 받습니다(OpenAI · Claude 키도 됩니다).');
+  P('     무료 등급은 보낸 내용이 서비스 개선에 쓰일 수 있어, 학생 자료는 결제를 켠 키를 권합니다. 키는 이 파일이 아니라 내 구글 계정에 저장됩니다.');
+  P('②  키가 없다면 — 복사 · 붙여넣기.  시트가 요청문을 만들어 주면 Gemini 앱(gemini.google.com)에 붙여 넣고, 받은 답을 다시 붙여 넣습니다.');
   P('     학교 구글 계정으로 Gemini 앱에 들어가면 무료이고 입력 내용이 AI 학습에 쓰이지 않습니다(학교에서 Gemini를 켜 두었을 때). 학생 이름은 보내지 않습니다.');
-  P('②  Gemini API 키 — 생성 · 검사가 버튼 한 번.  aistudio.google.com/apikey 에서 무료 발급. 무료 등급은 보낸 내용이 서비스 개선에 쓰일 수 있어, 학생 자료는 결제를 켠 키를 권합니다.');
   P('③  Gemini 구독(=AI 함수) — 학교에 Google AI Pro for Education 이 있거나 개인 Google AI Pro·Ultra 일 때.  무료 학교 계정(Education Fundamentals)에는 아직 없습니다.');
   P('     확인법: 시작하기 2단계 [구독으로]에서 [구독 확인하기] — 시험 셀을 만들어 [생성 및 삽입]이 되는지 봅니다.');
   P('');
@@ -3565,6 +3876,7 @@ function buildStart() {
   P('· 학생 이름은 기본적으로 AI에 전송되지 않습니다. 주민등록번호, 가정환경, 건강 정보 같은 민감정보는 입력하지 마세요.');
   P('· AI가 쓴 문장을 그대로 기재하지 마세요. 교사가 직접 관찰·평가한 내용을 바탕으로 고쳐 쓰고, 최종 문장의 책임은 작성한 교사에게 있습니다.');
   P('· 학교·교육청의 생성형 AI 활용 지침을 먼저 확인하세요. 시도교육청마다 다릅니다.');
+  P('· 새 버전이 나오면 시작하기 창에 알림이 뜹니다. 메뉴 [도움말 · 부가 기능] > [🔄 새 버전 확인 · 이전 파일에서 가져오기] 에서 새 사본을 받고 예전 자료를 옮기세요(예전 파일은 그대로 남습니다).');
   P('');
 
   H('함께 쓰면 좋은 도구');
@@ -3607,6 +3919,430 @@ function placeStartButtons_(s, btnRows) {
     img.setWidth(380).setHeight(52);
     img.assignScript(b.fn);
     try { img.setAltTextTitle(b.alt).setAltTextDescription('누르면 ' + b.alt + ' 창이 열립니다'); } catch (e) {}
+  });
+}
+
+
+/* ==========================================================================
+   34_Update.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 🔄 새 버전 알림 · 이전 파일에서 가져오기
+ *
+ * 사본은 만든 날의 코드로 굳는다(CLAUDE.md "알려진 한계"). 그래서 업데이트는
+ *   ① 새 버전이 나온 걸 알린다 — version.json(만든이의 GitHub)을 하루 한 번 읽는다
+ *   ② 선생님이 /copy 링크로 새 사본을 만든다
+ *   ③ 새 사본에서 [이전 파일에서 가져오기]에 예전 파일 링크를 붙여 넣으면 자료를 옮겨 온다
+ * 의 세 걸음이다. 예전 파일은 지우지 않으므로 잘못 옮겨져도 되돌릴 수 있다.
+ * 읽기는 xlsx 내보내기(drive.readonly) + 15_Update.gs 의 readXlsxParts — 새 권한이 필요 없다.
+ */
+
+var UPDATE_PROP_AT = 'UPDATE_CHECKED_AT';
+var UPDATE_PROP_INFO = 'UPDATE_INFO';
+var UPDATE_CHECK_HOURS = 24;
+
+/* ---------------------------------------------------------- 새 버전 */
+/** version.json 받기 → info 또는 null (조용히 실패) */
+function fetchVersionInfo_() {
+  try {
+    var res = UrlFetchApp.fetch(UPDATE_URL + '?t=' + Date.now(), { muteHttpExceptions: true, followRedirects: true });
+    if (res.getResponseCode() !== 200) return null;
+    var info = parseVersionInfo(res.getContentText());
+    if (info) { try { PropertiesService.getDocumentProperties().setProperty(UPDATE_PROP_INFO, JSON.stringify(info)); } catch (e) {} }
+    return info;
+  } catch (e) { return null; }
+}
+
+/** 마지막으로 받아 둔 정보(네트워크 없이) */
+function cachedVersionInfo_() {
+  try { return parseVersionInfo(PropertiesService.getDocumentProperties().getProperty(UPDATE_PROP_INFO) || ''); } catch (e) { return null; }
+}
+
+/** 지금 상태 — force 면 바로 받아 온다 */
+function updateStatus(force) {
+  var info = force ? (fetchVersionInfo_() || cachedVersionInfo_()) : cachedVersionInfo_();
+  var st = updateState(APP.VERSION, info);
+  st.checked = !!info;
+  st.fileUrl = '';
+  try { st.fileUrl = ss_().getUrl(); } catch (e) {}
+  return st;
+}
+
+/**
+ * 하루 한 번 저절로 확인(시작하기 창 · 생성 · 검사 때). 새 버전이면 토스트 한 번.
+ * 알림은 판마다 한 번만 — 같은 판을 계속 알리지 않는다.
+ */
+function autoUpdateCheck_() {
+  try {
+    var dp = PropertiesService.getDocumentProperties();
+    var at = Number(dp.getProperty(UPDATE_PROP_AT) || 0);
+    if (Date.now() - at < UPDATE_CHECK_HOURS * 3600000) return null;
+    dp.setProperty(UPDATE_PROP_AT, String(Date.now()));
+    var st = updateState(APP.VERSION, fetchVersionInfo_());
+    if (st.available && dp.getProperty('UPDATE_TOLD') !== st.latest) {
+      dp.setProperty('UPDATE_TOLD', st.latest);
+      toast_('새 버전 ' + st.latest + ' 이(가) 나왔습니다. 메뉴 [도움말 · 부가 기능] > [🔄 새 버전 확인 · 이전 파일에서 가져오기]', APP.MENU);
+    }
+    return st;
+  } catch (e) { return null; }
+}
+
+/** 메뉴: 창 열기. tab = 'version' | 'import' */
+function openUpdateDialog(tab) {
+  var t = HtmlService.createTemplateFromFile('UI_Update');
+  t.tab = tab === 'import' ? 'import' : 'version';
+  ui_().showModalDialog(t.evaluate().setWidth(700).setHeight(680), '🔄 새 버전 · 이전 파일에서 가져오기');
+}
+function openImportDialog() { openUpdateDialog('import'); }
+
+/* ------------------------------------------------- 예전 파일 읽기 */
+/**
+ * 예전 사본을 xlsx 로 내려받아 {시트 이름: 행 배열}.
+ * docs 내보내기 주소를 먼저(드라이브 API 를 켜지 않아도 됨), 안 되면 Drive API 내보내기.
+ */
+function readOldBook_(id) {
+  var token = ScriptApp.getOAuthToken();
+  var urls = [
+    'https://docs.google.com/spreadsheets/d/' + encodeURIComponent(id) + '/export?format=xlsx',
+    'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) +
+      '/export?mimeType=' + encodeURIComponent('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  ];
+  var lastCode = 0;
+  for (var i = 0; i < urls.length; i++) {
+    var res = UrlFetchApp.fetch(urls[i], { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true, followRedirects: true });
+    lastCode = res.getResponseCode();
+    if (lastCode !== 200) continue;
+    var blob = res.getBlob();
+    var parts = {};
+    try {
+      Utilities.unzip(blob.setContentType('application/zip')).forEach(function (b) {
+        if (/\.(xml|rels)$/.test(b.getName())) parts[b.getName()] = b.getDataAsString('UTF-8');
+      });
+    } catch (e) { continue; }
+    if (parts['xl/workbook.xml'] || parts['/xl/workbook.xml']) return readXlsxParts(parts);
+  }
+  if (lastCode === 404 || lastCode === 403 || lastCode === 401) {
+    throw new Error('그 파일을 열 수 없습니다. 지금 로그인한 계정의 파일인지, 링크가 맞는지 확인해 주세요. (' + lastCode + ')');
+  }
+  throw new Error('예전 파일을 내려받지 못했습니다' + (lastCode ? ' (' + lastCode + ')' : '') + '. 잠시 뒤 다시 해 보세요.');
+}
+
+/** 세특 도우미 파일인지 확인하고 요약 */
+function summarizeOldBook_(book) {
+  var A = APP.SH;
+  if (!book[A.ACTIVITY] && !book[A.CONFIG]) {
+    throw new Error('세특 작성 도우미 파일이 아닌 것 같습니다([🗂 활동목록]·[⚙️ 설정] 시트가 없음). 예전에 쓰던 세특 도우미 파일의 링크를 붙여 넣어 주세요.');
+  }
+  var ver = '';
+  var cfg = book[A.CONFIG] || [];
+  var m = String((cfg[0] || [])[0] || '').match(/v\d+\.\d+(?:\.\d+)?/);
+  if (m) ver = m[0];
+  var start = book[A.START] || [];
+  if (!ver) { var m2 = String((start[0] || [])[0] || '').match(/v\d+\.\d+(?:\.\d+)?/); if (m2) ver = m2[0]; }
+  var acts = book[A.ACTIVITY] ? tableOf(book[A.ACTIVITY], 1).rows.filter(function (r) { return String(r['활동키'] || '').trim(); }) : [];
+  var roster = book[A.ROSTER] ? tableOf(book[A.ROSTER], 1).rows.filter(function (r) { return String(r['이름'] || '').trim() || String(r['번호'] || '').trim(); }) : [];
+  var style = book[A.STYLE] ? tableOf(book[A.STYLE], 2).rows.filter(function (r) { return String(r[STYLE_HEAD[1]] || '').trim(); }).length : 0;
+  return { version: ver, activities: acts.map(function (a) { return String(a['활동명'] || a['활동키']); }),
+           roster: roster.length, style: style, sheets: Object.keys(book).length };
+}
+
+/** 창: 링크를 읽어 무엇이 옮겨질지 보여 준다(아무것도 바꾸지 않음) */
+function importPreview(url) {
+  var id = spreadsheetIdIn(url);
+  if (!id) throw new Error('구글 시트 링크를 붙여 넣어 주세요. (https://docs.google.com/spreadsheets/d/… )');
+  if (id === ss_().getId()) throw new Error('지금 열려 있는 이 파일의 링크입니다. 예전에 쓰던 다른 파일의 링크를 붙여 넣어 주세요.');
+  var sum = summarizeOldBook_(readOldBook_(id));
+  var mine = 0;
+  try { mine = getActivities_().length; } catch (e) {}
+  sum.current = APP.VERSION;
+  sum.currentActivities = mine;
+  return sum;
+}
+
+/* ------------------------------------------------------- 가져오기 */
+/**
+ * 예전 사본의 자료를 이 파일로 옮긴다. 여러 번 눌러도 이미 있는 활동은 건너뛴다.
+ * @param {string} url  예전 파일 링크
+ * @return {{lines:string[], notes:string[], report:Object}}
+ */
+function importFromOld(url) {
+  var id = spreadsheetIdIn(url);
+  if (!id) throw new Error('구글 시트 링크를 붙여 넣어 주세요.');
+  if (id === ss_().getId()) throw new Error('지금 열려 있는 이 파일의 링크입니다.');
+  var book = readOldBook_(id);
+  summarizeOldBook_(book);
+
+  var lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30000)) throw new Error('다른 작업이 실행 중입니다. 잠시 후 다시 시도하세요.');
+  var rep = { roster: 0, activities: [], skipped: [], compile: [], style: 0, settings: [], models: 0,
+              records: [], subjects: [], common: [], rules: 0, extra: [], failed: [] };
+  var step = function (label, fn) { try { fn(); } catch (e) { rep.failed.push(label + ' — ' + e.message); } };
+  try {
+    if (!sh_(APP.SH.ACTIVITY) || !sh_(APP.SH.RECORD) || !sh_(APP.SH.ROSTER)) {
+      lock.releaseLock();
+      installCore_();
+      if (!lock.tryLock(30000)) throw new Error('다른 작업이 실행 중입니다.');
+    }
+    step('⚙️ 설정', function () { importConfig_(book, rep); });
+    step('🧩 기록종류', function () { importKeyed_(book, APP.SH.RECORD, rep.records, PRESET_RECORD_TYPES,
+      { '키': 'key', '기록 항목명': 'name', '성취수준 사용': 'useGrade', '역할': 'role', '목표': 'goal', '서술 관점': 'view', '비고': 'note' }); });
+    step('📚 교과영역', function () { importKeyed_(book, APP.SH.SUBJECT, rep.subjects, PRESET_SUBJECTS,
+      { '키': 'key', '표시명': 'name', '분류': 'kind', '역할 표현': 'role', '역량·서술 관점': 'comp' }); });
+    step('📐 공통규칙', function () { importKeyed_(book, APP.SH.COMMON, rep.common, PRESET_COMMON,
+      { '키': 'key', '제목': 'title', '내용': 'body' }, ['NEIS_RULES']); });
+    step('👤 학생명단', function () { importRoster_(book, rep); });
+    step('🗂 활동', function () { importActivities_(book, rep); });
+    step('📦 최종취합', function () { importCompile_(book, rep); });
+    step('✒️ 내 문체', function () { importStyle_(book, rep); });
+    step('📏 우리 학교 규칙', function () { importRules_(book, rep); });
+    step('그 밖의 시트', function () { importExtraSheets_(book, rep); });
+    try { refreshActivityValidation_(); } catch (e) {}
+    try { refreshModelDropdowns_(); } catch (e) {}
+    try { orderSheets_(); } catch (e) {}
+  } finally { lock.releaseLock(); }
+
+  var notes = [];
+  var hasKey = PROVIDERS.some(function (p) { return !!getKey_(p); });
+  if (!hasKey) notes.push('API 키는 파일이 아니라 계정에 저장되어 새 파일로 따라오지 않습니다. 키를 쓰셨다면 메뉴 ② [AI 연결 · 모델 설정]에서 한 번 더 넣어 주세요.');
+  var oldForms = Object.keys(book).some(function (n) { return /설문|응답|Form Responses/i.test(n); });
+  if (oldForms) notes.push('구글 설문지 연결과 자동 생성 켜기는 파일마다 따로라 옮겨지지 않습니다. 쓰셨다면 이 파일에서 한 번 더 연결해 주세요.');
+  if (rep.skipped.length) notes.push('이미 같은 이름이 있어 건너뛴 활동: ' + rep.skipped.join(', '));
+  notes.push('예전 파일은 그대로 있습니다. 잘 옮겨졌는지 확인한 뒤 필요 없으면 지우셔도 됩니다.');
+  try { PropertiesService.getDocumentProperties().setProperty('IMPORTED_FROM', id); } catch (e) {}
+  return { lines: importReportLines(rep), notes: notes, failed: rep.failed, report: rep };
+}
+
+/** [⚙️ 설정] 값(항목 줄)과 모델 목록에 직접 더한 모델 */
+function importConfig_(book, rep) {
+  var old = book[APP.SH.CONFIG];
+  var s = sh_(APP.SH.CONFIG);
+  if (!old || !s) return;
+  var cur = {};
+  var head = modelTableRow_(s);
+  var lastSet = head ? head - 1 : s.getLastRow();
+  if (lastSet >= 4) s.getRange(4, 1, lastSet - 3, 2).getValues().forEach(function (r) { var k = String(r[0]).trim(); if (k) cur[k] = r[1]; });
+  var oldHead = -1;
+  for (var i = 0; i < old.length; i++) {
+    if (String((old[i] || [])[0]).trim() === MODEL_HEAD[0] && String((old[i] || [])[1]).trim() === MODEL_HEAD[1]) { oldHead = i; break; }
+  }
+  var end = oldHead >= 0 ? oldHead : old.length;
+  for (var r = 3; r < end; r++) {
+    var k = String((old[r] || [])[0] || '').trim(), v = (old[r] || [])[1];
+    if (!k || !cur.hasOwnProperty(k) || v === '' || v === null || v === undefined) continue;
+    if (sameText_(v, cur[k])) continue;
+    setCfg_(k, v);
+    rep.settings.push(k);
+  }
+  // 모델 목록 — 예전에 직접 적어 넣은 모델만 더한다(연결 확인 표시는 새로)
+  if (oldHead >= 0 && head) {
+    var have = readModelRowsAt_(s, head);
+    var names = have.map(function (x) { return x.model; });
+    var add = [];
+    tableOf(old, oldHead).rows.forEach(function (row) {
+      var m = normModel(row[MODEL_HEAD[0]]);
+      if (!m || names.indexOf(m) >= 0 || m === MANUAL_MODEL || m === SUBSCRIPTION_MODEL) return;
+      names.push(m);
+      add.push({ model: m, level: String(row['수준'] || ''), memo: String(row['언제 쓰나'] || ''), company: String(row['회사'] || '자동') || '자동', status: '' });
+    });
+    if (add.length) { writeModelTable_(s, head, have.concat(add)); rep.models = add.length; }
+  }
+}
+
+/**
+ * 키 열이 있는 표 하나 합치기 — 예전에만 있는 줄은 맨 아래에, 고쳐 쓴 칸은 (새 파일이 아직 기본값이면) 예전 값으로.
+ * @param {Object} fieldOf  {머리글: 프리셋 필드}
+ * @param {string[]=} skipKeys  규칙판이 관리하는 줄(옮기지 않음)
+ */
+function importKeyed_(book, name, out, presetList, fieldOf, skipKeys) {
+  var old = book[name], s = sh_(name);
+  if (!old || !s) return;
+  var curT = tableOf(s.getRange(1, 1, Math.max(s.getLastRow(), 2), Math.max(s.getLastColumn(), 1)).getValues(), 1);
+  var oldT = tableOf(old, 1);
+  var presets = {};
+  (presetList || []).forEach(function (p) {
+    var o = {};
+    Object.keys(fieldOf).forEach(function (h) { if (p.hasOwnProperty(fieldOf[h])) o[h] = p[fieldOf[h]]; });
+    presets[p.key] = o;
+  });
+  var cols = Object.keys(fieldOf).filter(function (h) { return h !== '키'; });
+  var oldRows = oldT.rows.filter(function (r) { return (skipKeys || []).indexOf(String(r['키']).trim()) < 0; });
+  var plan = mergeKeyed(oldRows, curT.rows, presets, '키', cols);
+  var head = curT.head;
+  plan.updates.forEach(function (u) {
+    var row = curT.rows.filter(function (r) { return String(r['키']).trim() === u.key; })[0];
+    var c = head.indexOf(u.col);
+    if (row && c >= 0) { s.getRange(row.__i + 1, c + 1).setValue(u.value); if (out.indexOf(u.key) < 0) out.push(u.key + ' 고친 문구'); }
+  });
+  if (plan.appends.length) {
+    var start = s.getLastRow() + 1;
+    var rows = plan.appends.map(function (r) { return head.map(function (h) { return h && r.hasOwnProperty(h) ? r[h] : ''; }); });
+    ensureRows_(s, start + rows.length);
+    s.getRange(start, 1, rows.length, head.length).setValues(rows).setWrap(true).setVerticalAlignment('top');
+    var cg = head.indexOf('성취수준 사용');
+    if (cg >= 0) s.getRange(start, cg + 1, rows.length, 1).insertCheckboxes();
+    plan.appends.forEach(function (r) { out.push(String(r['키']).trim() + ' 추가'); });
+  }
+}
+
+/** 학생명단 — 예전 명단 그대로(반·번호 / 학년·반·번호) */
+function importRoster_(book, rep) {
+  var old = book[APP.SH.ROSTER];
+  if (!old || old.length < 3) return;
+  var rows = old.slice(1).filter(function (r) { return r.some(function (v) { return String(v).trim() !== ''; }); });
+  if (rows.length < 2) return;
+  var r = parseRosterRows(rows, 'auto');
+  if (!r.students.length) return;
+  writeRosterSheet_(r.students, r.mode);
+  rep.roster = r.students.length;
+}
+
+/** 활동 — 활동목록 줄 → 시트(입력·예시) 만들기 → 학생 줄(자료·AI 결과·최종본·검증) 채우기 */
+function importActivities_(book, rep) {
+  var old = book[APP.SH.ACTIVITY];
+  if (!old) return;
+  var list = tableOf(old, 1).rows.filter(function (r) { return String(r['활동키'] || '').trim(); });
+  list.forEach(function (row) {
+    var exRows = book[String(row['예시 시트'] || '').trim()] || null;
+    var def = activityDefFromOld(row, exRows);
+    if (getActivity_(def.key) || sh_(sheetNameIn_(def.key))) { rep.skipped.push(def.name); return; }
+    var nameTaken = getActivities_().some(function (a) { return a.name === def.name; });
+    if (nameTaken) { rep.skipped.push(def.name); return; }
+    var made;
+    try {
+      made = createActivity_({
+        key: def.key, name: def.name, recordKey: def.recordKey, subjectKey: def.subjectKey, bytes: def.bytes,
+        columns: def.columns, desc: def.desc, mode: def.mode, examples: def.examples, noExamples: !def.exSheet
+      });
+    } catch (e) { rep.failed.push('활동 ' + def.name + ' — ' + e.message); return; }
+
+    // 직접작성 모드와 프롬프트는 createActivity_ 가 받지 않으므로 줄에 바로 쓴다
+    if (def.mode === '직접작성' || def.custom) {
+      var act = getActivity_(made.key), ls = sh_(APP.SH.ACTIVITY);
+      var lh = ls.getRange(2, 1, 1, ls.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
+      if (lh.indexOf('프롬프트 모드') >= 0 && def.mode === '직접작성') ls.getRange(act.__row, lh.indexOf('프롬프트 모드') + 1).setValue('직접작성');
+      if (lh.indexOf('직접 작성 프롬프트') >= 0 && def.custom) ls.getRange(act.__row, lh.indexOf('직접 작성 프롬프트') + 1).setValue(def.custom);
+    }
+
+    var n = 0, inOld = book[def.inSheet], inS = sh_(made.inSheet);
+    if (inOld && inS) n = fillStudentSheet_(inS, inOld);
+    rep.activities.push({ name: def.name, rows: n, examples: def.examples.filter(function (e) { return e.result; }).length });
+  });
+}
+
+/**
+ * 학생 줄을 머리글 이름으로 옮겨 채운다(활동 입력·최종취합 공용).
+ * 새 시트에 이미 있는 학생 줄(명단에서 채운 줄)은 지우고 예전 줄 순서대로 다시 쓴다.
+ * @return {number} 옮긴 줄 수
+ */
+function fillStudentSheet_(s, oldRows) {
+  var lastCol = s.getLastColumn();
+  var head = s.getRange(APP.HEAD_ROW, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
+  var out = remapStudentRows(oldRows, head, APP.HEAD_ROW - 1);
+  if (!out.length) return 0;
+  var first = APP.DATA_ROW, last = s.getLastRow();
+  if (last >= first) s.getRange(first, 1, last - first + 1, lastCol).clearContent();
+  ensureRows_(s, first + out.length);
+  s.getRange(first, 1, out.length, 1).setNumberFormat('@');
+  s.getRange(first, 1, out.length, head.length).setValues(out.map(function (r) {
+    return r.map(function (v, i) { return i === 0 ? String(v) : v; });
+  }));
+  if (head.indexOf('생성') >= 0) applyRowFormat_(s, out.length);
+  return out.length;
+}
+
+/** 최종취합 — 새로 모은 뒤, 예전에 다듬어 둔 [최종본]·[AI 압축결과]·[모델]을 학생별로 되돌려 놓는다 */
+function importCompile_(book, rep) {
+  var olds = Object.keys(book).filter(function (n) { return n.indexOf(APP.SH.COMPILE_PREFIX) === 0; });
+  if (!olds.length || !getActivities_().length) return;
+  try { buildCompileCore_(); } catch (e) { return; }
+  olds.forEach(function (name) {
+    var s = sh_(name);
+    if (!s) return;
+    var t = tableOf(book[name], APP.HEAD_ROW - 1);
+    var byId = {};
+    t.rows.forEach(function (r) { byId[studentKeyOf(r, t.head)] = r; });
+    var lastCol = s.getLastColumn(), last = s.getLastRow();
+    if (last < APP.DATA_ROW) return;
+    var head = s.getRange(APP.HEAD_ROW, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
+    var n = last - APP.DATA_ROW + 1;
+    var vals = s.getRange(APP.DATA_ROW, 1, n, lastCol).getValues();
+    var changed = false;
+    ['최종본', 'AI 압축결과', '모델', '검증'].forEach(function (h) {
+      var c = head.indexOf(h);
+      if (c < 0 || t.head.indexOf(h) < 0) return;
+      var col = vals.map(function (r) {
+        var o = byId[String(r[0]).trim() + '-' + String(r[1]).trim()];
+        var v = o ? o[h] : '';
+        return [v !== '' && v !== undefined ? v : r[c]];
+      });
+      s.getRange(APP.DATA_ROW, c + 1, n, 1).setValues(col);
+      changed = true;
+    });
+    if (changed) rep.compile.push(name.replace(APP.SH.COMPILE_PREFIX, '').trim());
+  });
+}
+
+/** ✒️ 내 문체 — 예전에 붙여 넣은 세특(사용 체크 포함) */
+function importStyle_(book, rep) {
+  var old = book[APP.SH.STYLE], s = sh_(APP.SH.STYLE);
+  if (!old || !s) return;
+  var rows = tableOf(old, APP.HEAD_ROW - 1).rows.filter(function (r) { return String(r[STYLE_HEAD[1]] || '').trim(); });
+  if (!rows.length) return;
+  var have = [];
+  if (s.getLastRow() >= APP.DATA_ROW) {
+    have = s.getRange(APP.DATA_ROW, 2, s.getLastRow() - APP.DATA_ROW + 1, 1).getValues()
+      .map(function (r) { return String(r[0]).trim(); }).filter(String);
+  }
+  var add = rows.filter(function (r) { return have.indexOf(String(r[STYLE_HEAD[1]]).trim()) < 0; });
+  if (!add.length) return;
+  var start = APP.DATA_ROW + have.length;
+  ensureRows_(s, start + add.length);
+  s.getRange(start, 1, add.length, STYLE_HEAD.length).setValues(add.map(function (r) {
+    var use = r[STYLE_HEAD[0]];
+    return [use === true || String(use).toUpperCase() === 'TRUE', r[STYLE_HEAD[1]], r[STYLE_HEAD[2]] || '', r[STYLE_HEAD[3]] || ''];
+  }));
+  s.getRange(start, 1, add.length, 1).insertCheckboxes();
+  s.getRange(start, 2, add.length, 1).setBackground(APP.COLORS.input).setWrap(true).setVerticalAlignment('top');
+  rep.style = add.length;
+}
+
+/** 📏 기재요령 — 선생님이 더한 줄([출처]가 기재요령·맞춤법(기본)이 아닌 줄)만 */
+function importRules_(book, rep) {
+  var old = book[APP.SH.RULES], s = sh_(APP.SH.RULES);
+  if (!old || !s) return;
+  var mine = old.slice(APP.DATA_ROW - 1).filter(function (r) {
+    return (String(r[3] || '').trim() || String(r[2] || '').trim()) && !isPackRow(r[6]);
+  }).map(function (r) { var o = r.slice(0, RULES_HEAD.length); while (o.length < RULES_HEAD.length) o.push(''); return o; });
+  if (!mine.length) return;
+  var cur = readRuleRows_(s);
+  var key = function (r) { return String(r[3]).trim() + '|' + String(r[2]).trim(); };
+  var have = cur.map(key);
+  var add = mine.filter(function (r) { return have.indexOf(key(r)) < 0; });
+  if (!add.length) return;
+  writeRuleRows_(s, cur.concat(add.map(function (r) { r[0] = r[0] === true || String(r[0]).toUpperCase() === 'TRUE' || r[0] === ''; return r; })));
+  rep.rules = add.length;
+}
+
+/** 그 밖의 시트 — 이 도구가 만드는 시트가 아니고 내용이 있는 것만, 값으로 */
+function importExtraSheets_(book, rep) {
+  var sys = Object.keys(APP.SH).map(function (k) { return APP.SH[k]; });
+  var actSheets = [];
+  try { getActivities_().forEach(function (a) { actSheets.push(a.inSheet, a.exSheet); }); } catch (e) {}
+  var oldActs = book[APP.SH.ACTIVITY] ? tableOf(book[APP.SH.ACTIVITY], 1).rows : [];
+  oldActs.forEach(function (r) { actSheets.push(String(r['입력 시트'] || '').trim(), String(r['예시 시트'] || '').trim()); });
+  Object.keys(book).forEach(function (name) {
+    if (sys.indexOf(name) >= 0 || actSheets.indexOf(name) >= 0 || name.indexOf(APP.SH.COMPILE_PREFIX) === 0) return;
+    if (/ ▸(입력|예시)$/.test(name) || sh_(name)) return;
+    var rows = book[name];
+    var filled = rows.filter(function (r) { return r.some(function (v) { return String(v).trim() !== ''; }); }).length;
+    if (!filled) return;
+    var w = Math.max.apply(null, rows.map(function (r) { return r.length; }).concat([1]));
+    var s = ss_().insertSheet(name);
+    ensureCols_(s, w);
+    ensureRows_(s, rows.length);
+    s.getRange(1, 1, rows.length, w).setValues(rows.map(function (r) { var o = r.slice(); while (o.length < w) o.push(''); return o; }));
+    rep.extra.push(name);
   });
 }
 
@@ -3677,6 +4413,15 @@ function buildHelp() {
   P('  · 창의 [Gem(지침)으로 만들어 두기] 탭: 규칙을 Gemini Gem 에 한 번 저장하면 다음부터 [학생 자료만 복사]로 짧게 붙여 넣습니다.');
   P('  · 학교 구글 계정으로 Gemini 앱에 들어가면 무료이고 입력 내용이 AI 학습에 쓰이지 않습니다(학교 관리자가 켜 두었을 때). 개인 무료 계정은 학습·검토에 쓰일 수 있습니다.');
   P('  · 메뉴 ② 창 맨 위에 지금 로그인한 계정이 보입니다. Gemini 구독(=AI 함수)이 있는지는 [지금 계정에 구독이 있는지 확인]으로 시험 셀을 만들어 봅니다.');
+
+  H('1-2. 새 버전으로 옮기기 — 🔄 새 버전 확인 · 📥 이전 파일에서 가져오기');
+  P('사본은 만든 날의 코드 그대로입니다. 새 버전이 나오면 시작하기 창 위쪽과 토스트로 알려 드립니다(하루 한 번 확인).');
+  P('  ① 메뉴 [도움말 · 부가 기능] > [🔄 새 버전 확인 · 이전 파일에서 가져오기] → [새 버전 사본 만들기]');
+  P('  ② 같은 창에서 [지금 파일 링크 복사]');
+  P('  ③ 새 파일에서 [🚀 시작하기](권한 승인) → 1단계의 [📥 이전 파일에서 가져오기] 에 붙여 넣기 → [무엇이 옮겨질지 보기] → [가져오기]');
+  P('  · 옮겨지는 것: 학생명단, 활동(입력 항목·학생 자료·AI 결과·최종본·검증), 예시, 최종취합의 [최종본], 내 문체, 설정, 직접 더한 교과·기록종류, 고쳐 쓴 공통규칙, 우리 학교 규칙');
+  P('  · 다시 해야 하는 것: API 키(계정에 저장 — 메뉴 ②), 구글 설문지 연결, 자동 생성 켜기');
+  P('  · 예전 파일은 바뀌지 않습니다. 같은 이름의 활동이 이미 있으면 건너뛰므로 두 번 눌러도 겹치지 않습니다.');
 
   H('2. 활동 만들기 — 입력 항목은 직접 적어도, AI에게 맡겨도 됩니다');
   P('메뉴 ④ 활동 만들기 · 입력 항목 바꾸기 를 엽니다. 두 가지 길이 있습니다.');
@@ -6135,6 +6880,7 @@ function generateChecked() {
   var rows = checkedRows_(sheet);
   if (!rows.length) { toast_('[생성] 체크된 행이 없습니다.'); return; }
   autoRulesCheck_();
+  autoUpdateCheck_();
   runGeneration_(act, sheet, rows);
 }
 
@@ -6702,6 +7448,7 @@ function manualGoto(p) {
 
 function openCheckSidebar() {
   try { autoRulesCheck_(); } catch (e) {}
+  try { autoUpdateCheck_(); } catch (e) {}
   var html = HtmlService.createHtmlOutputFromFile('UI_Check').setTitle('🔍 맞춤법 · 금지어 검사');
   ui_().showSidebar(html);
 }

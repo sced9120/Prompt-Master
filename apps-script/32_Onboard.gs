@@ -29,6 +29,7 @@ function isOnboardDone_() {
 
 function openOnboard() {
   try { if (sh_(APP.SH.RULES)) autoRulesCheck_(); } catch (e) {}
+  try { autoUpdateCheck_(); } catch (e) {}
   var html = HtmlService.createHtmlOutputFromFile('UI_Onboard')
     .setWidth(660).setHeight(720);
   ui_().showModelessDialog(html, '시작하기 — ' + APP.MENU);
@@ -46,8 +47,11 @@ function onboardStatus() {
     rosterCount: 0, activities: [], exampleCount: 0, done: isOnboardDone_(),
     models: [], defaultModel: '', compileModel: '',
     providerDefaults: PROVIDER_DEFAULT_MODEL, presets: presetModelRows_(), links: MODEL_LINKS,
-    manual: false, manualModel: MANUAL_MODEL, account: accountInfo_(), aiNotice: AI_NOTICE_2026
+    manual: false, manualModel: MANUAL_MODEL, account: accountInfo_(), aiNotice: AI_NOTICE_2026,
+    version: APP.VERSION, update: null, imported: false
   };
+  try { st.update = updateState(APP.VERSION, cachedVersionInfo_()); } catch (e) {}
+  try { st.imported = !!PropertiesService.getDocumentProperties().getProperty('IMPORTED_FROM'); } catch (e) {}
   try { st.manual = manualOn_(); } catch (e) {}
   try {
     st.installed = !!(sh_(APP.SH.CONFIG) && sh_(APP.SH.RECORD) && sh_(APP.SH.ACTIVITY) && sh_(APP.SH.ROSTER));
@@ -392,6 +396,7 @@ function buildStart() {
 
   H('2단계.  위 초록 버튼 [▶ 시작하기] 를 누르세요');
   P('또는 상단 메뉴  [' + APP.MENU + ']  >  [🚀 시작하기].  팝업이 순서대로 안내합니다. 중간에 닫아도 다시 누르면 이어서 진행됩니다.');
+  P('예전에 쓰던 세특 도우미 파일이 있다면: 시작하기 1단계의 [📥 이전 파일에서 가져오기]에 예전 파일 링크를 붙여 넣으면 학생명단 · 활동 · 결과가 그대로 옮겨집니다.');
   P('');
 
   H('⚠️ 처음 한 번만 — 권한 승인 화면 넘는 법');
@@ -403,10 +408,11 @@ function buildStart() {
   P('이 경고는 개인이 만든 스크립트라서 뜨는 것입니다. 코드는 이 파일 안에 그대로 있고 [확장 프로그램] > [Apps Script] 에서 볼 수 있습니다.');
   P('');
 
-  H('API 키가 없어도 됩니다 — 세 가지 방법 중 하나');
-  P('①  키 없이 (복사·붙여넣기) — 처음이라면 이것부터.  시트가 요청문을 만들어 주면 Gemini 앱(gemini.google.com)에 붙여 넣고, 받은 답을 다시 붙여 넣습니다.');
+  H('AI 연결 — API 키가 있으면 ①, 없으면 ②');
+  P('①  API 키가 있다면 — 생성 · 검사가 버튼 한 번.  Gemini 키는 aistudio.google.com/apikey 에서 1분이면 무료로 받습니다(OpenAI · Claude 키도 됩니다).');
+  P('     무료 등급은 보낸 내용이 서비스 개선에 쓰일 수 있어, 학생 자료는 결제를 켠 키를 권합니다. 키는 이 파일이 아니라 내 구글 계정에 저장됩니다.');
+  P('②  키가 없다면 — 복사 · 붙여넣기.  시트가 요청문을 만들어 주면 Gemini 앱(gemini.google.com)에 붙여 넣고, 받은 답을 다시 붙여 넣습니다.');
   P('     학교 구글 계정으로 Gemini 앱에 들어가면 무료이고 입력 내용이 AI 학습에 쓰이지 않습니다(학교에서 Gemini를 켜 두었을 때). 학생 이름은 보내지 않습니다.');
-  P('②  Gemini API 키 — 생성 · 검사가 버튼 한 번.  aistudio.google.com/apikey 에서 무료 발급. 무료 등급은 보낸 내용이 서비스 개선에 쓰일 수 있어, 학생 자료는 결제를 켠 키를 권합니다.');
   P('③  Gemini 구독(=AI 함수) — 학교에 Google AI Pro for Education 이 있거나 개인 Google AI Pro·Ultra 일 때.  무료 학교 계정(Education Fundamentals)에는 아직 없습니다.');
   P('     확인법: 시작하기 2단계 [구독으로]에서 [구독 확인하기] — 시험 셀을 만들어 [생성 및 삽입]이 되는지 봅니다.');
   P('');
@@ -430,6 +436,7 @@ function buildStart() {
   P('· 학생 이름은 기본적으로 AI에 전송되지 않습니다. 주민등록번호, 가정환경, 건강 정보 같은 민감정보는 입력하지 마세요.');
   P('· AI가 쓴 문장을 그대로 기재하지 마세요. 교사가 직접 관찰·평가한 내용을 바탕으로 고쳐 쓰고, 최종 문장의 책임은 작성한 교사에게 있습니다.');
   P('· 학교·교육청의 생성형 AI 활용 지침을 먼저 확인하세요. 시도교육청마다 다릅니다.');
+  P('· 새 버전이 나오면 시작하기 창에 알림이 뜹니다. 메뉴 [도움말 · 부가 기능] > [🔄 새 버전 확인 · 이전 파일에서 가져오기] 에서 새 사본을 받고 예전 자료를 옮기세요(예전 파일은 그대로 남습니다).');
   P('');
 
   H('함께 쓰면 좋은 도구');

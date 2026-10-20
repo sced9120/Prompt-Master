@@ -20,7 +20,9 @@ function onOpen() {
     .addItem('② AI 연결 · 모델 설정', 'openApiDialog')
     .addItem('   모델 연결 테스트', 'testAllModels')
     .addItem('③ 학생 명단 불러오기 (엑셀·붙여넣기)', 'openRosterDialog')
-    .addItem('   학생 명단 동기화', 'syncRoster'));
+    .addItem('   학생 명단 동기화', 'syncRoster')
+    .addSeparator()
+    .addItem('📥 이전 파일에서 가져오기 (새 버전으로 옮길 때)', 'openImportDialog'));
   m.addSubMenu(ui.createMenu('④⑤ 활동 · 예시 · 보고서')
     .addItem('④ 활동 만들기 · 입력 항목 바꾸기 ★', 'openWizard')
     .addItem('📚 새 교과 만들기 (교과 역량 · 입력 항목 초안)', 'openSubjectDialog')
@@ -57,6 +59,8 @@ function onOpen() {
     .addItem('📏 기재요령 규칙 보기 · 고치기', 'openRulesSheet')
     .addItem('   기재요령 규칙 업데이트 확인', 'checkRulesUpdate'));
   m.addSubMenu(ui.createMenu('도움말 · 부가 기능')
+    .addItem('🔄 새 버전 확인 · 이전 파일에서 가져오기', 'openUpdateDialog')
+    .addSeparator()
     .addItem('📄 스캔 문서 → 엑셀 사용 설명서 (업무 대시보드)', 'openOcrGuide')
     .addItem('📖 사용법 시트 열기', 'openHelpSheet')
     .addSeparator()

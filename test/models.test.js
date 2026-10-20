@@ -15,6 +15,7 @@ function boot() {
   files.forEach(f => vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f }));
   // 규칙판 원격 확인은 rules.test.js 에서 따로 본다 — 여기서는 "방금 확인함"으로 두어 호출 수를 세는 시험이 흔들리지 않게
   g.__docProps.setProperty('RULES_CHECKED_AT', String(Date.now()));
+  g.__docProps.setProperty('UPDATE_CHECKED_AT', String(Date.now()));   // 새 버전 확인도 건너뜀(호출 수를 세는 시험)
   return ctx;
 }
 

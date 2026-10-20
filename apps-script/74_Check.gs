@@ -10,6 +10,7 @@
 
 function openCheckSidebar() {
   try { autoRulesCheck_(); } catch (e) {}
+  try { autoUpdateCheck_(); } catch (e) {}
   var html = HtmlService.createHtmlOutputFromFile('UI_Check').setTitle('🔍 맞춤법 · 금지어 검사');
   ui_().showSidebar(html);
 }

@@ -32,6 +32,7 @@ function generateChecked() {
   var rows = checkedRows_(sheet);
   if (!rows.length) { toast_('[생성] 체크된 행이 없습니다.'); return; }
   autoRulesCheck_();
+  autoUpdateCheck_();
   runGeneration_(act, sheet, rows);
 }
 

@@ -7,8 +7,8 @@ Google Sheets + Apps Script로 학생부 세특(교과·창체·행발)을 AI AP
 ## 명령어
 
 ```
-npm test          # 9개 테스트 파일 전부 실행 (총 약 410개, 모두 mock 기반)
-npm run build     # 공방 페이지(build-studio) → apps-script/*.gs → dist/Code.gs 번들 + HTML/appsscript.json 복사 + rules/latest.json(규칙판)
+npm test          # 10개 테스트 파일 전부 실행 (총 약 430개, 모두 mock 기반)
+npm run build     # 공방 페이지(build-studio) → apps-script/*.gs → dist/Code.gs 번들 + HTML/appsscript.json 복사 + rules/latest.json(규칙판) + version.json(새 버전 알림)
 npm run kit       # build + dist → web/deploy-kit.html 재생성 (배포 키트)
 ```
 
@@ -16,8 +16,8 @@ npm run kit       # build + dist → web/deploy-kit.html 재생성 (배포 키�
 
 ## 구조
 
-- `apps-script/NN_*.gs` — 모듈(번호순으로 번들). 00 Presets, 10 Engine(순수), 12 Models(순수), 14 RosterParse(순수), 16 Rules(순수: 규칙판·맞춤법·고쳐쓰기·근거·키 없이·내보내기), 17 Design(순수: 예시로 칸 채우기), 18 Reports(순수: 보고서 요점·드라이브 링크·문체·설문지 머리글), 19 Subjects(순수: 새 교과 요청문·답 읽기·나누는 글),
-  20 Lib, 30 Setup(메뉴), 32 Onboard(시작하기 시트·버튼), 35 Help, 40 Roster, 45 Rules(📏 시트·원격 규칙판·SAETEUK_CHECK), 50 Activity, 52 Examples, 55 Wizard, 60 AI,
+- `apps-script/NN_*.gs` — 모듈(번호순으로 번들). 00 Presets, 10 Engine(순수), 12 Models(순수), 14 RosterParse(순수), 15 Update(순수: 버전 비교·version.json·xlsx 읽기·표 합치기), 16 Rules(순수: 규칙판·맞춤법·고쳐쓰기·근거·키 없이·내보내기), 17 Design(순수: 예시로 칸 채우기), 18 Reports(순수: 보고서 요점·드라이브 링크·문체·설문지 머리글), 19 Subjects(순수: 새 교과 요청문·답 읽기·나누는 글),
+  20 Lib, 30 Setup(메뉴), 32 Onboard(시작하기 시트·버튼), 34 Update(🔄 새 버전 알림·📥 이전 파일에서 가져오기), 35 Help, 40 Roster, 45 Rules(📏 시트·원격 규칙판·SAETEUK_CHECK), 50 Activity, 52 Examples, 55 Wizard, 60 AI,
   70 Generate(하네스 루프), 72 Manual(복사·붙여넣기), 74 Check(검사 사이드바), 76 Quick(바로 쓰기), 78 Export(Gem·스킬), 80 Compile, 82 Report(보고서 시트·드라이브 파일 읽기·폴더·예시 등록·내 문체), 84 Subject(📚 새 교과 창·저장), 86 Bytes(📏 활동별 바이트 한도 창), 88 Studio(🧪 공방을 시트 안에서·studioContext), 90 Forms(설문지 연결·제출 트리거), 95 Observe, 96 Guide(OCR 설명서), 98 Assets(버튼 PNG base64)
 - `apps-script/UI_*.html` — 다이얼로그 (Onboard, ApiKey, Roster, Wizard, Observe, Manual, Check(사이드바), Quick(바로 쓰기·보고서), Export, OcrGuide, Form, Style, Subject, Bytes, Studio — **UI_Studio 는 web/prompt-studio.html 에서 빌드가 만든다. 직접 고치지 말 것**)
 - `rules/latest.json` — 원격 규칙판. **빌드가 `16_Rules.gs` 의 RULES_2026 에서 만든다(직접 고치지 말 것)**. 해마다 고치는 법은 `rules/README.md`
@@ -51,6 +51,10 @@ npm run kit       # build + dist → web/deploy-kit.html 재생성 (배포 키�
 - **공방 칸 채우기(v3.8.2)**: 예시 결과 → `buildDesignUser` → `parseDesignAnswer`(입력 항목 순서의 "항목: 값"), 바이트는 `suggestBytes`. 시트는 프롬프트 글을 저장하지 않고 재료(입력 항목·개요·바이트·예시)만 저장한다.
 - **공방(v3.8.1)**: 한 파일(web/prompt-studio.html)이 웹·시트 둘 다. `google.script.run` 이 있으면 시트 모드 — studioContext 로 RECORDS·BUILTIN·COMMON·RULESET 을 바꿔 끼우고, 활동은 studioCreateActivity, 교과는 subjectSave.
 - **새 교과(v3.8)**: AI 답·공방·나누는 글이 모두 "이름: 값" 한 모양 → `parseSubjectAnswer`. `[교육과정 확인 필요]` 가 남으면 `subjectSave` 는 opts.confirmed 없이 거절.
+- **새 버전·가져오기(v3.9)**: `autoUpdateCheck_` 24시간 간격(DocumentProperties UPDATE_CHECKED_AT, 알린 판 UPDATE_TOLD) — 시작하기·생성·검사 때. `version.json`(빌드가 CHANGELOG 맨 위 판에서 만듦, **main 에 올려야 알림**).
+  가져오기는 예전 파일을 docs `export?format=xlsx`(실패 시 Drive API export)로 받아 `readXlsxParts` → 머리글 이름으로 옮김(`importFromOld`). 새 권한 없음(drive.readonly).
+  기본 문구는 `mergeKeyed` — 예전에서 고쳤고 새 파일은 기본값인 칸만. **기본 문구(PRESET_*)를 고치면 옛 문구를 `OLD_PRESET_TEXTS` 에 더할 것.** 활동은 같은 키·이름이면 건너뜀.
+  시험이 호출 수를 세면 boot 에서 UPDATE_CHECKED_AT 을 지금으로(RULES_CHECKED_AT 처럼).
 - 시작하기 버튼: `insertImage` + `assignScript` — 함수 이름 끝에 `_` 금지. 휴대폰 앱에선 동작 안 함(메뉴 안내 병기).
 
 ## 반드시 지킬 규칙
@@ -63,7 +67,7 @@ npm run kit       # build + dist → web/deploy-kit.html 재생성 (배포 키�
 - onOpen(단순 트리거)에서 PropertiesService 사용 금지 → `needsOnboarding_()`(시트 기반).
 - onEdit(단순 트리거)에서 AI 호출 불가 → `⏳ 확인 전` 표시 후 모델 대화상자 열 때 자동 확인.
 - 컨테이너 바인딩 스크립트: 설치형 트리거·웹앱 배포는 복사되지 않음.
-- 버전 올릴 때: `00_Presets.gs`의 `APP.VERSION`, `package.json`, `CHANGELOG.md`, deploy-kit 재생성을 함께.
+- 버전 올릴 때: `00_Presets.gs`의 `APP.VERSION`, `package.json`, `CHANGELOG.md`(맨 위 판이 APP.VERSION 과 다르면 빌드가 멈춤), deploy-kit 재생성, `version.json` 을 함께. 굵은 글씨 줄(`- **…**`)이 알림의 '바뀐 점'이 된다.
 - 메뉴 맨 위 항목은 8개 이하(작은 화면에서 잘림 — 시험이 강제). 나머지는 하위 메뉴로.
 - 윈도우에서 한글이 든 편집 스크립트를 stdin(heredoc)으로 python 에 넘기지 말 것(cp949 로 읽힘) — 파일로 만들어 `python -I 파일` 로.
 - 2026 기재요령 근거는 「2026 학교생활기록부 기재요령 주요 개정사항 안내(고등학교)」 쪽수(고 p.○)로 why 에 적는다.
@@ -79,10 +83,11 @@ npm run kit       # build + dist → web/deploy-kit.html 재생성 (배포 키�
 5. 스크립트가 넣은 긴 `=AI("…")` 수식(규칙 수천 자 + 줄바꿈)이 실제 구독 계정에서 [생성 및 삽입]으로 생성되는지
 6. (v3.6) 시작하기 시트 버튼(insertImage·assignScript), 검사 사이드바, 복사·붙여넣기 창의 복사 버튼(execCommand), 스킬 zip 내려받기, `=SAETEUK_CHECK`(사용자 정의 함수)가 실제 시트에서 되는지
 7. (v3.6) `rules/latest.json` 을 main 에 올린 뒤 사본이 RULES_URL 에서 받아 오는지(올리기 전에는 404 → 조용히 넘어감)
+8. (v3.9) 실제 계정에서 예전 사본 xlsx 내려받기(docs export + OAuth 토큰), 학교 워크스페이스 계정에서 막히는지, 활동이 많은 파일이 6분 안에 끝나는지, version.json 을 main 에 올린 뒤 알림
 
 ## 알려진 한계
 
-- 마스터를 고쳐도 이미 복사된 사본은 자동 갱신되지 않는다.
+- 마스터를 고쳐도 이미 복사된 사본은 자동 갱신되지 않는다. → v3.9 부터 알림 + 새 사본에서 [📥 이전 파일에서 가져오기]. v3.8.2 이전 사본은 알림이 없으니 직접 안내.
 - 묶음 생성 시 문장이 서로 비슷해질 수 있음 → `한 번에 묶을 학생 수`를 1로.
 - 입력 항목 이름을 바꾸면 새 항목으로 취급(기존 열 데이터 삭제, UI에서 경고).
 
