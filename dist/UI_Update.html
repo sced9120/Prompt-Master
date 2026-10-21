@@ -90,7 +90,7 @@
 </section>
 
 <script>
-var TAB = <?= tab === 'import' ? 'true' : 'false' ?> ? 'import' : 'version';
+var TAB = '<?!= tab === "import" ? "import" : "version" ?>';   // 스크립트 안의 출력 태그(=)는 따옴표로 감싸 넣으므로 ! 태그에 고정 값만
 var ST = null;
 var $ = function (id) { return document.getElementById(id); };
 function esc(s) { return String(s === undefined || s === null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }

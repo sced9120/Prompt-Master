@@ -118,7 +118,7 @@
 </div>
 
 <script>
-var FROM_ONBOARD = <?= fromOnboard ? 'true' : 'false' ?>;
+var FROM_ONBOARD = <?!= fromOnboard === true ? 'true' : 'false' ?>;   // 스크립트 안의 출력 태그(=)는 "false" 글자(참)로 들어가므로 ! 태그에 고정 값만
 var $ = function (id) { return document.getElementById(id); };
 var CTX = null, ROWS = null, TEXT = '', WB = null, LAST = null, timer = null;
 

@@ -10,7 +10,7 @@
  * 고칠 때는 apps-script/ 의 해당 파일을 고치고 node tools/build.js 를 다시 돌리세요.
  * 이 파일을 직접 고치면 다음 빌드 때 덮어써집니다.
  *
- * 빌드: 2026-10-20  ·  원본 34개 파일
+ * 빌드: 2026-10-21  ·  원본 34개 파일
  *****************************************************************************/
 
 /* ==========================================================================
@@ -4700,7 +4700,7 @@ function getRoster_() {
 /** 메뉴 ③ — 파일·붙여넣기로 명단 넣기 */
 function openRosterDialog(fromOnboard) {
   var t = HtmlService.createTemplateFromFile('UI_Roster');
-  t.fromOnboard = !!fromOnboard;
+  t.fromOnboard = fromOnboard === true;   // 메뉴에서 부르면 다른 값이 올 수 있다
   ui_().showModalDialog(t.evaluate().setWidth(720).setHeight(660), '학생 명단 불러오기');
 }
 

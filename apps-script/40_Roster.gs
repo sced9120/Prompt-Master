@@ -47,7 +47,7 @@ function getRoster_() {
 /** 메뉴 ③ — 파일·붙여넣기로 명단 넣기 */
 function openRosterDialog(fromOnboard) {
   var t = HtmlService.createTemplateFromFile('UI_Roster');
-  t.fromOnboard = !!fromOnboard;
+  t.fromOnboard = fromOnboard === true;   // 메뉴에서 부르면 다른 값이 올 수 있다
   ui_().showModalDialog(t.evaluate().setWidth(720).setHeight(660), '학생 명단 불러오기');
 }
 

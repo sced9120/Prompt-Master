@@ -172,6 +172,13 @@ t('메뉴와 창', () => {
   ['updateStatus', 'importPreview', 'importFromOld'].forEach(fn => ok(html.indexOf('.' + fn + '(') >= 0, fn));
 });
 
+t('창 안 <script> 에 <?= ?> 금지 — 구글이 따옴표로 감싸 "false" 가 참이 된다(<?!= ?> 에 고정 값만)', () => {
+  fs.readdirSync(dir).filter(f => /^UI_.*\.html$/.test(f)).forEach(f => {
+    const html = fs.readFileSync(path.join(dir, f), 'utf8');
+    (html.match(/<script>[\s\S]*?<\/script>/g) || []).forEach(js => ok(!/<\?=/.test(js), f + ' 의 <script> 안에 <?= ?>'));
+  });
+});
+
 console.log('\n[이전 파일에서 가져오기 — 끝까지]');
 function makeOld() {
   const O = boot();
