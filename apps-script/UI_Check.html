@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root { --line:#dde3dd; --muted:#6b7280; --accent:#35583f; --accent-soft:#e3ece4;
+          --warn:#8f2f20; --warn-soft:#f8eae6; --ok:#2c6340; --bg:#f6f8f6; --mark:#fff1a8; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; padding:12px; color:#16202a; font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
+  label { display:block; font-weight:600; font-size:12px; margin:10px 0 4px; }
+  select, textarea, input { width:100%; padding:7px 9px; border:1px solid #c9d1c9; border-radius:6px; font:inherit; background:#fff; }
+  textarea { resize:vertical; font-size:12.5px; line-height:1.55; }
+  button { font:inherit; font-size:12px; font-weight:600; cursor:pointer; padding:6px 10px; border:1px solid #c9d1c9;
+           border-radius:6px; background:#fff; color:#16202a; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  .actions { display:flex; gap:5px; flex-wrap:wrap; margin-top:7px; align-items:center; }
+  .count { font-size:11.5px; color:var(--muted); margin-top:3px; display:flex; justify-content:space-between; }
+  .count b.over { color:var(--warn); }
+  .msg { font-size:12px; margin-top:6px; min-height:14px; }
+  .msg.ok { color:var(--ok); } .msg.err { color:var(--warn); }
+  .sum { border-radius:7px; padding:7px 10px; margin-top:9px; font-weight:600; font-size:12.5px; }
+  .sum.ok { background:var(--accent-soft); color:var(--ok); } .sum.bad { background:var(--warn-soft); color:var(--warn); }
+  .sum.chk { background:#fff7e0; color:#7a5200; }
+  .iss { border-bottom:1px solid var(--line); padding:6px 0; font-size:12px; }
+  .iss .lv { font-size:10.5px; font-weight:700; border-radius:4px; padding:0 5px; margin-right:4px; }
+  .lv.block { background:var(--warn-soft); color:var(--warn); } .lv.check { background:#fff1c9; color:#7a5200; }
+  .iss .why { color:var(--muted); font-size:11.5px; }
+  .iss .fix { color:var(--ok); font-weight:600; }
+  .preview { background:var(--bg); border:1px solid var(--line); border-radius:7px; padding:8px 10px; margin-top:8px; font-size:12.5px; white-space:pre-wrap; word-break:keep-all; }
+  mark { background:var(--mark); border-radius:3px; padding:0 1px; }
+  mark.b { background:#fbd0c8; }
+  details { border:1px solid var(--line); border-radius:8px; padding:6px 9px; margin-top:10px; background:#fff; }
+  summary { cursor:pointer; font-weight:600; font-size:12.5px; }
+  .chg { display:flex; gap:6px; align-items:flex-start; font-size:12px; padding:3px 0; }
+  .chg input { width:auto; margin-top:3px; }
+  .hint { font-size:11.5px; color:var(--muted); margin-top:4px; line-height:1.5; }
+  .foot { font-size:11px; color:var(--muted); margin-top:12px; border-top:1px solid var(--line); padding-top:8px; }
+  .foot .ai { color:#7f1d1d; }
+</style>
+</head>
+<body>
+
+<div class="actions" style="margin-top:0">
+  <button id="bRead" title="시트에서 셀 하나를 고른 뒤 누르세요">⬇ 선택한 셀 가져오기</button>
+  <button id="bBack" disabled title="가져온 그 셀에 고친 글을 다시 넣습니다">⬆ 그 셀에 다시 넣기</button>
+</div>
+<div class="hint" id="src">시트의 [최종본]·[AI 결과] 칸을 고르고 가져오거나, 아래에 바로 붙여 넣으세요.</div>
+
+<label>기록 항목 · 활동 (바이트 한도)</label>
+<select id="rec"></select>
+
+<label>검사할 글</label>
+<textarea id="text" rows="9" placeholder="여기에 세특 문장을 붙여 넣거나 직접 쓰세요."></textarea>
+<div class="count"><span id="cnt">0자 · 0바이트</span><span id="lim"></span></div>
+<div class="actions">
+  <button class="primary" id="bCheck">🔍 검사 (금지어 · 형식 · 맞춤법)</button>
+</div>
+<div id="out"></div>
+
+<details id="dAi">
+  <summary>✨ AI 맞춤법 검사 — 규칙으로 못 잡는 오탈자까지</summary>
+  <div id="aiOn">
+    <div class="hint">내 키로 한 번 부릅니다(<span id="aiModel"></span>). 내용·문체는 바꾸지 않고 맞춤법·띄어쓰기만 고칩니다.</div>
+    <div class="actions"><button id="bSpell">AI 맞춤법 검사</button></div>
+  </div>
+  <div id="aiOff">
+    <div class="hint">API 키가 없으면 <b>Gemini 앱(학교 계정)</b>에 붙여 넣을 요청문을 복사해 드립니다. 받은 답을 보고 위 칸에서 고치세요.</div>
+    <div class="actions"><button id="bSpellCopy">📋 Gemini 앱에서 검사 — 요청 복사</button>
+      <a href="https://gemini.google.com/app" target="_blank" style="font-size:12px">Gemini 열기</a></div>
+  </div>
+  <div class="msg" id="mSpell"></div>
+  <div id="spellOut"></div>
+</details>
+
+<details id="dPolish">
+  <summary>🪶 AI 투 다듬기 — 번역투 · 상투어 · 되풀이를 고칠 곳만</summary>
+  <div class="hint">검사에서 <b>[확인] AI 투</b>로 걸린 표현(“~에 있어서”, “이를 통해”, “중요성을 깨달음” …)을 자연스러운 학생부 문장으로 고칠 곳을 제안합니다.
+    사실과 내용은 바꾸지 않고, 고칠지는 선생님이 고릅니다.<br>
+    AI가 쓴 글을 “AI가 안 쓴 것처럼” 만드는 기능이 아닙니다 — 2026 기재요령상 AI가 만든 글은 그대로 넣을 수 없고, 관찰한 사실인지 확인해 선생님이 고쳐 써야 합니다.</div>
+  <div id="polOn"><div class="actions"><button id="bPolish">AI 투 다듬기</button></div></div>
+  <div id="polOff"><div class="actions"><button id="bPolishCopy">📋 Gemini 앱에서 다듬기 — 요청 복사</button>
+    <a href="https://gemini.google.com/app" target="_blank" style="font-size:12px">Gemini 열기</a></div></div>
+  <div class="msg" id="mPolish"></div>
+  <div id="polishOut"></div>
+</details>
+
+<details id="dGround">
+  <summary>🧾 근거 확인 — 학생 자료에 없는 내용이 들어갔나</summary>
+  <div class="hint">2026 기재요령: AI 도움을 받았다면 입력 전에 <b>학생의 실제 수행과 무관한 허위·과장</b>이 없는지 확인해야 합니다.
+    학생 자료(관찰 메모·입력 항목)를 넣으면 위 글과 비교합니다.</div>
+  <textarea id="source" rows="4" placeholder="학생 자료(관찰 메모, 입력 항목 내용)"></textarea>
+  <div class="actions">
+    <button id="bGround">근거 확인</button>
+    <button id="bGroundCopy">📋 Gemini 앱에서 근거 확인 — 요청 복사</button>
+  </div>
+  <div class="msg" id="mGround"></div>
+  <div id="groundOut"></div>
+</details>
+
+<div class="foot">
+  <div id="ruleInfo"></div>
+  <div class="ai" id="aiNotice" style="margin-top:4px"></div>
+  <div style="margin-top:4px">검사 규칙은 [📏 기재요령] 시트에서 고치거나 더할 수 있습니다. 어느 셀에서든 <code>=SAETEUK_CHECK(A2)</code> 로도 검사합니다.</div>
+</div>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var CTX = null, SRC = null, LAST = null;
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+function say(id, t, cls) { var e = $(id); e.className = 'msg ' + (cls || ''); e.textContent = t || ''; }
+/** NEIS 바이트 — 한글 3, 그 밖 1, 줄바꿈 2 (서버와 같은 셈) */
+function bytes(s) { var n = 0; for (var i = 0; i < s.length; i++) { var c = s.charCodeAt(i); n += (c === 10 || c === 13) ? 2 : (c > 127 ? 3 : 1); } return n; }
+/** 고른 것의 바이트 한도 — 기록 항목은 글자수×3, '▸활동키'는 그 활동에 정한 바이트 */
+function limit() {
+  var v = $('rec').value;
+  if (CTX && v.charAt(0) === '▸') { var a = (CTX.activities || []).filter(function (x) { return '▸' + x.key === v; })[0]; if (a) return a.bytes; }
+  var r = CTX && CTX.records.filter(function (x) { return x.key === v; })[0]; return r ? r.chars * 3 : 1500;
+}
+function count() {
+  var t = $('text').value, b = bytes(t), lim = limit();
+  $('cnt').innerHTML = t.length + '자 · <b class="' + (b > lim ? 'over' : '') + '">' + b + '바이트</b>';
+  $('lim').textContent = '한도 ' + lim + '바이트(한글 약 ' + Math.floor(lim / 3) + '자)';
+}
+function copyText(text, msgId) {
+  var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+  document.body.appendChild(ta); ta.select(); var ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  if (ok) say(msgId, '✓ 복사했습니다. Gemini 대화창에 붙여 넣으세요.', 'ok');
+  else if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { say(msgId, '✓ 복사했습니다.', 'ok'); }, function () { say(msgId, '복사가 막혔습니다.', 'err'); });
+  else say(msgId, '복사가 막혔습니다.', 'err');
+}
+
+/** 걸린 구절을 미리보기에서 칠한다 */
+function preview(text, issues) {
+  var marks = [];
+  issues.forEach(function (x) {
+    if (!x.hit || /바이트|빈칸 두 번/.test(x.hit)) return;
+    x.hit.split(', ').forEach(function (h) {
+      h = h.trim(); if (!h) return;
+      var i = -1;
+      while ((i = text.indexOf(h, i + 1)) >= 0) marks.push({ a: i, b: i + h.length, block: x.level === 'block' });
+    });
+  });
+  marks.sort(function (p, q) { return p.a - q.a; });
+  var out = '', at = 0;
+  marks.forEach(function (m) {
+    if (m.a < at) return;
+    out += esc(text.slice(at, m.a)) + '<mark class="' + (m.block ? 'b' : '') + '">' + esc(text.slice(m.a, m.b)) + '</mark>';
+    at = m.b;
+  });
+  return out + esc(text.slice(at));
+}
+
+function showResult(r, text) {
+  var blocks = r.issues.filter(function (x) { return x.level === 'block'; }).length;
+  var checks = r.issues.length - blocks;
+  var h = '<div class="sum ' + (blocks ? 'bad' : checks ? 'chk' : 'ok') + '">' +
+    (blocks ? '고쳐야 할 것 ' + blocks + '개' : checks ? '고칠 것 없음 · 눈으로 볼 것 ' + checks + '개' : '✓ 걸리는 것이 없습니다') +
+    ' · ' + r.bytes + ' / ' + r.limit + '바이트</div>';
+  r.issues.forEach(function (x) {
+    h += '<div class="iss"><span class="lv ' + x.level + '">' + (x.level === 'block' ? '수정' : '확인') + '</span><b>' + esc(x.label) + '</b>' +
+      (x.hit ? ' · ' + esc(x.hit) : '') + (x.fix ? ' → <span class="fix">' + esc(x.fix) + '</span>' : '') +
+      (x.why ? '<div class="why">' + esc(x.why) + '</div>' : '') + '</div>';
+  });
+  if (r.issues.length) h += '<div class="preview">' + preview(text, r.issues) + '</div>';
+  if (r.issues.some(function (x) { return /^AI 투/.test(x.label); })) h += '<div class="hint">AI 투로 걸린 표현은 아래 [🪶 AI 투 다듬기]에서 고칠 곳을 제안받을 수 있습니다.</div>';
+  $('out').innerHTML = h;
+}
+
+function check() {
+  var text = $('text').value;
+  if (!text.trim()) { $('out').innerHTML = ''; return; }
+  $('bCheck').disabled = true;
+  google.script.run.withSuccessHandler(function (r) { $('bCheck').disabled = false; LAST = r; showResult(r, text); })
+    .withFailureHandler(function (e) { $('bCheck').disabled = false; $('out').innerHTML = '<div class="msg err">' + esc(e.message) + '</div>'; })
+    .checkTextNow({ text: text, bytes: limit() });
+}
+
+google.script.run.withSuccessHandler(function (c) {
+  CTX = c;
+  $('rec').innerHTML = '<optgroup label="기록 항목 (나이스 한 칸)">' +
+    c.records.map(function (r) { return '<option value="' + esc(r.key) + '">' + esc(r.key + ' — ' + r.name + ' · ' + r.chars + '자') + '</option>'; }).join('') + '</optgroup>' +
+    ((c.activities || []).length ? '<optgroup label="한도를 나눠 정한 활동">' +
+      c.activities.map(function (a) { return '<option value="▸' + esc(a.key) + '">' + esc(a.name + ' · ' + a.bytes + '바이트') + '</option>'; }).join('') + '</optgroup>' : '');
+  $('aiOn').hidden = !c.model; $('aiOff').hidden = !!c.model; $('bGround').hidden = !c.model;
+  $('polOn').hidden = !c.model; $('polOff').hidden = !!c.model;
+  $('aiModel').textContent = c.model || '';
+  $('ruleInfo').textContent = '규칙판 ' + c.rules.id + ' · ' + c.rules.year + '학년도 기재요령';
+  $('aiNotice').textContent = '⚠ ' + c.aiNotice;
+  count();
+}).withFailureHandler(function (e) { say('mSpell', e.message, 'err'); }).checkContext();
+
+$('rec').onchange = function () { count(); check(); };
+var timer = null;
+$('text').addEventListener('input', function () { count(); clearTimeout(timer); timer = setTimeout(check, 700); });
+$('bCheck').onclick = check;
+
+$('bRead').onclick = function () {
+  var btn = this; btn.disabled = true;
+  google.script.run.withSuccessHandler(function (r) {
+    btn.disabled = false; SRC = r;
+    $('text').value = r.text;
+    if (r.activityKey && CTX && (CTX.activities || []).some(function (x) { return x.key === r.activityKey; })) $('rec').value = '▸' + r.activityKey;
+    else if (r.recordKey && CTX && CTX.records.some(function (x) { return x.key === r.recordKey; })) $('rec').value = r.recordKey;
+    $('src').textContent = '가져온 셀: ' + r.sheet + ' ' + r.a1 + ' — 고친 뒤 [그 셀에 다시 넣기]';
+    $('bBack').disabled = false;
+    count(); check();
+  }).withFailureHandler(function (e) { btn.disabled = false; $('src').textContent = e.message; }).readActiveCell();
+};
+$('bBack').onclick = function () {
+  if (!SRC) return;
+  var btn = this; btn.disabled = true;
+  google.script.run.withSuccessHandler(function (m) { btn.disabled = false; $('src').textContent = m; })
+    .withFailureHandler(function (e) { btn.disabled = false; $('src').textContent = e.message; })
+    .writeBackCell({ sheet: SRC.sheet, a1: SRC.a1, text: $('text').value });
+};
+
+/* AI 맞춤법 */
+$('bSpell').onclick = function () {
+  var text = $('text').value.trim();
+  if (!text) { say('mSpell', '먼저 글을 넣으세요.', 'err'); return; }
+  var btn = this; btn.disabled = true; say('mSpell', 'AI가 맞춤법을 보는 중…'); $('spellOut').innerHTML = '';
+  google.script.run.withSuccessHandler(function (r) {
+    btn.disabled = false;
+    if (!r.changes.length) { say('mSpell', '✓ AI도 고칠 곳을 찾지 못했습니다. ' + (r.usage || ''), 'ok'); return; }
+    say('mSpell', r.changes.length + '곳 — 고칠 것을 골라 [고른 것 고치기]', 'ok');
+    var h = r.changes.map(function (c, i) {
+      return '<label class="chg"><input type="checkbox" data-i="' + i + '" checked><span><b>' + esc(c.from) + '</b> → <span class="fix">' + esc(c.to) + '</span>' +
+        (c.why ? '<br><span class="hint">' + esc(c.why) + '</span>' : '') + '</span></label>';
+    }).join('');
+    $('spellOut').innerHTML = h + '<div class="actions"><button class="primary" id="bApplySpell">고른 것 고치기</button></div>';
+    $('bApplySpell').onclick = function () {
+      var t = $('text').value;
+      [].forEach.call($('spellOut').querySelectorAll('input[type=checkbox]'), function (cb) {
+        if (!cb.checked) return;
+        var c = r.changes[+cb.dataset.i], k = t.indexOf(c.from);
+        if (k >= 0) t = t.slice(0, k) + c.to + t.slice(k + c.from.length);
+      });
+      $('text').value = t; count(); check();
+      say('mSpell', '고쳤습니다. 내용이 맞는지 한 번 더 읽어 보세요.', 'ok');
+    };
+  }).withFailureHandler(function (e) { btn.disabled = false; say('mSpell', e.message, 'err'); }).aiSpellCheck({ text: text });
+};
+$('bSpellCopy').onclick = function () {
+  var text = $('text').value.trim();
+  if (!text) { say('mSpell', '먼저 글을 넣으세요.', 'err'); return; }
+  copyText(CTX.spellSystem.replace(/JSON 하나만 출력한다\.[\s\S]*$/, '고칠 곳을 "틀린 구절 → 바른 구절 (이유)" 목록으로 보여 준다.') + '\n\n# 글\n' + text, 'mSpell');
+};
+
+/* AI 투 다듬기 — 고칠 목록을 보여 주고 고른 것만 적용 */
+function changeList(outId, msgId, changes, done) {
+  $(outId).innerHTML = changes.map(function (c, i) {
+    return '<label class="chg"><input type="checkbox" data-i="' + i + '" checked><span><b>' + esc(c.from) + '</b> → <span class="fix">' + esc(c.to) + '</span>' +
+      (c.why ? '<br><span class="hint">' + esc(c.why) + '</span>' : '') + '</span></label>';
+  }).join('') + '<div class="actions"><button class="primary" id="' + outId + 'Apply">고른 것 고치기</button></div>';
+  $(outId + 'Apply').onclick = function () {
+    var t = $('text').value;
+    [].forEach.call($(outId).querySelectorAll('input[type=checkbox]'), function (cb) {
+      if (!cb.checked) return;
+      var c = changes[+cb.dataset.i], k = t.indexOf(c.from);
+      if (k >= 0) t = t.slice(0, k) + c.to + t.slice(k + c.from.length);
+    });
+    $('text').value = t; count(); check();
+    say(msgId, done, 'ok');
+  };
+}
+$('bPolish').onclick = function () {
+  var text = $('text').value.trim();
+  if (!text) { say('mPolish', '먼저 글을 넣으세요.', 'err'); return; }
+  var btn = this; btn.disabled = true; say('mPolish', '걸린 표현을 보고 고칠 곳을 찾는 중…'); $('polishOut').innerHTML = '';
+  google.script.run.withSuccessHandler(function (r) {
+    btn.disabled = false;
+    if (!r.changes.length) { say('mPolish', '✓ 고칠 곳을 찾지 못했습니다. ' + (r.usage || ''), 'ok'); return; }
+    say('mPolish', r.changes.length + '곳 — 고칠 것을 골라 [고른 것 고치기]. ' + (r.usage || ''), 'ok');
+    changeList('polishOut', 'mPolish', r.changes, '고쳤습니다. 뜻이 그대로인지, 관찰한 사실과 맞는지 한 번 더 읽어 보세요.');
+  }).withFailureHandler(function (e) { btn.disabled = false; say('mPolish', e.message, 'err'); }).aiPolish({ text: text, bytes: limit() });
+};
+$('bPolishCopy').onclick = function () {
+  var text = $('text').value.trim();
+  if (!text) { say('mPolish', '먼저 글을 넣으세요.', 'err'); return; }
+  google.script.run.withSuccessHandler(function (t) { copyText(t, 'mPolish'); })
+    .withFailureHandler(function (e) { say('mPolish', e.message, 'err'); }).polishRequest({ text: text, bytes: limit() });
+};
+
+/* 근거 확인 */
+$('bGround').onclick = function () {
+  var text = $('text').value.trim(), source = $('source').value.trim();
+  if (!text || !source) { say('mGround', '글과 학생 자료를 모두 넣으세요.', 'err'); return; }
+  var btn = this; btn.disabled = true; say('mGround', '비교하는 중…'); $('groundOut').innerHTML = '';
+  google.script.run.withSuccessHandler(function (r) {
+    btn.disabled = false;
+    if (!r.list.length) { say('mGround', '✓ 학생 자료에 없는 내용을 찾지 못했습니다. ' + (r.usage || ''), 'ok'); return; }
+    say('mGround', r.list.length + '곳이 자료에서 확인되지 않습니다 — 사실이면 자료에 보태고, 아니면 빼세요.', 'err');
+    $('groundOut').innerHTML = r.list.map(function (x) {
+      return '<div class="iss"><span class="lv check">확인</span><b>' + esc(x.quote) + '</b>' + (x.why ? '<div class="why">' + esc(x.why) + '</div>' : '') + '</div>';
+    }).join('');
+  }).withFailureHandler(function (e) { btn.disabled = false; say('mGround', e.message, 'err'); }).aiGroundCheck({ text: text, source: source });
+};
+$('bGroundCopy').onclick = function () {
+  var text = $('text').value.trim(), source = $('source').value.trim();
+  if (!text || !source) { say('mGround', '글과 학생 자료를 모두 넣으세요.', 'err'); return; }
+  copyText(CTX.groundSystem.replace(/JSON 하나만 출력한다\.[\s\S]*$/, '근거가 없는 구절과 그 이유를 목록으로 보여 준다. 없으면 "없음".') +
+           '\n\n# 학생 자료\n' + source + '\n\n# 특기사항 초안\n' + text, 'mGround');
+};
+</script>
+</body>
+</html>

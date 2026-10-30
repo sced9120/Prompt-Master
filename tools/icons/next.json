@@ -1,0 +1,6 @@
+{
+ "id": "next",
+ "version": "2.0.13",
+ "color": "#43B966",
+ "svg": "<path data-part=\"tri\" class=\"s\" d=\"M5 5.4v13.2a.9.9 0 0 0 1.4.75l9.6-6.6a.9.9 0 0 0 0-1.5L6.4 4.65A.9.9 0 0 0 5 5.4z\"/><path data-part=\"bar\" class=\"a\" d=\"M19.5 5v14\"/>"
+}

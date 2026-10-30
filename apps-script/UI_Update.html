@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root { --line:#dde3dd; --muted:#6b7280; --accent:#35583f; --accent-soft:#e3ece4;
+          --warn:#8f2f20; --warn-soft:#f8eae6; --ok:#2c6340; --bg:#f6f8f6; --info:#eef4fb; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; padding:16px 18px; color:#16202a; font:13.5px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
+  .tabs { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:14px; }
+  .tab { border:1px solid transparent; border-bottom:none; background:none; padding:8px 14px; border-radius:7px 7px 0 0;
+         font:inherit; font-weight:600; font-size:13px; color:var(--muted); cursor:pointer; }
+  .tab.on { border-color:var(--line); background:#fff; color:#16202a; margin-bottom:-1px; }
+  .card { border:1px solid var(--line); border-radius:9px; padding:12px 14px; background:#fff; margin-bottom:10px; }
+  .ver { display:flex; gap:18px; align-items:baseline; flex-wrap:wrap; }
+  .ver .k { font-size:11.5px; color:var(--muted); }
+  .ver .v { font-size:20px; font-weight:700; }
+  .new { color:var(--ok); }
+  .badge { display:inline-block; font-size:11px; font-weight:700; border-radius:4px; padding:1px 7px; }
+  .badge.up { background:var(--ok); color:#fff; } .badge.same { background:var(--line); color:#374151; }
+  ul { margin:6px 0 0; padding-left:18px; } li { margin:2px 0; }
+  ol.steps { margin:6px 0 0; padding-left:20px; } ol.steps li { margin:5px 0; }
+  label { display:block; font-size:12px; font-weight:600; color:#374151; margin:10px 0 4px; }
+  input { width:100%; padding:8px 10px; border:1px solid #c9d1c9; border-radius:6px; font:inherit; }
+  button, a.btn { font:inherit; font-size:13px; font-weight:600; cursor:pointer; padding:8px 14px; border:1px solid #c9d1c9;
+                  border-radius:6px; background:#fff; color:#16202a; text-decoration:none; display:inline-block; }
+  button.primary, a.btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.55; cursor:default; }
+  .actions { display:flex; gap:7px; margin-top:10px; flex-wrap:wrap; align-items:center; }
+  .note { font-size:11.5px; color:var(--muted); margin-top:5px; line-height:1.55; }
+  .info { background:var(--info); color:#1f3f66; border-radius:7px; padding:9px 12px; font-size:12.5px; }
+  .warn { background:var(--warn-soft); color:#6b2417; border-radius:7px; padding:9px 12px; font-size:12.5px; margin-top:8px; }
+  .msg { font-size:12.5px; margin-top:8px; min-height:16px; } .msg.ok { color:var(--ok); } .msg.err { color:var(--warn); }
+  .spin { display:inline-block; width:11px; height:11px; border:2px solid #ccd; border-top-color:var(--accent);
+          border-radius:50%; animation:sp .8s linear infinite; vertical-align:-1px; margin-right:5px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .result { background:var(--bg); border:1px solid var(--line); border-radius:7px; padding:10px 13px; margin-top:10px; font-size:12.5px; }
+  .result b { color:var(--ok); }
+  code { background:#eef2ee; padding:0 4px; border-radius:4px; font-size:12px; word-break:break-all; }
+  @media (prefers-reduced-motion:reduce) { * { animation:none !important; } }
+</style>
+</head>
+<body>
+<div class="tabs">
+  <button class="tab" data-t="version">🔄 새 버전 확인</button>
+  <button class="tab" data-t="import">📥 이전 파일에서 가져오기</button>
+</div>
+
+<!-- ───────────── 새 버전 ───────────── -->
+<section id="pVersion">
+  <div class="card">
+    <div class="ver">
+      <div><div class="k">지금 이 파일</div><div class="v" id="cur">-</div></div>
+      <div><div class="k">최신 버전</div><div class="v" id="latest"><span class="spin"></span></div></div>
+      <div id="badge"></div>
+    </div>
+    <div id="notes"></div>
+    <div class="msg" id="mVer"></div>
+  </div>
+
+  <div class="card" id="howUp" hidden>
+    <b>새 버전으로 옮기는 법</b> — 지금 파일은 지우지 않고 그대로 둡니다.
+    <ol class="steps">
+      <li><a class="btn primary" id="copyLink" href="#" target="_blank">① 새 버전 사본 만들기</a>
+        <div class="note">새 창에서 [사본 만들기]를 누르면 내 드라이브에 새 파일이 생깁니다.</div></li>
+      <li>② 아래 버튼으로 <b>지금 이 파일의 링크</b>를 복사해 둡니다.
+        <div class="actions"><button id="bCopyMine">📋 지금 파일 링크 복사</button><span class="msg" id="mCopy"></span></div></li>
+      <li>③ 새 파일에서 메뉴 <b>[세특 도우미 v3] &gt; [🚀 시작하기]</b>(권한 승인) 뒤,
+        메뉴 <b>[도움말 · 부가 기능] &gt; [🔄 새 버전 확인 · 이전 파일에서 가져오기]</b> → [📥 이전 파일에서 가져오기] 탭에 붙여 넣기.
+        <div class="note">학생명단 · 활동과 학생 자료 · AI 결과 · 최종본 · 예시 · 내 문체 · 설정이 옮겨집니다. API 키와 설문지 연결은 새 파일에서 한 번 더.</div></li>
+    </ol>
+  </div>
+  <div class="card" id="sameBox" hidden>최신 버전을 쓰고 있습니다. 새 버전이 나오면 시작하기 창·생성할 때 하루 한 번 확인해서 알려 드립니다.</div>
+  <div class="actions"><button id="bRecheck">다시 확인</button><button id="bClose1">닫기</button></div>
+</section>
+
+<!-- ───────────── 가져오기 ───────────── -->
+<section id="pImport" hidden>
+  <div class="info">예전에 쓰던 <b>세특 작성 도우미 파일</b>의 자료를 <b>지금 이 파일</b>로 옮깁니다. 예전 파일은 바뀌지 않습니다.<br>
+    옮기는 것: 학생명단 · 활동(입력 항목 · 학생 자료 · AI 결과 · 최종본 · 검증) · 예시 · 최종취합의 [최종본] · 내 문체 · 설정 · 직접 더한 교과/기록종류 · 고쳐 쓴 공통규칙 · 우리 학교 규칙</div>
+  <label for="url">예전 파일 링크 <span style="font-weight:400;color:var(--muted)">— 예전 파일을 열고 주소창의 주소를 통째로 복사해 붙여 넣으세요</span></label>
+  <input id="url" placeholder="https://docs.google.com/spreadsheets/d/…/edit" autocomplete="off" spellcheck="false">
+  <div class="actions"><button id="bPreview">1. 무엇이 옮겨질지 보기</button><button class="primary" id="bImport" disabled>2. 가져오기</button><button id="bClose2">닫기</button></div>
+  <div class="msg" id="mImp"></div>
+  <div id="preview"></div>
+  <div id="done"></div>
+  <div class="note">같은 계정(지금 로그인한 계정)이 열 수 있는 파일이어야 합니다. 이미 같은 이름의 활동이 있으면 그 활동은 건너뜁니다(두 번 눌러도 겹치지 않음).</div>
+</section>
+
+<script>
+var TAB = '<?!= tab === "import" ? "import" : "version" ?>';   // 스크립트 안의 출력 태그(=)는 따옴표로 감싸 넣으므로 ! 태그에 고정 값만
+var ST = null;
+var $ = function (id) { return document.getElementById(id); };
+function esc(s) { return String(s === undefined || s === null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function say(id, t, cls) { $(id).className = 'msg ' + (cls || ''); $(id).innerHTML = t || ''; }
+function busy(btn, on, label) {
+  if (on) { btn.dataset.l = btn.innerHTML; btn.innerHTML = '<span class="spin"></span>' + (label || '처리 중'); btn.disabled = true; }
+  else { btn.innerHTML = btn.dataset.l || btn.innerHTML; btn.disabled = false; }
+}
+function show(t) {
+  TAB = t;
+  [].forEach.call(document.querySelectorAll('.tab'), function (b) { b.classList.toggle('on', b.dataset.t === t); });
+  $('pVersion').hidden = t !== 'version'; $('pImport').hidden = t !== 'import';
+}
+[].forEach.call(document.querySelectorAll('.tab'), function (b) { b.onclick = function () { show(b.dataset.t); }; });
+show(TAB);
+
+function drawVersion(st) {
+  ST = st;
+  $('cur').textContent = st.current;
+  $('latest').innerHTML = st.latest ? '<span class="' + (st.available ? 'new' : '') + '">' + esc(st.latest) + '</span>' : '-';
+  $('badge').innerHTML = !st.checked ? '' : st.available ? '<span class="badge up">새 버전 있음</span>' : '<span class="badge same">최신</span>';
+  $('notes').innerHTML = st.available && st.notes && st.notes.length
+    ? '<div class="note" style="margin-top:8px"><b>' + esc(st.latest) + ' 바뀐 점</b>' + (st.date ? ' · ' + esc(st.date) : '') + '</div><ul>' +
+      st.notes.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>' : '';
+  $('howUp').hidden = !st.available; $('sameBox').hidden = !st.checked || st.available;
+  $('copyLink').href = st.copyUrl;
+  if (!st.checked) say('mVer', '최신 버전 정보를 받지 못했습니다. 인터넷 연결을 확인하고 [다시 확인]을 눌러 주세요.', 'err');
+  else say('mVer', '');
+}
+function check(btn) {
+  if (btn) busy(btn, true, '확인 중');
+  google.script.run
+    .withSuccessHandler(function (st) { if (btn) busy(btn, false); drawVersion(st); })
+    .withFailureHandler(function (e) { if (btn) busy(btn, false); say('mVer', esc(e.message), 'err'); $('latest').textContent = '-'; })
+    .updateStatus(true);
+}
+check();
+$('bRecheck').onclick = function () { check(this); };
+$('bCopyMine').onclick = function () {
+  var url = (ST && ST.fileUrl) || '';
+  var ta = document.createElement('textarea'); ta.value = url; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+  document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  say('mCopy', ok ? '✓ 복사했습니다.' : '복사가 막혔습니다. 주소: <code>' + esc(url) + '</code>', ok ? 'ok' : 'err');
+};
+$('bClose1').onclick = $('bClose2').onclick = function () { google.script.host.close(); };
+
+$('url').addEventListener('input', function () { $('bImport').disabled = true; $('preview').innerHTML = ''; });
+$('bPreview').onclick = function () {
+  var btn = this, url = $('url').value.trim();
+  if (!url) { say('mImp', '예전 파일 링크를 붙여 넣어 주세요.', 'err'); return; }
+  busy(btn, true, '예전 파일 읽는 중'); say('mImp', ''); $('done').innerHTML = '';
+  google.script.run
+    .withSuccessHandler(function (s) {
+      busy(btn, false);
+      $('preview').innerHTML = '<div class="result">예전 파일' + (s.version ? ' <b>' + esc(s.version) + '</b>' + (s.legacy ? ' (이전 번호 체계)' : '') : '') + ' → 지금 파일 <b>' + esc(s.current) + '</b><br>' +
+        '학생 <b>' + s.roster + '</b>명 · 활동 <b>' + s.activities.length + '</b>개' + (s.activities.length ? ' (' + s.activities.map(esc).join(', ') + ')' : '') +
+        ' · 내 문체 <b>' + s.style + '</b>편</div>' +
+        (s.currentActivities ? '<div class="warn">이 파일에 이미 활동이 ' + s.currentActivities + '개 있습니다. 같은 이름의 활동은 건너뛰고 나머지만 더합니다.</div>' : '');
+      $('bImport').disabled = false;
+    })
+    .withFailureHandler(function (e) { busy(btn, false); say('mImp', esc(e.message), 'err'); })
+    .importPreview(url);
+};
+$('bImport').onclick = function () {
+  var btn = this, url = $('url').value.trim();
+  busy(btn, true, '옮기는 중 — 활동이 많으면 1~2분'); $('bPreview').disabled = true; say('mImp', '');
+  google.script.run
+    .withSuccessHandler(function (r) {
+      busy(btn, false); btn.disabled = true; $('bPreview').disabled = false;
+      $('done').innerHTML = '<div class="result"><b>✓ 가져왔습니다</b><ul>' +
+        (r.lines.length ? r.lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') : '<li>옮길 자료가 없었습니다.</li>') + '</ul></div>' +
+        (r.failed && r.failed.length ? '<div class="warn"><b>옮기지 못한 것</b><ul>' + r.failed.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul></div>' : '') +
+        '<div class="info" style="margin-top:8px"><ul style="margin:0">' + r.notes.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul></div>';
+    })
+    .withFailureHandler(function (e) { busy(btn, false); $('bPreview').disabled = false; say('mImp', esc(e.message), 'err'); })
+    .importFromOld(url);
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+{
+ "id": "play",
+ "version": "2.0.13",
+ "color": "#43B966",
+ "svg": "<path data-part=\"tri\" class=\"s\" d=\"M7 4.9v14.2a1 1 0 0 0 1.5.86l11.6-7.1a1 1 0 0 0 0-1.72L8.5 4.04A1 1 0 0 0 7 4.9z\"/><g data-part=\"bars\"><rect class=\"s\" x=\"6\" y=\"4.5\" width=\"4\" height=\"15\" rx=\"1.5\"/><rect class=\"s\" x=\"14\" y=\"4.5\" width=\"4\" height=\"15\" rx=\"1.5\"/></g>",
+ "poses": {
+  "*": {
+   "bars": {
+    "opacity": 0,
+    "scale": 0.4,
+    "rotate": -90
+   }
+  },
+  "playing": {
+   "tri": {
+    "opacity": 0,
+    "scale": 0.4,
+    "rotate": 90
+   },
+   "bars": {
+    "opacity": 1,
+    "scale": 1,
+    "rotate": 0
+   }
+  }
+ },
+ "defaultState": "paused"
+}

@@ -1,0 +1,6 @@
+{
+ "id": "arrow",
+ "version": "2.0.13",
+ "color": "#3093EC",
+ "svg": "<g data-part=\"mark\" class=\"a\"><path d=\"M4.5 12h15\"/><path d=\"m13.5 6 6 6-6 6\"/></g>"
+}

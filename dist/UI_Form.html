@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root { --line:#dde3dd; --muted:#6b7280; --accent:#35583f; --accent-soft:#e3ece4; --warn:#8f2f20; --warn-soft:#f8eae6; --ok:#2c6340; --bg:#f6f8f6; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; padding:14px 18px 70px; color:#16202a; font:13.5px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
+  h3 { margin:0 0 6px; font-size:14px; display:flex; gap:8px; align-items:center; }
+  .num { flex:none; width:22px; height:22px; border-radius:50%; background:var(--accent); color:#fff; font-size:11px; font-weight:600; line-height:22px; text-align:center; }
+  .card { border:1px solid var(--line); border-radius:9px; padding:11px 13px; margin-bottom:9px; background:#fff; }
+  .note { font-size:12px; color:var(--muted); line-height:1.55; }
+  .warn { background:var(--warn-soft); border-radius:7px; padding:8px 11px; font-size:12px; color:#6b2417; margin-top:6px; }
+  .info { background:#eef4fb; border-radius:7px; padding:8px 11px; font-size:12px; color:#1f3f66; }
+  select, input { padding:6px 8px; border:1px solid #c9d1c9; border-radius:6px; font:inherit; background:#fff; }
+  .grid { display:grid; grid-template-columns:repeat(5, 1fr); gap:6px; }
+  .grid label { font-size:11.5px; font-weight:600; color:#374151; } .grid select { width:100%; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  td { border-bottom:1px solid var(--line); padding:5px 4px; vertical-align:middle; }
+  td:first-child { width:55%; } td select { width:100%; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; } .row > * { flex:1; min-width:140px; }
+  label.inline { display:flex; gap:6px; align-items:center; font-size:12.5px; margin:4px 0; }
+  label.inline input { margin:0; }
+  button { font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; padding:7px 13px; border:1px solid #c9d1c9; border-radius:6px; background:#fff; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.small { padding:3px 8px; font-size:11.5px; }
+  button:disabled { opacity:.5; }
+  .msg { font-size:12.5px; margin-top:6px; min-height:16px; } .msg.ok { color:var(--ok); } .msg.err { color:var(--warn); }
+  .foot { position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line); padding:8px 18px; display:flex; gap:8px; align-items:center; }
+  .foot .msg { flex:1; margin:0; }
+  .tag { font-size:10.5px; border-radius:4px; padding:0 5px; background:#e3edf9; color:#1f4f8f; margin-left:4px; }
+  ol { margin:4px 0; padding-left:18px; font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<div class="card" id="links" hidden></div>
+
+<div class="card">
+  <h3><span class="num">1</span>응답 시트 고르기</h3>
+  <div id="noSheet" hidden>
+    <div class="warn">이 파일에서 설문지 응답 시트를 찾지 못했습니다. 아래처럼 설문지를 이 파일에 연결하세요.</div>
+    <ol>
+      <li>구글 설문지 편집 화면 → <b>[응답]</b> 탭 → <b>[Sheets에 연결]</b> → <b>"기존 스프레드시트 선택"</b> → 이 파일</li>
+      <li>학생 문항: <b>학번</b>(또는 반·번호)과 <b>이름</b>을 단답형으로. 순서는 상관없고, 이메일 수집을 켜도 됩니다</li>
+      <li>보고서를 파일로 받으려면 <b>파일 업로드</b> 문항을 넣으세요(학생이 구글 계정으로 로그인해야 합니다 — 학교 계정 권장)</li>
+      <li>응답이 한 건이라도 들어오면 [다시 찾기]</li>
+    </ol>
+    <button id="bReload">다시 찾기</button>
+  </div>
+  <div id="hasSheet" hidden>
+    <select id="sheet"></select> <span class="note" id="sheetNote"></span>
+  </div>
+</div>
+
+<div id="rest" hidden>
+<div class="card">
+  <h3><span class="num">2</span>학생을 알아볼 칸</h3>
+  <div class="grid" id="keys"></div>
+  <div class="note" style="margin-top:5px">머리글 이름으로 저절로 골랐습니다. 학번(20315)이 있으면 학번만으로도 됩니다. 반·번호가 없으면 이름으로 찾습니다(같은 이름이 둘이면 못 찾음).</div>
+  <div class="warn" id="keyWarn" hidden>학생을 알아볼 칸이 없습니다. 위에서 학번·반·번호·이름 중 하나 이상 골라 주세요.</div>
+</div>
+
+<div class="card">
+  <h3><span class="num">3</span>보낼 곳</h3>
+  <select id="target" style="width:100%"></select>
+  <div id="newBox" class="row" style="margin-top:7px" hidden>
+    <input id="newName" placeholder="새 시트 이름" maxlength="20">
+    <select id="newRec"></select>
+    <select id="newSub"></select>
+  </div>
+  <div class="note" id="targetNote" style="margin-top:5px"></div>
+</div>
+
+<div class="card">
+  <h3><span class="num">4</span>문항 → 칸</h3>
+  <table id="map"></table>
+  <div class="note" style="margin-top:5px">여러 문항을 한 칸으로 보내면 "문항: 답" 으로 이어 붙입니다. 📎 는 파일 업로드 문항 — 📄 보고서 시트의 [보고서] 칸으로 보내면 파일을 읽어 요점을 뽑습니다.</div>
+</div>
+
+<div class="card">
+  <h3><span class="num">5</span>받아 오는 방식</h3>
+  <label class="inline"><input type="checkbox" id="auto" checked> <b>응답이 오면 저절로 받아 오기</b> — 학생이 제출할 때마다 (권한 승인이 한 번 더 뜰 수 있음)</label>
+  <label class="inline"><input type="checkbox" id="autoGen"> <b>받아 온 학생은 바로 세특 생성</b> <span class="note" id="genNote"></span></label>
+  <label class="inline"><input type="checkbox" id="addMissing"> 명단에 없는 학생은 시트 맨 아래에 줄을 더하기 (끄면 목록으로만 알려 줌)</label>
+  <div class="note">선생님이 시트에서 고친 칸은 다시 받아 와도 덮어쓰지 않습니다.</div>
+</div>
+</div>
+
+<div class="foot">
+  <div class="msg" id="msg"></div>
+  <button class="primary" id="bSave" disabled>연결하고 지금 받아 오기</button>
+  <button id="bClose">닫기</button>
+</div>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var C = null, INFO = null;
+var KEYS = [['sid', '학번'], ['year', '학년'], ['cls', '반'], ['no', '번호'], ['name', '이름']];
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+function say(t, cls) { $('msg').className = 'msg ' + (cls || ''); $('msg').textContent = t || ''; }
+function opt(v, t, sel) { return '<option value="' + esc(v) + '"' + (sel ? ' selected' : '') + '>' + esc(t) + '</option>'; }
+
+function load() {
+  google.script.run.withSuccessHandler(function (c) {
+    C = c;
+    drawLinks();
+    $('noSheet').hidden = !!c.sheets.length; $('hasSheet').hidden = !c.sheets.length;
+    $('sheet').innerHTML = c.sheets.map(function (s, i) { return opt(i, s.name + ' (응답 ' + s.rows + '건)'); }).join('');
+    $('newRec').innerHTML = c.records.map(function (r) { return opt(r.key, r.key + ' — ' + r.name); }).join('');
+    $('newSub').innerHTML = c.subjects.map(function (s) { return opt(s.key, s.key + ' — ' + s.name, s.key === c.defaultSubject); }).join('');
+    $('addMissing').checked = !c.rosterCount;
+    $('autoGen').disabled = !c.hasKey;
+    $('genNote').textContent = c.hasKey ? '(API 키로 · 보고서 시트는 요점부터)' : '— API 키가 있어야 합니다(키 없이 쓰면 메뉴 ⑥ 에서 복사·붙여넣기)';
+    if (c.sheets.length) pickSheet();
+  }).withFailureHandler(function (e) { say(e.message, 'err'); }).formDialogContext();
+}
+
+function drawLinks() {
+  if (!C.links.length) { $('links').hidden = true; return; }
+  $('links').hidden = false;
+  $('links').innerHTML = '<h3>연결된 설문지</h3>' + C.links.map(function (l, i) {
+    return '<div class="row" style="margin:3px 0"><span style="flex:3">' + esc(l.sheet) + ' → <b>' + esc(l.actName) + '</b>' +
+      (l.auto ? ' <span class="tag">저절로</span>' : '') + (l.autoGen ? ' <span class="tag">바로 생성</span>' : '') +
+      (l.last ? ' <span class="note">마지막 ' + esc(l.last) + '</span>' : '') + '</span>' +
+      '<button class="small" data-run="' + i + '">지금 받기</button><button class="small" data-del="' + i + '">연결 끊기</button></div>';
+  }).join('');
+  [].forEach.call($('links').querySelectorAll('[data-run]'), function (b) {
+    b.onclick = function () { b.disabled = true; say('받아 오는 중…');
+      google.script.run.withSuccessHandler(function (t) { b.disabled = false; say('✓ ' + t, 'ok'); }).withFailureHandler(function (e) { b.disabled = false; say(e.message, 'err'); })
+        .formRunNow(C.links[+b.dataset.run].sheet); };
+  });
+  [].forEach.call($('links').querySelectorAll('[data-del]'), function (b) {
+    b.onclick = function () {
+      google.script.run.withSuccessHandler(function (t) { say(t, 'ok'); load(); }).formUnlink(C.links[+b.dataset.del].sheet);
+    };
+  });
+}
+
+function pickSheet() {
+  var s = C.sheets[+$('sheet').value];
+  INFO = s.info;
+  $('rest').hidden = false;
+  $('sheetNote').textContent = '문항 ' + s.info.questions.length + '개';
+  var heads = ['<option value="-1">(없음)</option>'].concat(s.head.map(function (h, i) { return opt(i, h || '(빈 머리글)'); }));
+  $('keys').innerHTML = KEYS.map(function (k) {
+    return '<div><label>' + k[1] + '</label><select data-k="' + k[0] + '">' + heads.join('') + '</select></div>';
+  }).join('');
+  KEYS.forEach(function (k) { $('keys').querySelector('[data-k=' + k[0] + ']').value = String(INFO[k[0]]); });
+  [].forEach.call($('keys').querySelectorAll('select'), function (sel) { sel.onchange = checkKeys; });
+  checkKeys();
+  // 보낼 곳: 이 응답 시트와 연결된 활동이 있으면 그것, 아니면 새 보고서 시트(파일 문항이 있을 때)
+  var hasFile = s.info.questions.some(function (q) { return q.isFile; });
+  var linked = C.links.filter(function (l) { return l.sheet === s.name; })[0];
+  $('target').innerHTML =
+    '<optgroup label="새로 만들기">' + opt('new:보고서', '＋ 새 📄 보고서 세특 시트', hasFile && !linked) + opt('new:바로쓰기', '＋ 새 ✍️ 바로 쓰기 시트') +
+    opt('new:자동', '＋ 새 활동 (고른 문항을 입력 항목으로)', !hasFile && !linked) + '</optgroup>' +
+    (C.activities.length ? '<optgroup label="이미 있는 시트">' + C.activities.map(function (a) {
+      return opt('act:' + a.key, a.name + (a.mode === '보고서' ? ' (📄 보고서)' : a.mode === '바로쓰기' ? ' (✍️ 바로 쓰기)' : ''), linked && linked.act === a.key);
+    }).join('') + '</optgroup>' : '');
+  $('newName').value = (s.name.replace(/설문지 응답 시트|Form Responses/i, '').trim() || '설문') + (hasFile ? ' 보고서' : '');
+  $('target').onchange = drawMap;
+  drawMap();
+}
+
+function checkKeys() {
+  var v = function (k) { return +$('keys').querySelector('[data-k=' + k + ']').value; };
+  var ok = v('sid') >= 0 || (v('cls') >= 0 && v('no') >= 0) || v('name') >= 0;
+  $('keyWarn').hidden = ok; $('bSave').disabled = !ok;
+  drawMap();
+}
+
+function targetCols() {
+  var t = $('target').value;
+  if (t === 'new:보고서') return C.reportCols;
+  if (t === 'new:바로쓰기') return ['관찰 메모'];
+  if (t === 'new:자동') return null;     // 문항 이름 그대로 새 칸
+  var a = C.activities.filter(function (x) { return 'act:' + x.key === t; })[0];
+  return a ? a.cols : [];
+}
+function targetMode() {
+  var t = $('target').value;
+  if (t.indexOf('new:') === 0) return t.slice(4);
+  var a = C.activities.filter(function (x) { return 'act:' + x.key === t; })[0];
+  return a ? a.mode : '';
+}
+
+function drawMap() {
+  if (!INFO) return;
+  var isNew = $('target').value.indexOf('new:') === 0;
+  $('newBox').hidden = !isNew;
+  var cols = targetCols(), mode = targetMode();
+  var keyIdx = KEYS.map(function (k) { var s = $('keys').querySelector('[data-k=' + k[0] + ']'); return s ? +s.value : -1; });
+  var qs = C.sheets[+$('sheet').value].head.map(function (h, i) { return { i: i, title: h }; })
+    .filter(function (q) { return q.title && keyIdx.indexOf(q.i) < 0 && !/타임스탬프|timestamp|이메일|e-?mail/i.test(q.title); })
+    .map(function (q) { var m = INFO.questions.filter(function (x) { return x.i === q.i; })[0]; q.isFile = !!(m && m.isFile); return q; });
+  $('targetNote').textContent = mode === '보고서' ? '파일 업로드·보고서 문항은 [보고서] 칸으로. 요점은 시트에서 [📄 보고서 요점 뽑기]로 뽑습니다.'
+    : mode === '자동' && isNew ? '고른 문항 이름이 그대로 입력 시트의 칸이 됩니다(12개까지).' : '';
+  var norm = function (s) { return String(s || '').replace(/\s+/g, '').replace(/[?？:：().]/g, ''); };
+  $('map').innerHTML = qs.map(function (q) {
+    var o = opt('', '(보내지 않음)');
+    if (cols === null) o += opt('＋', '✓ 이 문항으로 새 칸', true);
+    else cols.forEach(function (c) {
+      var auto = norm(c) === norm(q.title) || (mode === '보고서' && c === '보고서' && (q.isFile || /보고서|탐구|산출물|과제/.test(q.title))) ||
+                 (mode === '바로쓰기' && cols.length === 1);
+      o += opt(c, c, auto);
+    });
+    return '<tr><td>' + esc(q.title) + (q.isFile ? ' <span class="tag">📎 파일</span>' : '') + '</td><td><select data-q="' + esc(q.title) + '">' + o + '</select></td></tr>';
+  }).join('') || '<tr><td colspan="2" class="note">문항이 없습니다.</td></tr>';
+}
+
+$('sheet').onchange = pickSheet;
+$('bReload').onclick = load;
+$('bClose').onclick = function () { google.script.host.close(); };
+$('bSave').onclick = function () {
+  var keys = {};
+  KEYS.forEach(function (k) { keys[k[0]] = +$('keys').querySelector('[data-k=' + k[0] + ']').value; });
+  var map = {};
+  [].forEach.call($('map').querySelectorAll('select[data-q]'), function (s) { map[s.dataset.q] = s.value; });
+  var t = $('target').value, target;
+  if (t.indexOf('new:') === 0) target = { type: 'new', kind: t.slice(4), name: $('newName').value.trim(), recordKey: $('newRec').value, subjectKey: $('newSub').value };
+  else target = { type: 'existing', key: t.slice(4) };
+  var btn = this; btn.disabled = true; say('연결하고 받아 오는 중…');
+  google.script.run.withSuccessHandler(function (r) {
+    btn.disabled = false;
+    say('✓ [' + r.inSheet + '] ← ' + r.text, r.result.unmatched.length ? 'err' : 'ok');
+    load();
+  }).withFailureHandler(function (e) { btn.disabled = false; say(e.message, 'err'); })
+    .formSave({ sheet: C.sheets[+$('sheet').value].name, keys: keys, map: map, target: target,
+                auto: $('auto').checked, autoGen: $('autoGen').checked && !$('autoGen').disabled, addMissing: $('addMissing').checked });
+};
+load();
+</script>
+</body>
+</html>

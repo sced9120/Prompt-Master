@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root { --line:#dde3dd; --muted:#6b7280; --accent:#35583f; --accent-soft:#e3ece4; --warn:#8f2f20; --ok:#2c6340; --bg:#f6f8f6; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; padding:14px 18px; color:#16202a; font:13.5px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
+  label { display:block; font-weight:600; font-size:12px; margin:8px 0 4px; }
+  select { padding:7px 9px; border:1px solid #c9d1c9; border-radius:6px; font:inherit; min-width:260px; }
+  textarea { width:100%; padding:8px 10px; border:1px solid #c9d1c9; border-radius:6px; font:11.5px/1.5 ui-monospace,Consolas,monospace; background:#fafbfa; resize:vertical; }
+  .card { border:1px solid var(--line); border-radius:9px; padding:11px 13px; margin-top:10px; }
+  .card h3 { margin:0 0 3px; font-size:14px; }
+  .note { font-size:12px; color:var(--muted); line-height:1.55; }
+  button { font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; padding:7px 13px; border:1px solid #c9d1c9; border-radius:6px; background:#fff; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .actions { display:flex; gap:7px; flex-wrap:wrap; align-items:center; margin-top:7px; }
+  .msg { font-size:12.5px; } .msg.ok { color:var(--ok); } .msg.err { color:var(--warn); }
+  ol { margin:3px 0 4px; padding-left:18px; font-size:12px; }
+  .warn { background:#f8eae6; color:#6b2417; border-radius:7px; padding:7px 10px; font-size:12px; margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="note">시트가 조립한 <b>규칙(프롬프트)</b>을 다른 AI 앱에 한 번 저장해 두면, 그다음부터는 학생 자료만 붙여 넣으면 됩니다.
+  학생 자료는 들어가지 않습니다. 규칙을 고치면(기록종류·공통규칙·기재요령·예시) 다시 내보내세요.</div>
+<div class="actions" style="margin-top:10px">
+  <label style="margin:0">활동</label><select id="act"></select>
+  <label style="margin:0;font-weight:400"><input type="checkbox" id="ex" checked> 예시 넣기</label>
+</div>
+<div class="warn" id="exWarn" hidden></div>
+
+<div class="card">
+  <h3>Gemini Gem · ChatGPT · Claude 프로젝트 — 지침 글</h3>
+  <ol>
+    <li><a href="https://gemini.google.com/gems/create" target="_blank">Gemini › Gem 만들기</a> (학교 계정 권장) → [안내]에 붙여 넣기</li>
+    <li>ChatGPT: GPT 만들기 또는 프로젝트 › 지침 / Claude: 프로젝트 › 지침</li>
+  </ol>
+  <textarea id="gem" rows="8" readonly></textarea>
+  <div class="actions"><button class="primary" id="bGem">📋 지침 글 복사</button><span class="msg" id="mGem"></span></div>
+</div>
+
+<div class="card">
+  <h3>Claude 스킬 (SKILL.md)</h3>
+  <div class="note">스킬은 "필요할 때만 꺼내 읽는 지침 꾸러미"입니다. claude.ai › 설정 › 기능 › 스킬 에서 zip 을 올리면,
+    세특 이야기를 꺼낼 때 Claude 가 이 규칙을 저절로 불러 씁니다(유료 요금제·코드 실행이 켜져 있어야 함).</div>
+  <textarea id="skill" rows="8" readonly></textarea>
+  <div class="actions"><button class="primary" id="bZip">⬇ 스킬 zip 내려받기</button><button id="bMd">SKILL.md 만 내려받기</button><span class="msg" id="mSkill"></span></div>
+</div>
+<div class="actions" style="justify-content:flex-end"><button id="bClose">닫기</button></div>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var CUR = null;
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+function say(id, t, cls) { $(id).className = 'msg ' + (cls || ''); $(id).textContent = t || ''; }
+function copyText(text, id) {
+  var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+  document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta); say(id, ok ? '✓ 복사했습니다.' : '복사가 막혔습니다. 칸을 누르고 Ctrl+A → Ctrl+C', ok ? 'ok' : 'err');
+}
+function download(blob, name) { var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
+function load() {
+  google.script.run.withSuccessHandler(function (r) {
+    CUR = r; $('gem').value = r.gem; $('skill').value = r.skill;
+    $('exWarn').hidden = !($('ex').checked && r.examples);
+    $('exWarn').textContent = '예시 ' + r.examples + '개가 함께 들어갑니다. 예시에 실제 학생 글을 그대로 넣었다면 [예시 넣기]를 끄세요.';
+  }).withFailureHandler(function (e) { say('mGem', e.message, 'err'); }).exportFor({ key: $('act').value, examples: $('ex').checked });
+}
+google.script.run.withSuccessHandler(function (c) {
+  if (!c.activities.length) { say('mGem', '먼저 활동이나 바로 쓰기 시트를 만드세요.', 'err'); return; }
+  $('act').innerHTML = c.activities.map(function (a) { return '<option value="' + esc(a.key) + '"' + (a.key === c.pick ? ' selected' : '') + '>' + esc(a.name + ' · ' + a.recordKey) + '</option>'; }).join('');
+  load();
+}).exportContext();
+$('act').onchange = load; $('ex').onchange = load;
+$('bGem').onclick = function () { copyText($('gem').value, 'mGem'); };
+$('bMd').onclick = function () { download(new Blob([$('skill').value], { type: 'text/markdown;charset=utf-8' }), 'SKILL.md'); };
+$('bZip').onclick = function () {
+  say('mSkill', '만드는 중…');
+  google.script.run.withSuccessHandler(function (r) {
+    var bin = atob(r.b64), arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    download(new Blob([arr], { type: 'application/zip' }), r.file);
+    say('mSkill', '✓ ' + r.file + ' — claude.ai › 설정 › 기능 › 스킬 › 올리기', 'ok');
+  }).withFailureHandler(function (e) { say('mSkill', e.message, 'err'); }).exportSkillZip({ key: $('act').value, examples: $('ex').checked });
+};
+$('bClose').onclick = function () { google.script.host.close(); };
+</script>
+</body>
+</html>

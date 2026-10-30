@@ -1,0 +1,6 @@
+{
+ "id": "wand",
+ "version": "2.0.13",
+ "color": "#AC5CD7",
+ "svg": "<path data-part=\"wand\" d=\"m3.5 20.5 11-11\"/><path data-part=\"tip\" class=\"a\" d=\"m14.5 9.5 2.5-2.5\"/><path data-part=\"sp1\" class=\"a\" d=\"M18.5 2.5v3M17 4h3\"/><path data-part=\"sp2\" class=\"a\" d=\"M20.5 9.5v2M19.5 10.5h2\"/><path data-part=\"sp3\" class=\"a\" d=\"M11.5 3v2M10.5 4h2\"/>"
+}

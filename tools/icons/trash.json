@@ -1,0 +1,18 @@
+{
+ "id": "trash",
+ "version": "2.0.13",
+ "color": "#F05465",
+ "svg": "<g data-part=\"lid\"><path d=\"M3.5 6.5h17\"/><path d=\"M9 6.5V4.75c0-.69.56-1.25 1.25-1.25h3.5c.69 0 1.25.56 1.25 1.25V6.5\"/></g><g data-part=\"can\"><path class=\"s\" d=\"m5.5 6.5 1.07 12.66A2 2 0 0 0 8.56 21h6.88a2 2 0 0 0 1.99-1.84L18.5 6.5\"/><path class=\"a\" d=\"M10 10.5v6M14 10.5v6\"/></g>",
+ "poses": {
+  "open": {
+   "lid": {
+    "rotate": 18,
+    "translate": [
+     0,
+     -1.2
+    ]
+   }
+  }
+ },
+ "defaultState": "closed"
+}

@@ -1,0 +1,2824 @@
+<meta charset="utf-8">
+<!-- 자동 생성: web/prompt-studio.html → tools/build-studio.js. 여기를 고치지 말고 web/prompt-studio.html 을 고치세요. -->
+<title>세특 프롬프트 공방</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --ground:#f4f6f3; --surface:#ffffff; --surface-2:#eef1ec;
+    --ink:#16202a; --ink-2:#4d5a64; --ink-3:#7d8a92;
+    --line:#d9ded7; --line-2:#c3cabf;
+    --accent:#35583f; --accent-2:#5b8465; --accent-soft:#e3ece4;
+    --warn:#8f2f20; --warn-soft:#f6e6e2;
+    --check:#7a5c14; --check-soft:#f7efdb;
+    --ok:#2c6340; --on-accent:#ffffff;
+    --radius:10px;
+    --mono:"IBM Plex Mono","SFMono-Regular",Consolas,monospace;
+    --sans:"IBM Plex Sans KR","Malgun Gothic",-apple-system,BlinkMacSystemFont,sans-serif;
+    --serif:"Gowun Batang","Nanum Myeongjo",Georgia,serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#14191b; --surface:#1c2326; --surface-2:#232b2e;
+      --ink:#e7ece7; --ink-2:#aab5ae; --ink-3:#7e8a83;
+      --line:#2f383b; --line-2:#3e494c;
+      --accent:#8fb99a; --accent-2:#6f9b7b; --accent-soft:#223029;
+      --warn:#e8a396; --warn-soft:#38231f;
+      --check:#d8bd77; --check-soft:#332a17;
+      --ok:#8ccca3; --on-accent:#101614;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#14191b; --surface:#1c2326; --surface-2:#232b2e;
+    --ink:#e7ece7; --ink-2:#aab5ae; --ink-3:#7e8a83;
+    --line:#2f383b; --line-2:#3e494c;
+    --accent:#8fb99a; --accent-2:#6f9b7b; --accent-soft:#223029;
+    --warn:#e8a396; --warn-soft:#38231f;
+    --check:#d8bd77; --check-soft:#332a17;
+    --ok:#8ccca3; --on-accent:#101614;
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  body{background:var(--ground); color:var(--ink); font-family:var(--sans);
+       font-size:15px; line-height:1.65; margin:0; padding:0 16px; -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px; margin:0 auto; padding-block:28px 64px}
+
+  header.top{border-bottom:1px solid var(--line); padding-bottom:20px; margin-bottom:26px}
+  header.top h1{font-family:var(--serif); font-weight:700; font-size:clamp(25px,4.2vw,34px);
+                margin:0 0 6px; letter-spacing:-.01em; text-wrap:balance}
+  header.top p{margin:0; color:var(--ink-2); max-width:62ch; font-size:14.5px}
+  .kicker{font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+          color:var(--accent); font-weight:600; margin-bottom:8px}
+
+  .cols{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:26px; align-items:start}
+  @media (max-width:900px){ .cols{grid-template-columns:1fr} }
+
+  .panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden}
+  .panel > h2{margin:0; font-family:var(--sans); font-size:12px; font-weight:600; letter-spacing:.08em;
+              text-transform:uppercase; color:var(--ink-2); padding:13px 18px;
+              background:var(--surface-2); border-bottom:1px solid var(--line)}
+  .panel .body{padding:18px}
+
+  .field{display:flex; flex-direction:column; gap:5px; margin-bottom:16px; min-width:0}
+  .field:last-child{margin-bottom:0}
+  .field > label, .field > .lab{font-size:12.5px; font-weight:600; color:var(--ink-2)}
+  .field .note{font-size:11.5px; color:var(--ink-3); line-height:1.5}
+  .pair{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  @media (max-width:520px){ .pair{grid-template-columns:1fr} }
+  .labrow{display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap}
+
+  input[type=text], input[type=number], select, textarea{
+    font-family:var(--sans); font-size:14px; color:var(--ink);
+    background:var(--surface); border:1px solid var(--line-2); border-radius:7px;
+    padding:9px 11px; width:100%; line-height:1.5}
+  input[type=number]{font-variant-numeric:tabular-nums}
+  textarea{resize:vertical; min-height:64px}
+  textarea.mono{font-family:var(--mono); font-size:12px}
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, .tab:focus-visible{
+    outline:2px solid var(--accent-2); outline-offset:2px}
+
+  .split{display:flex; gap:4px; flex-wrap:wrap}
+  .split button{font-family:var(--mono); font-size:11.5px; border:1px solid var(--line-2); background:var(--surface);
+                color:var(--ink-2); border-radius:6px; padding:3px 9px; cursor:pointer; font-variant-numeric:tabular-nums}
+  .split button[aria-pressed=true]{background:var(--accent-soft); color:var(--accent); border-color:var(--accent-2)}
+  .share{height:5px; border-radius:3px; background:var(--line); overflow:hidden; margin-top:2px}
+  .share i{display:block; height:100%; background:var(--accent-2); border-radius:3px; transition:width .18s}
+
+  .linkbtn{background:none; border:0; padding:0; color:var(--accent); font-family:var(--sans);
+           font-size:12.5px; font-weight:600; cursor:pointer; text-decoration:underline; text-underline-offset:3px}
+
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:7px}
+  .chip{display:inline-flex; align-items:center; gap:6px; background:var(--accent-soft);
+        color:var(--accent); border:1px solid transparent; border-radius:999px;
+        padding:3px 6px 3px 11px; font-size:12.5px; font-weight:500}
+  .chip button{background:none; border:0; color:inherit; cursor:pointer; font-size:14px;
+               line-height:1; padding:2px 4px; opacity:.6; border-radius:50%}
+  .chip button:hover{opacity:1}
+  .chip .open{font-size:12.5px; opacity:1; border-radius:4px; padding:0; font-family:var(--sans); font-weight:500}
+
+  .tabs{display:flex; gap:2px; background:var(--surface-2); border-bottom:1px solid var(--line); padding:0 8px; overflow-x:auto}
+  .tab{appearance:none; background:none; border:0; border-bottom:2px solid transparent; cursor:pointer;
+       font-family:var(--sans); font-size:12.5px; font-weight:600; color:var(--ink-3);
+       padding:12px 12px 10px; white-space:nowrap}
+  .tab[aria-selected=true]{color:var(--accent); border-bottom-color:var(--accent)}
+
+  pre.out{font-family:var(--mono); font-size:11.5px; line-height:1.62; white-space:pre-wrap;
+      word-break:break-word; background:var(--surface-2); border:1px solid var(--line);
+      border-radius:8px; padding:14px; margin:0; max-height:min(58vh,560px); overflow:auto; color:var(--ink)}
+
+  .bar{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:12px}
+  .bar .spacer{flex:1}
+  button.act, a.act{font-family:var(--sans); font-size:13px; font-weight:600; cursor:pointer;
+             border:1px solid var(--line-2); background:var(--surface); color:var(--ink);
+             border-radius:7px; padding:8px 14px; text-decoration:none; display:inline-flex; align-items:center; gap:7px; line-height:1.4}
+  button.act.primary{background:var(--accent); border-color:var(--accent); color:var(--on-accent)}
+  /* 버튼 아이콘 — Lucian Icons(MIT) 기본 모습. 초록 버튼에서는 강조색도 글자색으로 */
+  svg.ic{width:16px; height:16px; flex:none}
+  button.act.primary svg.ic{--ic:currentColor!important}
+  .linkbtn svg.ic, summary svg.ic{width:15px; height:15px; vertical-align:-3px; margin-right:5px}
+  .chip button svg.ic{width:12px; height:12px; display:block; --ic:currentColor!important}
+  button.act:hover, a.act:hover{border-color:var(--accent-2)}
+  button.act:disabled{opacity:.5; cursor:default}
+
+  .meter{font-family:var(--mono); font-size:12px; font-variant-numeric:tabular-nums;
+         color:var(--ink-2); display:inline-flex; align-items:center; gap:7px}
+  .meter b{color:var(--ink); font-weight:500}
+  .track{width:120px; height:6px; border-radius:3px; background:var(--line); overflow:hidden}
+  .track i{display:block; height:100%; background:var(--accent-2); border-radius:3px; transition:width .18s}
+  .track.over i{background:var(--warn)}
+
+  .issue{display:flex; gap:9px; align-items:flex-start; padding:9px 11px; border-radius:7px;
+         font-size:12.5px; margin-bottom:6px; line-height:1.5}
+  .issue.block{background:var(--warn-soft); color:var(--warn)}
+  .issue.check{background:var(--check-soft); color:var(--check)}
+  .issue.pass{background:var(--accent-soft); color:var(--ok)}
+  .issue .tag{font-family:var(--mono); font-size:10.5px; font-weight:500; letter-spacing:.04em;
+              border:1px solid currentColor; border-radius:4px; padding:1px 5px; flex:none; margin-top:2px; opacity:.8}
+  .issue .hit{font-family:var(--mono); opacity:.85}
+  .issue .why{display:block; font-size:11.5px; opacity:.85}
+
+  .warnbox{background:var(--check-soft); color:var(--check); border-radius:7px; padding:10px 12px; font-size:12.5px; line-height:1.55}
+  .warnbox label{display:flex; gap:7px; align-items:flex-start; margin-top:6px; font-weight:600; cursor:pointer}
+  .warnbox input{margin-top:4px}
+  .checkline{display:flex; gap:7px; align-items:flex-start; font-size:12.5px; color:var(--ink-2); cursor:pointer}
+  .checkline input{margin-top:4px}
+
+  details.rules{border-top:1px solid var(--line); margin-top:4px}
+  details.rules summary{cursor:pointer; font-size:12.5px; font-weight:600; color:var(--ink-2);
+                        padding:12px 0 10px; list-style:none}
+  details.rules summary::-webkit-details-marker{display:none}
+  details.rules summary::before{content:"▸ "; color:var(--accent)}
+  details.rules[open] summary::before{content:"▾ "}
+  details.rules textarea{min-height:120px; font-size:12.5px}
+
+  .steps{list-style:none; margin:0 0 22px; padding:0; display:grid;
+         grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; background:var(--line);
+         border:1px solid var(--line); border-radius:var(--radius); overflow:hidden}
+  @media (max-width:760px){ .steps{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  .steps li{background:var(--surface); padding:12px 14px}
+  .steps .n{font-family:var(--mono); font-size:11px; color:var(--accent); font-weight:500}
+  .steps .t{font-size:13px; font-weight:600; margin-top:2px}
+  .steps .d{font-size:11.5px; color:var(--ink-3); line-height:1.5}
+
+  .sheetnote{margin-top:10px!important; font-size:13px!important; color:var(--accent)!important; font-weight:500}
+  dl.sum{display:grid; grid-template-columns:max-content minmax(0,1fr); gap:6px 14px; margin:0 0 4px; font-size:13px}
+  dl.sum dt{color:var(--ink-3); font-size:12px; padding-top:1px}
+  dl.sum dd{margin:0; min-width:0; overflow-wrap:anywhere}
+  .exlist{display:flex; flex-direction:column; gap:12px}
+  .excard{display:flex; flex-direction:column; gap:6px; background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:12px}
+  .excard textarea{min-height:56px}
+  .sublab{font-size:12px; font-weight:600; color:var(--ink-3)}
+  .dsex{margin-top:10px}
+  .dsex .sublab{display:block; margin-bottom:4px}
+  #newSubject{margin-top:26px; scroll-margin-top:16px}
+  #newSubject .lead{margin:0 0 16px; color:var(--ink-2); font-size:13.5px; max-width:78ch}
+  .stage{font-family:var(--mono); font-size:11px; color:var(--accent); font-weight:500; letter-spacing:.04em; margin-bottom:8px}
+  .mine{border-top:1px solid var(--line); margin-top:18px; padding-top:14px}
+
+  footer{margin-top:40px; padding-top:18px; border-top:1px solid var(--line);
+         font-size:12px; color:var(--ink-3); line-height:1.7}
+  .toast{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(24px + env(safe-area-inset-bottom,0px));
+         background:var(--ink); color:var(--ground); font-size:13px; padding:9px 16px; border-radius:999px;
+         opacity:0; pointer-events:none; transition:opacity .2s; max-width:calc(100% - 32px); text-align:center}
+  .toast.show{opacity:1}
+  @media (prefers-reduced-motion:reduce){ *{transition:none!important; animation:none!important} }
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="kicker">학교생활기록부 특기사항 · 2026학년도 기재요령</div>
+  <h1>세특 프롬프트 공방</h1>
+  <p>활동 하나를 정의하면 그에 맞는 프롬프트가 조립됩니다. 교과·창체·행동특성을 같은 방식으로 다루고, 기재요령 금지사항과 분량 규칙은 자동으로 붙습니다. 목록에 없는 교과는 교육과정 자료로 직접 만들어 쓰고, 한 칸을 여러 활동이 나눠 쓰면 활동마다 바이트를 정합니다. 스프레드시트 도구와 같은 엔진이라 시트에서 만든 프롬프트와 똑같습니다.</p>
+  <p class="sheetnote" id="sheetNote" hidden></p>
+</header>
+
+<ol class="steps">
+  <li><div class="n">01</div><div class="t">기록 종류 · 바이트</div><div class="d">한 칸의 바이트와 관점·기재 주의가 따라오고, 나눠 쓰면 이 활동의 몫만</div></li>
+  <li><div class="n">02</div><div class="t">교과 · 영역</div><div class="d">교과 역량 문단이 들어갑니다. 없는 교과는 새로 만듭니다</div></li>
+  <li><div class="n">03</div><div class="t">활동 정의</div><div class="d">입력 항목, 개요 한두 줄, 예시. 결과 예시만 넣고 AI로 채워도 됩니다</div></li>
+  <li><div class="n">04</div><div class="t">복사 · 검증</div><div class="d">프롬프트를 쓰고, 나온 문장을 여기서 점검합니다</div></li>
+</ol>
+
+<div class="cols">
+
+  <!-- ─────────────── 설계 ─────────────── -->
+  <section class="panel">
+    <h2>활동 설계</h2>
+    <div class="body">
+
+      <div class="pair">
+        <div class="field">
+          <label for="rec">기록 종류</label>
+          <select id="rec"></select>
+          <div class="note" id="recNote"></div>
+        </div>
+        <div class="field">
+          <div class="labrow"><label for="bytes">이 활동의 바이트 한도</label><span class="note" id="bytesHint"></span></div>
+          <input type="number" id="bytes" min="60" max="1500" step="1">
+          <div class="share" aria-hidden="true"><i id="shareBar"></i></div>
+          <div class="split" role="group" aria-label="한 칸 나누기">
+            <button type="button" data-split="1">한 칸 전체</button>
+            <button type="button" data-split="2">½</button>
+            <button type="button" data-split="3">⅓</button>
+            <button type="button" data-split="4">¼</button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>결과 길이 · 관찰 메모에 맞추기</label>
+        <div class="split" role="group" aria-label="결과 길이" id="amount">
+          <button type="button" data-amount="메모만큼">메모만큼</button>
+          <button type="button" data-amount="보통">보통</button>
+          <button type="button" data-amount="넉넉히">넉넉히</button>
+        </div>
+        <div class="note" id="amountNote"></div>
+      </div>
+      <div class="note" style="margin:-6px 0 16px">한 칸을 여러 활동이 나눠 쓰면 이 활동의 몫만 적으세요. 예) 수학 과세특 1500바이트 = 탐구 보고서 750 + 발표 450 + 수업 태도 300. 2022 개정 공통과목은 1·2 합산이라 학기마다 750씩.</div>
+
+      <div class="field">
+        <div class="labrow"><label for="sub">교과 · 영역</label><button type="button" class="linkbtn" id="toNew" data-icon="plus">목록에 없는 교과 만들기</button></div>
+        <select id="sub"></select>
+        <div class="note">창의적 체험활동과 행동특성 및 종합의견은 <b>공통</b>을 고르세요. 교과 역량 문구가 빠집니다.</div>
+      </div>
+
+      <div class="field">
+        <label for="name">활동 이름</label>
+        <input type="text" id="name" placeholder="예) 전기전자 데이터 탐구">
+      </div>
+
+      <div class="field">
+        <label for="colInput">입력 항목 <span style="font-weight:400;color:var(--ink-3)">— 학생 한 명당 채울 칸</span></label>
+        <input type="text" id="colInput" placeholder="항목을 적고 엔터 · 쉼표로 여러 개">
+        <div class="chips" id="chips"></div>
+        <div class="note">과정이 드러나게 3~6개가 적당합니다. 무엇을, 왜, 어떻게, 무엇을 알게 되었는지, 한계는.</div>
+      </div>
+
+      <div class="field">
+        <label for="desc">활동 개요</label>
+        <textarea id="desc" rows="2" placeholder="이 활동이 무엇인지 한두 문장"></textarea>
+      </div>
+
+      <div class="field">
+        <div class="labrow"><span class="lab">예시 <span style="font-weight:400;color:var(--ink-3)">— 이렇게 나왔으면 하는 결과</span></span><button type="button" class="linkbtn" id="toDesign" data-icon="wand">결과만 넣고 나머지 칸 채우기</button></div>
+        <div class="exlist" id="exList"></div>
+        <div class="bar" style="margin-top:4px">
+          <button type="button" class="act" id="exAdd" data-icon="plus">예시 추가</button>
+          <span class="note">수준이 다른 예시 3~5편이 가장 좋습니다. 한 편만 넣어도 톤이 안정됩니다. 학생 이름은 지우고 넣으세요.</span>
+        </div>
+      </div>
+
+      <details class="rules">
+        <summary>공통 규칙 손보기 — 어미, 기재 금지사항</summary>
+        <div class="field">
+          <label for="rWrite">서술 규칙</label>
+          <textarea id="rWrite" rows="8"></textarea>
+        </div>
+        <div class="field">
+          <label for="rNeis">학생부 기재 금지사항 (2026학년도)</label>
+          <textarea id="rNeis" rows="8"></textarea>
+        </div>
+        <div class="bar"><button class="act" id="resetRules" data-icon="undo">기본값으로 되돌리기</button></div>
+      </details>
+
+    </div>
+  </section>
+
+  <!-- ─────────────── 결과 ─────────────── -->
+  <section class="panel">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-prompt" aria-selected="true" aria-controls="p-prompt">조립된 프롬프트</button>
+      <button class="tab" role="tab" id="tab-design" aria-selected="false" aria-controls="p-design">AI로 칸 채우기</button>
+      <button class="tab" role="tab" id="tab-row" aria-selected="false" aria-controls="p-row">활동목록 한 줄</button>
+      <button class="tab" role="tab" id="tab-check" aria-selected="false" aria-controls="p-check">결과 검증</button>
+    </div>
+    <div class="body">
+
+      <div id="p-prompt" role="tabpanel" aria-labelledby="tab-prompt">
+        <pre class="out" id="promptOut"></pre>
+        <div class="bar">
+          <span class="meter">프롬프트 <b id="promptBytes">0</b> 바이트</span>
+          <span class="spacer"></span>
+          <button class="act primary" data-copy="promptOut" data-icon="copy">프롬프트 복사</button>
+        </div>
+        <p class="note" style="margin-top:10px">이 프롬프트를 ChatGPT·Gemini·Claude 어디에 붙여넣든 됩니다. 그 아래에 <code># 학생 자료</code>를 적고 <code>항목: 내용</code> 형태로 한 줄씩 이어 붙이세요. 학생 이름은 넣지 마세요.</p>
+        <details class="rules" id="gemBox">
+          <summary><span data-icon="diamond"></span>Gemini Gem · Claude 스킬로 저장해 두기</summary>
+          <p class="note" style="margin:0 0 8px">Gemini 앱(구독 계정 · 학교 계정)에 이 프롬프트를 Gem으로 한 번 저장해 두면, 다음부터는 학생 자료만 붙여 넣으면 됩니다. 여러 학생은 [S1] [S2]처럼 나눠 답합니다.</p>
+          <ol class="note" style="margin:0 0 8px;padding-left:18px">
+            <li>[Gem 지침 복사] → <b>새 Gem 만들기</b> → 이름(예: 세특 — 수학 탐구) → <b>[안내]</b>에 붙여 넣고 저장</li>
+            <li>쓸 때는 그 Gem을 열고 학생 자료를 붙여 넣기 → 받은 글을 시트 [최종본]이나 [결과 검증] 탭에 붙여 넣어 검사</li>
+            <li>설계를 바꾸면 다시 복사해 Gem의 [안내]를 바꿔 주세요</li>
+          </ol>
+          <div class="bar">
+            <button class="act primary" id="gemCopy" data-icon="copy">Gem 지침 복사</button>
+            <a class="act" data-icon="arrow" href="https://gemini.google.com/gems/create" target="_blank" rel="noopener">새 Gem 만들기</a>
+            <button class="act" id="skillCopy" data-icon="copy">Claude 스킬(SKILL.md) 복사</button>
+          </div>
+          <p class="note" style="margin-top:6px">Claude 스킬은 claude.ai 설정 › 기능 › 스킬에서 SKILL.md 를 담은 폴더(zip)로 올립니다. 시트 안에서는 메뉴 ⑧ [AI 앱용 지침 내보내기]가 zip 파일로 바로 줍니다.</p>
+        </details>
+      </div>
+
+      <div id="p-design" role="tabpanel" aria-labelledby="tab-design" hidden>
+        <p class="note" style="margin:0 0 10px">왼쪽 <b>예시</b>의 결과 칸에 “이렇게 나왔으면” 하는 세특을 1~5편 넣으세요. 학생 자료는 비워도 됩니다. AI가 그 글을 거꾸로 읽어 <b>활동 개요 · 입력 항목 · 예시마다의 학생 자료</b>를 채우고, 예시 길이로 <b>바이트 한도</b>를 맞춥니다. 기록 종류와 교과는 지금 고른 것을 씁니다.</p>
+        <p class="note" id="dsState" style="margin:0"></p>
+        <div class="bar">
+          <button class="act primary" id="dsAuto" data-icon="sparkle" hidden>AI로 채우기</button>
+          <button class="act" id="dsCopy" data-icon="copy">요청문 복사</button>
+          <a class="act" data-icon="arrow" href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini 열기</a>
+        </div>
+        <div class="field" style="margin-top:14px">
+          <label for="dsAnswer">AI 답 붙여 넣기</label>
+          <textarea id="dsAnswer" class="mono" rows="4" placeholder="활동 이름: …&#10;활동 개요: …&#10;입력 항목: 항목1|항목2|항목3&#10;[예시1]&#10;항목1: …"></textarea>
+        </div>
+        <div class="bar" style="margin-top:-6px"><button class="act" id="dsParse" data-icon="document">읽기</button><span class="note" id="dsMsg" role="status"></span></div>
+        <div id="dsPreview" hidden style="margin-top:14px">
+          <dl class="sum" id="dsSum"></dl>
+          <div id="dsEx"></div>
+          <div class="bar">
+            <button class="act primary" id="dsApply" data-icon="check">왼쪽 칸에 모두 넣기</button>
+            <button class="act" id="dsUndo" data-icon="undo" hidden>되돌리기</button>
+          </div>
+          <p class="note" style="margin-top:8px">넣은 뒤에도 왼쪽에서 직접 고칠 수 있습니다. 선생님이 정한 활동 이름은 바꾸지 않습니다.</p>
+        </div>
+      </div>
+
+      <div id="p-row" role="tabpanel" aria-labelledby="tab-row" hidden>
+        <div id="rowSheet" hidden>
+          <p class="note" style="margin:0 0 12px">지금 설계 그대로 이 시트에 활동을 만듭니다. 입력 시트와 예시 시트가 생기고 학생 명단이 채워집니다. 예시를 적었다면 예시 시트에 1편이 들어갑니다.</p>
+          <dl class="sum" id="rowSummary"></dl>
+          <div class="bar">
+            <button class="act primary" id="mkAct" data-icon="grid">이 설계로 활동 시트 만들기</button>
+            <button class="act" id="openAct" data-icon="next" hidden>만든 시트 열기</button>
+          </div>
+          <p class="note" id="mkMsg" role="status" style="margin-top:8px"></p>
+        </div>
+        <div id="rowWeb">
+        <pre class="out" id="rowOut"></pre>
+        <div class="bar">
+          <span class="spacer"></span>
+          <button class="act primary" data-copy="rowOut" data-icon="copy">한 줄 복사</button>
+        </div>
+        <p class="note" style="margin-top:10px">스프레드시트 도구의 <b>🗂 활동목록</b> 시트 맨 아래 빈 행 A열을 클릭하고 붙여넣으면 탭으로 열이 나뉩니다. 다섯째 칸이 <b>바이트 한도</b>입니다. 붙여넣은 뒤 메뉴에서 활동 시트를 만들거나, 마법사로 만든 활동의 설정을 이 값으로 맞추면 됩니다. 직접 만든 교과는 시트의 <b>📚 새 교과 만들기</b>에 나누는 글을 먼저 붙여 넣어 저장하세요.</p>
+        </div>
+      </div>
+
+      <div id="p-check" role="tabpanel" aria-labelledby="tab-check" hidden>
+        <div class="field">
+          <label for="checkIn">완성된 특기사항을 붙여넣으세요</label>
+          <textarea id="checkIn" rows="7" placeholder="AI가 쓴 문장이든 직접 쓴 문장이든 상관없습니다"></textarea>
+        </div>
+        <div class="bar" style="margin-bottom:14px">
+          <span class="meter">
+            <b id="checkBytes">0</b> / <span id="checkLimit">1500</span> 바이트
+            <span class="track" id="track"><i style="width:0"></i></span>
+          </span>
+        </div>
+        <div id="checkOut"></div>
+        <p class="note" style="margin-top:12px">기계적인 점검입니다. <b>수정</b>은 기재요령상 걸리는 표현, <b>확인</b>은 맥락에 따라 괜찮을 수도 있는 표현입니다. 한도는 위에서 정한 이 활동의 바이트입니다. 최종 판단과 책임은 작성자에게 있습니다.</p>
+      </div>
+
+    </div>
+  </section>
+</div>
+
+<!-- ─────────────── 새 교과 ─────────────── -->
+<section class="panel" id="newSubject" aria-labelledby="nsTitle">
+  <h2 id="nsTitle">새 교과 만들기</h2>
+  <div class="body">
+    <p class="lead">교과 이름과 교육과정 자료(교과 역량·성취기준)를 주면 AI가 교과 역량과 수업에서 볼 수 있는 모습, 입력 항목 초안을 만듭니다. 요청문을 복사해 쓰는 AI에 붙여 넣고, 받은 답을 오른쪽에 붙여 넣으세요. 시트 도구의 <b>📚 새 교과 만들기</b>와 같은 요청문이고, 다른 선생님이 나눈 교과 글도 그대로 읽힙니다.</p>
+    <div class="cols">
+      <div>
+        <div class="stage">① 교과와 자료</div>
+        <div class="pair">
+          <div class="field">
+            <label for="nsName">교과(과목) 이름</label>
+            <input type="text" id="nsName" placeholder="예) 화학, 공통국어1, 인공지능 기초">
+          </div>
+          <div class="field">
+            <label for="nsLevel">학교급</label>
+            <select id="nsLevel"><option>고등학교</option><option>중학교</option></select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="nsSource">교육과정 자료 <span style="font-weight:400;color:var(--ink-3)">— 비워도 됩니다</span></label>
+          <textarea id="nsSource" rows="5" placeholder="교과 역량, 핵심 아이디어, 성취기준 부분을 붙여 넣으면 그 말로 씁니다.&#10;예) [12화학01-01] 화학이 인류 문명에 기여한 사례를 조사하여 …"></textarea>
+          <div class="note">교육과정 원문은 <a href="https://ncic.re.kr" target="_blank" rel="noopener">국가교육과정정보센터(ncic.re.kr)</a>에서 과목별로 받을 수 있습니다. PDF는 AI 대화창에 파일로 첨부해도 됩니다. 자료 없이 만들면 확실하지 않은 줄에 [교육과정 확인 필요]가 붙습니다.</div>
+        </div>
+        <div class="field">
+          <label for="nsNote">우리 수업에서 강조할 점 <span style="font-weight:400;color:var(--ink-3)">— 선택</span></label>
+          <input type="text" id="nsNote" placeholder="예) 실험보다 데이터 분석 중심, 발표·토론 수업이 많음">
+        </div>
+        <div class="bar">
+          <button class="act primary" id="nsCopy" data-icon="copy">요청문 복사</button>
+          <a class="act" data-icon="arrow" href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini 열기</a>
+          <a class="act" data-icon="arrow" href="https://chatgpt.com" target="_blank" rel="noopener">ChatGPT 열기</a>
+        </div>
+      </div>
+
+      <div>
+        <div class="stage">② 답 붙여 넣기 → ③ 읽고 고치기</div>
+        <div class="field">
+          <label for="nsAnswer">AI 답 · 나눠 받은 교과 글</label>
+          <textarea id="nsAnswer" class="mono" rows="5" placeholder="키: 화학&#10;표시명: 화학&#10;분류: 교과&#10;…"></textarea>
+        </div>
+        <div class="bar" style="margin:-6px 0 14px"><button class="act" id="nsParse" data-icon="document">읽기</button><span class="note" id="nsMsg" role="status"></span></div>
+
+        <div id="nsEdit" hidden>
+          <div class="pair">
+            <div class="field"><label for="fKey">키 (짧게)</label><input type="text" id="fKey"></div>
+            <div class="field"><label for="fName">표시명</label><input type="text" id="fName"></div>
+          </div>
+          <div class="field"><label for="fRole">역할 표현</label><input type="text" id="fRole"></div>
+          <div class="field">
+            <label for="fComp">역량 · 서술 관점 <span style="font-weight:400;color:var(--ink-3)">— 프롬프트에 그대로 들어갑니다</span></label>
+            <textarea id="fComp" rows="7"></textarea>
+          </div>
+          <div class="field">
+            <label for="fCols">추천 입력 항목 <span style="font-weight:400;color:var(--ink-3)">— | 로 나눔</span></label>
+            <input type="text" id="fCols">
+          </div>
+          <div class="warnbox" id="nsUnsure" hidden>[교육과정 확인 필요] 표시가 있습니다. 교과 역량 이름과 관찰 모습을 교육과정 문서와 맞춰 보세요. 쓰기를 누르면 표시는 지워집니다.
+            <label><input type="checkbox" id="nsConfirm"> 교육과정과 맞춰 보았습니다</label>
+          </div>
+          <label class="checkline" style="margin-top:12px" id="nsOverBox" hidden><input type="checkbox" id="nsOver"> 이 시트에 같은 키의 교과가 있습니다 — 덮어쓰기</label>
+          <label class="checkline" style="margin-top:12px"><input type="checkbox" id="nsUseCols" checked> 추천 입력 항목을 위 활동 설계에도 넣기</label>
+          <div class="bar">
+            <button class="act primary" id="nsSave" data-icon="save">이 교과 쓰기</button>
+            <button class="act" id="nsShare" data-icon="copy">나누는 글 복사</button>
+          </div>
+          <p class="note" style="margin-top:8px" id="nsSaveNote">나누는 글을 시트의 <b>📚 새 교과 만들기</b> 창에 붙여 넣으면 시트에도 저장되고, 같은 교과 선생님께 보내면 그대로 쓸 수 있습니다.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mine" id="mineBox" hidden>
+      <div class="field" style="margin:0">
+        <span class="lab">내가 만든 교과 <span style="font-weight:400;color:var(--ink-3)">— 이 브라우저에만 저장됩니다. 눌러서 다시 고치기</span></span>
+        <div class="chips" id="mineChips"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer id="foot"></footer>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* @@ENGINE — tools/build-studio.js 가 넣는 자리. 손으로 고치지 마세요. */
+var ENGINE = (function () {
+/* ── apps-script/00_Presets.gs ── */
+/**
+ * 세특 작성 도우미 v3 — 기본 프리셋
+ * ---------------------------------------------------------------
+ * 이 파일의 값은 "최초 설치 시 시트에 채워지는 기본값"입니다.
+ * 설치 후에는 스프레드시트의 [기록종류] · [교과영역] · [공통규칙] 시트에서
+ * 자유롭게 수정하세요. 코드를 고칠 필요가 없습니다.
+ * ---------------------------------------------------------------
+ */
+
+var APP = {
+  VERSION: 'v3.0.0',
+  MENU: '세특 도우미 v3',
+  // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
+  SH: {
+    START: '🚀 시작하기',
+    HELP: '📖 사용법',
+    CONFIG: '⚙️ 설정',
+    ROSTER: '👤 학생명단',
+    RECORD: '🧩 기록종류',
+    SUBJECT: '📚 교과영역',
+    COMMON: '📐 공통규칙',
+    ACTIVITY: '🗂 활동목록',
+    COMPILE_PREFIX: '📦 취합 ▸',
+    REVIEW: '✅ 검토',
+    RULES: '📏 기재요령',
+    STYLE: '✒️ 내 문체',
+    FORM_RAW: '📥 폼응답원본'
+  },
+  SUFFIX: { IN: ' ▸입력', EX: ' ▸예시' },
+  // 활동 입력 시트의 고정 열 구조
+  HEAD_ROW: 3,   // 헤더 행
+  DATA_ROW: 4,   // 데이터 시작 행
+  COLORS: {
+    input: '#fff8e1',   // 교사가 채우는 칸
+    output: '#e8f5e9',  // AI 결과
+    paste: '#e3f2fd',   // 복붙용
+    lock: '#eeeeee',    // 자동/수정금지
+    warn: '#ffebee'
+  }
+};
+
+/**
+ * 기록 종류 프리셋
+ * 출처: 2026학년도 학교생활기록부 기재요령(교육부·17개 시도교육청)
+ * ※ 글자수는 학년도마다 바뀝니다. 반드시 해당 연도 기재요령으로 확인 후 시트에서 수정하세요.
+ */
+var PRESET_RECORD_TYPES = [
+  {
+    key: '과세특',
+    name: '과목별 세부능력 및 특기사항',
+    chars: 500,
+    useGrade: true,
+    role: '{교과} 교과를 {연차}년간 지도해 온 고등학교 교사',
+    goal: '교과 수업과 평가 과정에서 관찰한 학생의 학업 역량·성장 과정을 학교생활기록부의 과목별 세부능력 및 특기사항으로 작성',
+    view: '- 교과 수업·평가 장면에서 실제로 관찰된 사실을 근거로 서술할 것\n' +
+          '- 결과물의 우수성보다 탐구 과정·사고의 전개·태도의 변화를 중심으로 서술할 것\n' +
+          '- 해당 교과의 핵심역량이 드러나는 장면을 구체적으로 연결할 것',
+    note: '과목별 최대 500자. 2022 개정 공통과목(공통국어·공통수학·공통영어·통합사회·통합과학·한국사·과학탐구실험)은 1·2를 합산해 500자, 전공실무과목은 학기별 500자. 2026학년도 기준(고 p.208).'
+  },
+  {
+    key: '개세특',
+    name: '개인별 세부능력 및 특기사항',
+    chars: 500,
+    useGrade: false,
+    role: '학생의 학습 전반을 관찰해 온 고등학교 교사',
+    goal: '특정 교과에 귀속되지 않는 학생의 학업 관련 특성을 개인별 세부능력 및 특기사항으로 작성',
+    view: '- 특정 과목의 성취가 아니라 교과 전반에 걸친 학습 태도·방법·성장을 서술할 것\n' +
+          '- 학교교육계획에 따라 이루어진 활동만 근거로 삼을 것',
+    note: '교과별 세특에 담기 어려운 내용을 기재.'
+  },
+  {
+    key: '자율',
+    name: '자율·자치활동 특기사항',
+    chars: 500,
+    useGrade: false,
+    role: '학급과 학교 활동을 함께해 온 담임교사',
+    goal: '자율·자치활동에서 드러난 학생의 역할·참여도·성장을 창의적 체험활동 특기사항으로 작성',
+    view: '- 학급·학교 단위 활동에서 학생이 맡은 구체적 역할과 기여를 중심으로 서술할 것\n' +
+          '- 단순 참여 사실 나열이 아니라 참여의 동기·과정·변화가 드러나도록 할 것\n' +
+          '- 교과 역량 문구를 억지로 넣지 말 것',
+    note: ''
+  },
+  {
+    key: '동아리',
+    name: '동아리활동 특기사항',
+    chars: 500,
+    useGrade: false,
+    role: '동아리를 지도해 온 고등학교 교사',
+    goal: '정규 동아리활동에서 관찰한 학생의 탐구 과정·협력·성장을 창의적 체험활동 특기사항으로 작성',
+    view: '- 동아리의 공동 활동과 그 안에서 학생 개인이 맡은 몫을 구분해 서술할 것\n' +
+          '- 탐구 주제 선정 이유 → 과정 → 어려움과 해결 → 알게 된 점 흐름이 드러나게 할 것\n' +
+          '- 학생의 진로와 자연스럽게 연결되는 지점이 있으면 드러낼 것',
+    note: '자율동아리는 대입 미반영. 정규 동아리 활동만 기재.'
+  },
+  {
+    key: '진로',
+    name: '진로활동 특기사항',
+    chars: 500,
+    useGrade: false,
+    role: '학생의 진로 탐색을 지도해 온 고등학교 교사',
+    goal: '진로활동에서 관찰한 학생의 진로 탐색 과정과 자기이해의 심화를 특기사항으로 작성',
+    view: '- 희망 진로 자체보다 그 진로에 도달하기 위한 탐색 과정과 근거를 서술할 것\n' +
+          '- 진로가 바뀌었다면 변화의 계기와 사고의 확장을 긍정적으로 서술할 것\n' +
+          '- 특정 대학·학과·기관명을 쓰지 말 것',
+    note: '2026학년도부터 700자 → 500자로 축소.'
+  },
+  {
+    key: '행발',
+    name: '행동특성 및 종합의견',
+    chars: 300,
+    useGrade: false,
+    role: '1년간 학생을 관찰해 온 담임교사',
+    goal: '1년간의 관찰을 바탕으로 학생의 행동특성과 학습·인성 전반에 대한 종합의견을 작성',
+    view: '- 담임교사의 관찰자 시점에서, 학생을 총체적으로 조망하여 서술할 것\n' +
+          '- 인성·대인관계·자기관리·학습태도가 균형 있게 드러나도록 할 것\n' +
+          '- 교과 성취나 특정 활동의 재탕이 되지 않도록 할 것\n' +
+          '- 추천서에 준하는 서술이 되도록 하되 단정적 평가어는 피할 것',
+    note: '2026학년도부터 500자 → 300자로 축소. 분량이 매우 짧으니 문장을 압축할 것.'
+  }
+];
+
+/**
+ * 교과·영역 프로필 프리셋
+ * role      : 역할 문장에 들어갈 표현
+ * comp      : 해당 교과/영역에서 드러나야 할 역량·관점 (프롬프트에 그대로 삽입)
+ */
+var PRESET_SUBJECTS = [
+  {
+    key: '공통',
+    name: '(교과 무관 · 창체/행발용)',
+    kind: '공통',
+    role: '고등학교 교사',
+    comp: '2022 개정 교육과정 핵심역량 중 다음이 드러나도록 서술한다.\n' +
+          '자기관리, 지식정보처리, 창의적 사고, 심미적 감성, 협력적 소통, 공동체 역량.\n' +
+          '역량 이름을 그대로 나열하지 말고, 관찰된 장면 속에서 자연스럽게 드러나게 한다.'
+  },
+  {
+    key: '수학',
+    name: '수학',
+    kind: '교과',
+    role: '고등학교 수학교사',
+    comp: '수학과 핵심역량: 문제해결, 추론, 의사소통, 연결, 정보처리.\n' +
+          '- 수학적 지식을 이해하고 활용하여 자신감 있게 문제를 해결하는 모습\n' +
+          '- 수학적 사실에 흥미를 갖고 추측과 정당화를 통해 추론하는 모습\n' +
+          '- 수학적 사고와 전략을 언어·기호·그래프로 표현하고 소통하는 모습\n' +
+          '- 개념·원리·법칙 간 관련성을 탐구하고 실생활이나 타 교과에 적용하는 모습\n' +
+          '- 공학 도구를 목적에 맞게 활용하고 자료를 처리하여 합리적으로 판단하는 모습'
+  },
+  {
+    key: '국어',
+    name: '국어',
+    kind: '교과',
+    role: '고등학교 국어교사',
+    comp: '국어과 핵심역량: 비판적·창의적 사고, 자료·정보 활용, 의사소통, 공동체·대인관계, 문화향유, 자기성찰·계발.\n' +
+          '- 텍스트를 맥락 속에서 해석하고 근거를 들어 비판적으로 읽는 모습\n' +
+          '- 자신의 생각을 목적과 독자에 맞게 조직하여 표현하는 모습\n' +
+          '- 토의·토론에서 상대의 논지를 정확히 파악하고 조정하는 모습'
+  },
+  {
+    key: '영어',
+    name: '영어',
+    kind: '교과',
+    role: '고등학교 영어교사',
+    comp: '영어과 핵심역량: 영어 의사소통, 자기관리, 공동체, 지식정보처리.\n' +
+          '- 주제와 상황에 맞게 듣고 읽은 내용을 이해·재구성하는 모습\n' +
+          '- 자신의 생각을 영어로 조직하여 말하고 쓰는 모습\n' +
+          '- 어휘·구문을 맥락 속에서 추론하며 학습 전략을 스스로 조절하는 모습\n' +
+          '※ 공인어학시험 점수·등급은 절대 언급하지 않는다.'
+  },
+  {
+    key: '과학',
+    name: '과학(통합과학·물화생지)',
+    kind: '교과',
+    role: '고등학교 과학교사',
+    comp: '과학과 핵심역량: 과학적 사고력, 탐구능력, 문제해결력, 의사소통능력, 참여와 평생학습능력.\n' +
+          '- 가설 설정 → 변인 통제 → 자료 수집 → 해석 → 결론의 흐름을 스스로 설계하는 모습\n' +
+          '- 오차와 한계를 인식하고 개선 방안을 제시하는 모습\n' +
+          '- 과학 개념을 실생활·사회적 쟁점과 연결하여 설명하는 모습'
+  },
+  {
+    key: '사회',
+    name: '사회(통합사회·역사·지리·일반사회)',
+    kind: '교과',
+    role: '고등학교 사회교사',
+    comp: '사회과 핵심역량: 창의적 사고력, 비판적 사고력, 문제해결력 및 의사결정력, 의사소통 및 협업능력, 정보활용능력.\n' +
+          '- 자료를 근거로 사회 현상을 다각도에서 해석하는 모습\n' +
+          '- 서로 다른 입장을 비교하고 합리적 대안을 도출하는 모습\n' +
+          '- 공동체 문제에 관심을 갖고 참여적 태도를 보이는 모습'
+  },
+  {
+    key: '정보',
+    name: '정보·인공지능',
+    kind: '교과',
+    role: '고등학교 정보교사',
+    comp: '정보과 핵심역량: 컴퓨팅 사고력, 디지털 문화 소양, 인공지능 소양, 협력적 문제해결력.\n' +
+          '- 문제를 분해하고 추상화하여 알고리즘으로 표현하는 모습\n' +
+          '- 코드를 스스로 디버깅하며 개선하는 과정\n' +
+          '- 데이터·인공지능의 활용과 그 사회적 영향을 함께 고려하는 태도'
+  },
+  {
+    key: '체육',
+    name: '체육',
+    kind: '교과',
+    role: '고등학교 체육교사',
+    comp: '체육과 핵심역량: 건강관리, 신체수련, 경기수행, 신체표현 능력.\n' +
+          '- 자신의 체력 수준을 파악하고 목표를 세워 꾸준히 관리하는 모습\n' +
+          '- 경기 상황에서 전략을 이해하고 동료와 협력하는 모습\n' +
+          '- 규칙과 상대를 존중하는 스포츠맨십'
+  },
+  {
+    key: '예술',
+    name: '음악·미술',
+    kind: '교과',
+    role: '고등학교 예술교사',
+    comp: '예술과 핵심역량: 심미적 감성, 창의적 사고, 문화적 공동체, 자기주도 학습 능력.\n' +
+          '- 작품의 의도를 자신의 언어로 해석하고 표현하는 모습\n' +
+          '- 재료·기법·매체를 선택하고 시도하며 완성도를 높여 가는 과정\n' +
+          '- 서로의 작품을 존중하며 감상하고 피드백하는 태도'
+  },
+  {
+    key: '진로교과',
+    name: '진로와 직업',
+    kind: '교과',
+    role: '고등학교 진로교사',
+    comp: '자기이해, 일과 직업세계 이해, 진로탐색, 진로디자인과 준비 역량.\n' +
+          '- 자기 이해를 근거 자료와 연결하여 구체화하는 모습\n' +
+          '- 관심 분야를 좁혀 가며 탐색의 깊이를 더하는 과정'
+  }
+];
+
+/**
+ * [📐 공통규칙]의 NEIS_RULES 기본 문구 — 2026학년도 학교생활기록부 기재요령 기준.
+ * 프롬프트의 [학생부 기재 금지사항] 칸에 그대로 들어간다.
+ * 해마다 바뀌는 부분은 16_Rules.gs 의 규칙판(RULES_2026)과 원격 규칙판이 이어받는다.
+ */
+var NEIS_RULES_2026 =
+  '다음은 학교생활기록부에 쓰지 않는다(2026학년도 학교생활기록부 기재요령 기준). 학생 자료에 있어도 결과에 넣지 않는다.\n' +
+  '- 대회 참여 사실·성적·수상(대회를 행사로 바꿔 써도 안 됨), 교외 기관·단체에게 받은 상\n' +
+  '- 공인어학시험·인증시험·자격증, 모의고사·전국연합학력평가 성적·석차·등급\n' +
+  '- 논문 투고·학회 발표·도서 출간·특허, 연구보고서(소논문) 실적(제목·주제·참여 인원·소요 시간)\n' +
+  '- K-MOOC 같은 온라인 공개강좌, 방과후학교, 해외 활동·어학연수, 봉사 시간·헌혈 횟수\n' +
+  '- 대학명·학과명·기관명·학원·강사명·상호명, 부모와 친인척의 직업·지위\n' +
+  '- 정규교육과정 밖의 활동, 사교육을 부르는 내용, 도서명 나열(도서는 교육활동과 이어 도서명(저자)로만)';
+
+/** 2026.1 규칙판(옛 번호 v3.6~v3.8.6)의 NEIS_RULES — 이 문구 그대로인 칸은 손대지 않은 옛 기본값 */
+var NEIS_RULES_2026_1 =
+  '다음은 학교생활기록부에 기재할 수 없다(2026학년도 학교생활기록부 기재요령 기준). 결과물에 절대 포함하지 않는다.\n' +
+  '- 교내·외 대회 참여 사실과 그 성적·수상실적, 수상 등수(수상경력란에만 기재). 대회 이름을 단순 행사로 바꿔 쓰는 것도 안 된다.\n' +
+  '- 교외 기관·단체(장)에게 받은 상(표창장·감사장·공로상 포함)\n' +
+  '- 공인어학시험(TOEIC, TOEFL, TEPS, HSK, JLPT, G-TELP 등)과 교내·외 인증시험의 참여 사실·점수·등급\n' +
+  '- 자격증·인증 취득 사실, 기능사·산업기사 같은 자격명(자격증란에만 기재)\n' +
+  '- 모의고사·전국연합학력평가 성적(원점수, 석차, 등급, 백분위)\n' +
+  '- 논문(소논문)의 학회지 투고·등재·학회 발표 사실, 도서 출간 사실, 특허·실용신안·상표·디자인 출원·등록 사실\n' +
+  '- 연구보고서(소논문) 관련 실적(제목, 연구 주제, 참여 인원, 소요 시간)\n' +
+  '- K-MOOC·MOOC·KOCW 같은 온라인 공개강좌 수강 내용, 방과후학교 활동\n' +
+  '- 해외 활동실적, 어학연수, 해외봉사\n' +
+  '- 특정 대학명·학과명, 기관명, 사설 학원·강사명, 상호명(도서명·저자명에 들어 있는 경우만 예외)\n' +
+  '- 부모 및 친인척의 사회적·경제적 지위를 암시하는 내용(직업, 직위, 직장명 등)\n' +
+  '- 학교교육계획에 없거나 정규교육과정 밖에서 이루어진 활동\n' +
+  '- 봉사활동 시간, 헌혈 횟수처럼 다른 항목에 적는 사항\n' +
+  '- 도서명만 늘어놓는 식의 기재(도서가 필요하면 교육활동과 연결해 도서명(저자) 형식으로)\n' +
+  '- 사교육을 유발할 수 있는 요소';
+
+/**
+ * 예전 판(옛 번호 v3.0~v3.5)이 설치하던 NEIS_RULES 문구.
+ * [공통규칙] 칸이 이 문구 그대로면 선생님이 손대지 않은 것이므로, 새 학년도 문구로 바꿔도 된다.
+ */
+var OLD_NEIS_RULES = [
+  '다음은 학교생활기록부에 기재할 수 없다. 결과물에 절대 포함하지 않는다.\n' +
+  '- 교외 대회·경시대회 수상 실적, 교내외 수상 사실 및 등수(수상경력란에만 기재)\n' +
+  '- 공인어학시험(TOEIC, TOEFL, TEPS, HSK, JLPT, 지텔프 등) 점수·등급\n' +
+  '- 각종 자격증·인증 취득 사실, 기능사·산업기사 등 자격명\n' +
+  '- 논문 학회지 등재, 도서 출간, 발명 특허 출원 사실\n' +
+  '- 모의고사·전국연합학력평가 성적, 석차, 백분위, 등급\n' +
+  '- 해외 활동실적, 어학연수, 해외봉사\n' +
+  '- 특정 대학명, 학과명, 사설 기관·학원·강사명, 상호명, 프로그램 상품명\n' +
+  '- 부모 및 친인척의 사회적·경제적 지위를 암시하는 내용\n' +
+  '- 정규 교육과정 외에 이루어진 활동(학교교육계획에 없는 활동)\n' +
+  '- 헌혈, 봉사활동 시간 등 별도 항목에 기재하는 사항\n' +
+  '- 특정 도서명의 나열식 기재\n' +
+  '- 사교육을 유발할 수 있는 요소'
+].concat([NEIS_RULES_2026_1]);
+
+/** 옛 번호 v3.8.7 시험판(시험 사본에만 들어감)의 서술 규칙 — 성장 가능성 줄을 바꾸기 전 */
+var OLD_WRITING_RULES_387 =
+  '- 명사형 어미(~함, ~음, ~임)로 끝맺고, 존댓말·구어체 없이 한 문단으로 쓴다.\n' +
+  '- \'학생은\' 같은 학생 주어와 학생 이름을 쓰지 않는다.\n' +
+  '- 하이픈, 가운뎃점, 따옴표 같은 특수문자와 이모지를 쓰지 않고 쉼표와 마침표만 쓴다.\n' +
+  '- 관찰된 사실 → 그 의미 → 성장 가능성 순서로 잇고, 부족한 점은 개선 방향과 함께 쓴다.\n' +
+  '- 근거 없는 과장, 누구에게나 해당하는 일반론, 입력 자료에 없는 사실을 쓰지 않는다.';
+
+/**
+ * 2026.1 판(옛 번호 v3.6~v3.8.6)의 [📐 공통규칙] 기본 문구 — 옛 번호 v3.8.7 에서 프롬프트를 줄이며 바꿨다.
+ * 이 문구 그대로인 칸은 손대지 않은 옛 기본값으로 본다(15_Update.gs OLD_PRESET_TEXTS).
+ */
+var OLD_COMMON_2026_1 = {
+  WRITING_RULES:
+    '- 문장 종결은 명사형 어미(~함, ~음, ~임)를 사용한다.\n' +
+    '- 존댓말·구어체를 쓰지 않고, 문단 구분 없이 한 문단으로 작성한다.\n' +
+    '- \'학생은\', \'학생이\' 등 학생을 지칭하는 주어를 쓰지 않는다. 학생 이름도 쓰지 않는다.\n' +
+    '- 하이픈(-), 가운뎃점(·), 따옴표 등 특수문자와 이모지를 쓰지 않는다. 쉼표와 마침표만 사용한다.\n' +
+    '- 같은 표현의 반복을 피하고 유의어로 변주한다.\n' +
+    '- 관찰된 사실 → 그 의미 → 성장 가능성 순서로 자연스럽게 잇는다.\n' +
+    '- 부족한 점은 지적으로 끝내지 말고 개선 방향과 함께 서술한다.\n' +
+    '- 근거 없는 과장, 상투적 미사여구, 모든 학생에게 해당하는 일반론을 쓰지 않는다.\n' +
+    '- 입력된 자료에 없는 사실을 추측해서 만들어 내지 않는다.',
+  BYTE_RULE:
+    '분량은 바이트로 계산한다.\n' +
+    '- 한글 1글자 = 3바이트\n' +
+    '- 영문 대소문자, 숫자, 공백, 마침표·쉼표 등 = 각 1바이트\n' +
+    '- 줄바꿈 = 2바이트',
+  GRADE_RULE:
+    '학생의 성취수준은 5단계이며 1이 가장 높다(상위 약 10%).\n' +
+    '- 1~2에 가까울수록 여러 역량이 높은 수준에서 함께 관찰되었다는 전제로 서술한다.\n' +
+    '- 4~5에 가까울수록 특정 역량이 부분적으로 관찰된 수준임을 전제로 하되,\n' +
+    '  노력한 지점과 성장 가능성을 반드시 함께 담아 긍정적으로 서술한다.\n' +
+    '- 성취수준 자체나 등급, 석차를 결과물에 직접 언급하지 않는다.',
+  AVOID_RULES:
+    'AI가 쓴 글에서 흔한 말투는 쓰지 않는다.\n' +
+    '- 번역투: "~에 있어(서)", "~와 관련하여", "~에 기반하여", "~에 의해", "~에서의", "관심을 가지고 있음", "~을 보여 줌"\n' +
+    '- 결산·과장 관용구: "이를 통해", "결론적으로", "시사하는 바가 크다", "주목할 점은", "단순한 ~을 넘어"\n' +
+    '- 상투적인 맺음과 수식: "~의 중요성을 깨달음", "~하는 계기가 됨", "한 단계 성장함", "~을 함양함", "깊이 있는", "탁월함"\n' +
+    '- "~하는 모습을 보임", "돋보임" 같은 서술어를 되풀이하지 않는다. 연결어미 바로 뒤에 쉼표를 습관처럼 찍지 않는다.\n' +
+    '- 평가하는 말보다 관찰한 장면(무엇을, 어떻게 했는지)으로 쓴다.'
+};
+
+/**
+ * 공통규칙 프리셋 (교과와 무관하게 전 기록에 적용)
+ */
+var PRESET_COMMON = [
+  {
+    key: 'WRITING_RULES',
+    title: '서술 규칙',
+    body:
+      '- 명사형 어미(~함, ~음, ~임)로 끝맺고, 존댓말·구어체 없이 한 문단으로 쓴다.\n' +
+      '- \'학생은\' 같은 학생 주어와 학생 이름을 쓰지 않는다.\n' +
+      '- 하이픈, 가운뎃점, 따옴표 같은 특수문자와 이모지를 쓰지 않고 쉼표와 마침표만 쓴다.\n' +
+      '- 관찰된 사실을 중심으로 쓰고, 그 의미와 성장 가능성은 자료가 뒷받침할 때만 덧붙인다. 부족한 점은 개선 방향과 함께 쓴다.\n' +
+      '- 근거 없는 과장, 누구에게나 해당하는 일반론, 입력 자료에 없는 사실을 쓰지 않는다.'
+  },
+  {
+    key: 'NEIS_RULES',
+    title: '학생부 기재 금지사항',
+    body: NEIS_RULES_2026
+  },
+  {
+    key: 'BYTE_RULE',
+    title: '분량 계산법',
+    body:
+      '분량은 나이스 바이트로 센다(한글 3, 영문·숫자·공백·문장부호 1, 줄바꿈 2).'
+  },
+  {
+    key: 'GRADE_RULE',
+    title: '성취수준 반영 지침',
+    body:
+      '성취수준은 1~5단계이고 1이 가장 높다.\n' +
+      '- 1~2는 여러 역량이 높은 수준에서 함께 드러난 것으로, 4~5는 일부 역량이 드러난 것으로 쓰되 노력한 점과 성장 가능성을 함께 긍정적으로 쓴다.\n' +
+      '- 성취수준, 등급, 석차는 결과에 쓰지 않는다.'
+  },
+  {
+    key: 'AVOID_RULES',
+    title: '피할 표현 (AI 투)',
+    // 16_Rules.gs 의 AVOID_RULES_DEFAULT 와 같은 글. 비우면 프롬프트에 넣지 않는다(칸이 없는 예전 시트는 이 기본값을 쓴다)
+    body:
+      'AI가 쓴 글에서 흔한 말투는 쓰지 않는다.\n' +
+      '- "~에 있어(서)", "~와 관련하여", "~에 기반하여", "~에 의해", "~에서의", "~을 보여 줌", "이를 통해", "결론적으로", "단순한 ~을 넘어"\n' +
+      '- "~의 중요성을 깨달음", "~하는 계기가 됨", "~을 함양함", "깊이 있는", "탁월함", 되풀이되는 "~하는 모습을 보임"\n' +
+      '- 평가하는 말보다 관찰한 장면(무엇을, 어떻게 했는지)으로 쓴다.'
+  },
+  {
+    key: 'STYLE_CARD',
+    title: '내 문체 카드',
+    // 비워 두면 쓰지 않는다. 메뉴 ⑧ [✒️ 내 문체 카드 만들기]가 [✒️ 내 문체] 시트의 예전 세특에서 만들어 채운다
+    body: ''
+  },
+  {
+    key: 'INSTRUCTION',
+    title: '마무리 지시문',
+    body:
+      '아래 학생 자료를 근거로, 위의 모든 규칙을 지켜 특기사항 본문만 출력한다.\n' +
+      '제목, 머리말, 설명, 따옴표, 마크다운 기호 없이 완성된 한 문단만 출력한다.'
+  }
+];
+
+/**
+ * 결과 검증용 패턴 (2026학년도 기재요령 기준)
+ * level: 'block'(기재 금지 · 반드시 수정) | 'check'(오탐 가능 · 눈으로 확인)
+ * why  : 검사 창·[📏 기재요령] 시트에 보이는 이유와 근거(기재요령 쪽수는 고등학교 판)
+ * 설치하면 [📏 기재요령] 시트에 표로 채워지고, 그다음부터는 그 표가 우선합니다.
+ */
+var PRESET_BANNED = [
+  { level: 'block', label: '공인어학시험', re: '토익|토플|텝스|지텔프|아이엘츠|오픽|TOEIC|TOEFL|TEPS|G-TELP|IELTS|HSK|JLPT|JPT|OPIc|DELF',
+    why: '공인어학시험 참여 사실·점수·등급은 학생부 어느 항목에도 쓸 수 없음 (2026 기재요령 고 p.118)' },
+  { level: 'block', label: '수상·등수', re: '수상|최우수상|우수상|장려상|금상|은상|동상|대상 수상|입상|[1-3]위 ?(입상|차지|기록)|메달',
+    why: '대회 참여 사실·성적·수상실적은 수상경력란에만. 대회 이름을 행사로 바꿔 쓰는 것도 안 됨 (고 p.118)' },
+  { level: 'block', label: '교외상', re: '표창장|감사장|공로상',
+    why: '교외 기관·단체(장)에게 받은 상은 기재할 수 없음 (고 p.118)' },
+  { level: 'block', label: '자격증·인증시험', re: '자격증|자격 ?취득|기능사|산업기사|기사 ?자격|정보처리기사|한국사능력검정|인증시험',
+    why: '자격증·인증시험은 [자격증 및 인증 취득상황]란에만 (고 p.66·p.118)' },
+  { level: 'block', label: '논문·특허·출판', re: '논문|학회지|학술지|학회 ?발표|특허 ?(출원|등록|취득)|실용신안|상표 ?(출원|등록)|저서 ?출간|책을 ?출간|도서 ?출간',
+    why: '논문 투고·등재·학회 발표, 도서 출간, 지식재산권 출원·등록 사실은 기재 불가 (고 p.118)' },
+  { level: 'block', label: '모의고사·석차', re: '모의고사|전국연합학력평가|모평|수능 ?성적|백분위|표준점수|석차|내신 ?[1-9] ?등급',
+    why: '모의고사·전국연합학력평가 성적, 석차, 등급은 기재 불가 (고 p.118)' },
+  { level: 'block', label: '온라인 공개강좌', re: '[Kk]-?MOOC|MOOC|KOCW|케이무크',
+    why: 'K-MOOC·MOOC·KOCW 관련 사항은 세특에 쓸 수 없음 (2026 신설, 고 p.118)' },
+  { level: 'block', label: '방과후학교', re: '방과후 ?학교|방과후 ?수업|방과후 ?강좌|방과후 ?활동',
+    why: '방과후학교 활동은 세특·행발 어디에도 쓸 수 없음 (2026 신설, 고 p.118·p.159)' },
+  { level: 'block', label: '해외활동', re: '어학연수|해외 ?연수|해외 ?봉사|교환학생|해외 ?캠프',
+    why: '해외 활동실적은 기재 불가' },
+  { level: 'block', label: '사설기관·학원', re: '학원|과외|사설 ?기관|아카데미|인강|사교육|입시 ?컨설팅',
+    why: '사설 기관·학원·강사명 등 사교육을 유발하는 요소는 기재 불가' },
+  { level: 'block', label: '부모 정보', re: '아버지|어머니|부모님?(의)? ?(직업|직장|회사|사업|직위)|가정 ?형편',
+    why: '부모·친인척의 사회적·경제적 지위를 암시하는 내용은 기재 불가' },
+  { level: 'check', label: '대학·기관명 가능성', re: '[가-힣A-Za-z]{2,10}대학교|[가-힣]{2,10}연구원|[가-힣]{2,10}재단|[가-힣]{2,8}학과',
+    why: '특정 대학·학과·기관명은 쓰지 않음. 도서명·저자명 안에 든 것만 예외 (고 p.157)' },
+  { level: 'check', label: '대회 언급', re: '대회|공모전|경시|올림피아드',
+    why: '대회 참여 사실은 기재 불가 — 수업 중 활동이면 대회라는 말 없이 활동 내용으로' },
+  { level: 'check', label: '봉사시간', re: '봉사 ?\\d+ ?시간|헌혈',
+    why: '봉사활동 시간·헌혈은 다른 항목에 적는 사항' },
+  { level: 'check', label: '청소년단체', re: '청소년 ?단체|스카우트|아람단|누리단|RCY|청소년적십자',
+    why: '고등학교는 청소년단체 활동의 단체명·특기사항을 입력하지 않음' },
+  { level: 'check', label: '학교스포츠클럽', re: '스포츠 ?클럽',
+    why: '정규교육과정 밖 학교스포츠클럽은 특기사항을 입력하지 않음 — 동아리란에 클럽명만 (2026 고 p.78)' },
+  { level: 'check', label: '자율동아리', re: '자율 ?동아리',
+    why: '고등학교 자율동아리는 동아리명만 입력하고 특기사항은 쓰지 않음 (고 p.84)' },
+  { level: 'check', label: '도서명 표기', re: '[『』《》]',
+    why: '도서는 교육활동과 연결될 때 도서명(저자) 형식으로 (고 p.157)' }
+];
+
+/** 형식 검증(어미·인칭·특수문자) */
+var PRESET_FORMAT_RULES = [
+  { level: 'block', label: '존댓말/평서형 어미', re: '습니다|입니다|했다\\.|이다\\.|였다\\.|한다\\.',
+    why: '학생부 문장은 명사형 어미(~함, ~음, ~임)로 끝냄' },
+  { level: 'block', label: "'학생' 주어", re: '학생(은|이|의|을|를|과|와|도)',
+    why: '학생을 지칭하는 주어를 쓰지 않음' },
+  { level: 'block', label: '금지 특수문자', re: "[·‘’“”\"'\\-–—*#]",
+    why: '[📐 공통규칙]의 서술 규칙: 쉼표와 마침표만 사용' },
+  { level: 'check', label: '줄바꿈 포함', re: '\\n',
+    why: '한 문단으로 씀. 줄바꿈은 2바이트로 셈' }
+];
+
+/* ================================================================ AI 모델 */
+/**
+ * 기본 모델 목록 — 설치할 때 [⚙️ 설정] 시트 아래 [🤖 모델 목록] 표에 한 번 채워지고,
+ * 그다음부터는 선생님이 고친 표가 우선합니다. (2026년 10월 기준으로 확인한 이름)
+ *
+ * 모델 이름은 회사들이 몇 달마다 바꿉니다. 그래서 기본값은 '-latest' 이름을 씁니다.
+ * gemini-flash-latest 는 구글이 새 Flash 모델을 낼 때마다 자동으로 그 모델을 가리키므로
+ * 배포한 사본이 몇 년이 지나도 "모델을 찾을 수 없음"으로 멈추지 않습니다.
+ *
+ * level: 표의 [수준] 칸. memo: [언제 쓰나] 칸.
+ */
+var DEFAULT_MODEL = 'gemini-flash-latest';
+
+/** 회사별 "이 정도면 충분" 모델 — 시작하기에서 키를 넣으면 이것으로 맞춘다 */
+var PROVIDER_DEFAULT_MODEL = {
+  gemini: 'gemini-flash-latest',
+  openai: 'gpt-6-luna',
+  anthropic: 'claude-haiku-5-5'
+};
+
+var PRESET_MODELS = [
+  { model: 'gemini-flash-latest', level: '★ 기본 · 충분',
+    memo: '세특·창체·행발 모두 이 정도면 충분합니다. 구글이 새 Flash를 내면 자동으로 바뀌어 이름이 낡지 않습니다. 무료 등급으로도 쓸 수 있습니다(호출 횟수 제한 있음).' },
+  { model: 'gemini-flash-lite-latest', level: '가볍게',
+    memo: '더 빠르고 저렴합니다. 행발처럼 짧은 글이나 한 번에 많은 학생을 돌릴 때. 문장이 조금 단조로울 수 있습니다.' },
+  { model: 'gemini-3.8-flash', level: '버전 고정',
+    memo: '학기 중에 문체가 바뀌지 않게 버전을 못 박고 싶을 때. 1년쯤 지나면 종료될 수 있으니 가끔 연결 테스트로 확인하세요.' },
+  { model: 'gemini-pro-latest', level: '고급 · 유료',
+    memo: '여러 활동을 합친 압축본이 글자수를 잘 못 맞출 때만. 느리고 비싸며, 무료 등급에서는 막힐 수 있습니다.' },
+  { model: 'gpt-6-luna', level: '충분',
+    memo: 'OpenAI 키를 쓸 때의 기본. 세특 작성에 충분합니다.' },
+  { model: 'gpt-6-sol', level: '고급',
+    memo: 'OpenAI 상위 모델. 압축본 품질을 더 올리고 싶을 때.' },
+  { model: 'claude-haiku-5-5', level: '충분',
+    memo: 'Claude 키를 쓸 때의 기본. 세특 작성에 충분합니다.' },
+  { model: 'claude-sonnet-5-5', level: '고급',
+    memo: 'Claude 상위 모델. 압축본 품질을 더 올리고 싶을 때.' }
+];
+
+/** 옛 번호 v3.0.x 의 기본값 — 설치/복구 때 선생님이 손대지 않은 값이면 새 기본값으로 올린다 */
+var OLD_DEFAULT_MODELS = { '활동용 모델': 'gemini-2.5-flash', '합본용 모델': 'gpt-5-mini' };
+
+/** 최신 모델명을 확인하는 공식 페이지 */
+var MODEL_LINKS = {
+  gemini: 'https://ai.google.dev/gemini-api/docs/models',
+  openai: 'https://platform.openai.com/docs/models',
+  anthropic: 'https://platform.claude.com/docs/en/models/overview'
+};
+
+/* ============================================================ 입력 항목 */
+/**
+ * 활동을 만들 때 고를 수 있는 [입력 항목] 묶음.
+ * 선생님이 직접 적는 것이 기본이고, 이 목록은 "이렇게들 많이 쓴다"는 출발점입니다.
+ * for: 어울리는 기록종류 키. 비어 있으면 어디서나 보여 줍니다.
+ */
+var PRESET_COLUMN_SETS = [
+  { label: '탐구·보고서', for: ['과세특', '개세특', '동아리', '진로'],
+    cols: ['탐구 주제', '선정 이유', '탐구 과정', '알게 된 점', '한계와 개선점'] },
+  { label: '실험', for: ['과세특', '동아리'],
+    cols: ['실험 주제', '세운 가설', '실험 설계', '결과 해석', '오차와 개선점'] },
+  { label: '수업 참여', for: ['과세특', '개세특'],
+    cols: ['단원·주제', '수업 중 모습', '질문·발표', '어려움과 극복', '성장한 점'] },
+  { label: '발표·토론', for: ['과세특', '동아리', '자율'],
+    cols: ['주제', '맡은 역할', '준비 과정', '발표·토론 내용', '배운 점'] },
+  { label: '독서 연계', for: ['과세특', '개세특', '진로'],
+    cols: ['읽은 책·계기', '인상 깊은 내용', '교과와 연결한 점', '더 알아본 것'] },
+  { label: '제작·산출물', for: ['과세특', '동아리', '진로'],
+    cols: ['만든 것', '설계·계획', '만드는 과정', '어려움과 해결', '결과와 소감'] },
+  { label: '자율·자치', for: ['자율'],
+    cols: ['활동명', '맡은 역할', '준비와 과정', '기여한 점', '변화·성장'] },
+  { label: '진로 탐색', for: ['진로'],
+    cols: ['관심 분야', '탐색 방법', '알게 된 점', '진로 계획의 변화'] },
+  { label: '행동특성', for: ['행발'],
+    cols: ['학습 태도', '인성·관계', '자기관리', '성장한 점', '보완할 점'] },
+  { label: '간단하게', for: [],
+    cols: ['무엇을 했나', '어떻게 했나', '무엇을 알게 되었나'] }
+];
+
+/* ── apps-script/10_Engine.gs ── */
+/**
+ * 세특 작성 도우미 v3 — 프롬프트 조립 엔진 (순수 로직)
+ * ---------------------------------------------------------------
+ * v2의 가장 큰 문제: 활동마다 프롬프트 "전체"를 사람이 복붙해서 관리
+ *   → 활동이 늘수록 골격이 서로 달라지고, 공통 규칙을 고쳐도 활동별
+ *     하드코딩 문구(예: "750바이트 이내") 때문에 반영되지 않음.
+ *
+ * v3의 해법: 프롬프트를 7개 슬롯으로 쪼개고 엔진이 자동 조립.
+ *   교사가 쓰는 것은 [활동설명 한두 줄 + 입력컬럼 + 예시] 뿐.
+ *
+ *   ① 역할      ← 기록종류.role  ×  교과영역.role
+ *   ② 맥락      ← 기록종류.goal  +  활동명/활동설명
+ *   ③ 서술규칙  ← 공통규칙.WRITING_RULES
+ *   ④ 기재요령  ← 공통규칙.NEIS_RULES
+ *   ⑤ 관점·역량 ← 기록종류.view  +  교과영역.comp
+ *   ⑥ 분량      ← 활동의 바이트 한도(없으면 기록종류 글자수×3) → 문장 자동 생성 + BYTE_RULE
+ *   ⑦ 활동고유  ← 입력 형식 + 예시 + (성취수준 지침) + 마무리 지시문
+ * ---------------------------------------------------------------
+ * 이 파일은 Apps Script와 Node 양쪽에서 동작하도록 작성되어 있습니다.
+ */
+
+/** NEIS 기준 바이트 수 (한글 3, 그 외 1, 줄바꿈 2) */
+function byteLen(s) {
+  if (s === null || s === undefined) return 0;
+  s = String(s);
+  var n = 0;
+  for (var i = 0; i < s.length; i++) {
+    var c = s.charCodeAt(i);
+    if (c === 10 || c === 13) n += 2;          // 줄바꿈
+    else if (c > 127) n += 3;                   // 한글 등 멀티바이트
+    else n += 1;
+  }
+  return n;
+}
+
+/** 바이트 한도에 맞게 자르되 문장 단위로 끊음 */
+function trimToBytes(s, limit) {
+  s = String(s || '');
+  if (byteLen(s) <= limit) return s;
+  var cut = '';
+  for (var i = 0; i < s.length; i++) {
+    if (byteLen(cut + s[i]) > limit) break;
+    cut += s[i];
+  }
+  var last = cut.lastIndexOf('.');
+  if (last > cut.length * 0.5) cut = cut.slice(0, last + 1);
+  return cut;
+}
+
+/** "a|b|c" 또는 "a, b, c" → ['a','b','c'] */
+function parseColumns(raw) {
+  if (!raw) return [];
+  return String(raw)
+    .split(/[|,\n]/)
+    .map(function (x) { return x.trim(); })
+    .filter(function (x) { return x.length > 0; });
+}
+
+/**
+ * 활동의 바이트 한도 — [🗂 활동목록]의 바이트 한도(예전 시트는 글자수×3), 비었으면 기록 항목 한도.
+ * 기록 항목 한도(나이스 한 칸)를 넘지 않는다. 한 기록 항목을 여러 활동이 나눠 쓸 때 활동마다 작게 정한다.
+ */
+function activityBytes(act, rec) {
+  var cap = Number(rec && rec.chars || 500) * 3;
+  var b = Number(act && act.bytes) || Number(act && act.chars || 0) * 3;
+  return b > 0 ? Math.min(Math.round(b), cap) : cap;
+}
+
+/**
+ * 예시 학생 자료 글("항목: 값" 줄들) → 입력 항목 순서의 값 배열 (공방에서 만든 예시를 예시 시트로 옮길 때)
+ * 항목 이름이 하나도 안 맞으면 글 전체를 첫 항목에 넣는다.
+ */
+function exampleValuesFrom(cols, text) {
+  var vals = [], hit = false;
+  for (var i = 0; i < cols.length; i++) vals.push('');
+  String(text || '').replace(/\r/g, '').split('\n').forEach(function (line) {
+    var m = /^\s*([^:：]{1,30}?)\s*[:：]\s*(.*)$/.exec(line);
+    var at = m ? cols.indexOf(m[1].trim()) : -1;
+    if (at >= 0) { vals[at] = (vals[at] ? vals[at] + ' ' : '') + m[2].trim(); hit = true; }
+  });
+  if (!hit && cols.length && String(text || '').trim()) vals[0] = String(text).trim();
+  return vals;
+}
+
+/** 한도를 n 개 활동에 똑같이 나누기(남는 바이트는 앞 활동부터 1씩) */
+function splitBytes(total, n) {
+  total = Math.max(0, Math.floor(Number(total) || 0)); n = Math.max(1, Math.floor(Number(n) || 1));
+  var each = Math.floor(total / n), rest = total - each * n, out = [];
+  for (var i = 0; i < n; i++) out.push(each + (i < rest ? 1 : 0));
+  return out;
+}
+
+/**
+ * 같은 기록 항목(과세특은 같은 교과까지)을 나눠 쓰는 활동들의 한도 합 — 나이스 한 칸을 넘는지
+ * @param {Array<{bytes?:number, chars?:number}>} acts
+ * @return {{cap:number, sum:number, left:number, over:boolean}}
+ */
+function byteBudget(acts, rec) {
+  var cap = Number(rec && rec.chars || 500) * 3, sum = 0;
+  (acts || []).forEach(function (a) { sum += activityBytes(a, rec); });
+  return { cap: cap, sum: sum, left: cap - sum, over: sum > cap };
+}
+
+/** 목록에서 key로 1건 찾기 */
+function findByKey(list, key) {
+  key = String(key || '').trim();
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].key).trim() === key) return list[i];
+  }
+  return null;
+}
+
+/** {KEY} 치환 (없는 키는 빈 문자열로 제거) */
+function fillTokens(tpl, map) {
+  return String(tpl || '').replace(/\{([A-Za-z0-9_가-힣]+)\}/g, function (m, k) {
+    return Object.prototype.hasOwnProperty.call(map, k) ? String(map[k]) : '';
+  });
+}
+
+/**
+ * 프롬프트 조립
+ * @param {Object} o
+ *   o.activity  {key,name,recordKey,subjectKey,bytes,columns,desc,mode,custom}  (bytes 대신 예전 chars 도 읽는다)
+ *   o.record    기록종류 1건
+ *   o.subject   교과영역 1건
+ *   o.common    {WRITING_RULES, NEIS_RULES, BYTE_RULE, GRADE_RULE, INSTRUCTION}
+ *   o.examples  예시 합본 문자열 (없으면 빈 문자열)
+ *   o.years     교직 경력 표기 (기본 15)
+ *   record.rules 이 기록 항목에만 붙는 기재 주의([🧩 기록종류]의 [기재 주의] — 기재요령 규칙판에서 옴)
+ *   activity.mode '바로쓰기' 면 입력 자료가 교사의 자유 메모 한 칸이다
+ *   activity.mode '보고서' 면 입력 자료가 [보고서 요점](교사가 확인한 것)과 [교사 관찰 메모]다
+ *   o.styleSamples 예전에 쓴 세특 몇 편(쓰는 방식만 참고) · common.STYLE_CARD 내 문체 카드
+ * @return {string}
+ */
+var AMOUNTS = ['메모만큼', '보통', '넉넉히'];
+
+/** 활동의 [분량 맞추기] — 비었거나 모르는 값이면 '보통' */
+function activityAmount(act) {
+  var v = String(act && act.amount || '').trim();
+  return AMOUNTS.indexOf(v) >= 0 ? v : '보통';
+}
+
+/**
+ * [분량 맞추기] 단계별 분량 지시
+ *   메모만큼: 메모가 한두 줄이면 한두 문장 — 관찰을 더 적으라는 신호가 [검증]의 분량 부족으로 보인다
+ *   보통: 메모가 짧아도 한도의 60% 안팎까지, 늘리는 몫은 메모 속 행동을 구체적으로 풀고 교과 역량과 잇는 데 쓴다
+ *   넉넉히: 메모 양과 관계없이 90% 안팎
+ * 어느 단계든 자료에 없는 활동 · 과정 · 결과 · 수치는 만들지 않는다(2026 기재요령: 허위 · 과장 기재 금지).
+ */
+function amountLines(amount, bytes) {
+  var full = Math.round(bytes * 0.9), half = Math.round(bytes * 0.6);
+  var noMake = '메모에 없는 활동, 과정, 결과, 수치는 만들지 않는다.';
+  if (amount === '메모만큼') {
+    return ['- 분량은 자료의 양을 따른다. 관찰 사실이 여럿이면 ' + full + '바이트 안팎까지 쓰고, 메모가 한두 줄이면 한두 문장으로 끝낸다.',
+            '- 분량을 채우려고 자료에 없는 과정, 결과, 칭찬, 성장 가능성 문장을 덧붙이지 않는다.'];
+  }
+  if (amount === '넉넉히') {
+    return ['- 메모 양과 관계없이 ' + full + '바이트 안팎으로 충실하게 쓴다. 메모 속 행동을 구체적으로 풀고, 그 의미와 교과 역량, 앞으로의 방향까지 잇는다.',
+            '- ' + noMake];
+  }
+  return ['- 관찰 사실이 여럿이면 ' + full + '바이트 안팎까지 쓰고, 메모가 짧아도 ' + half + '바이트 안팎은 쓴다.',
+          '- 늘리는 몫은 메모 속 행동을 구체적으로 풀고 교과 역량과 잇는 데 쓴다. ' + noMake,
+          '- 막연한 칭찬이나 성장 가능성 문장으로 분량을 채우지 않는다.'];
+}
+
+function buildPrompt(o) {
+  var act = o.activity || {};
+  var rec = o.record || {};
+  var sub = o.subject || {};
+  var com = o.common || {};
+  var recBytes = Number(rec.chars || 500) * 3;
+  var bytes = activityBytes(act, rec);
+  var chars = Math.floor(bytes / 3);
+  var cols = parseColumns(act.columns);
+
+  // 직접 작성 모드: 교사가 쓴 본문을 토큰만 치환해서 사용
+  if (String(act.mode || '').indexOf('직접') === 0) {
+    return fillTokens(act.custom, {
+      ROLE: buildRole(rec, sub, o.years),
+      WRITING_RULES: com.WRITING_RULES || '',
+      AVOID_RULES: com.AVOID_RULES || '',
+      NEIS_RULES: com.NEIS_RULES || '',
+      BYTE_RULE: com.BYTE_RULE || '',
+      GRADE_RULE: com.GRADE_RULE || '',
+      INSTRUCTION: com.INSTRUCTION || '',
+      COMPETENCY: sub.comp || '',
+      VIEW: rec.view || '',
+      RECORD_RULES: rec.rules || '',
+      STYLE_CARD: com.STYLE_CARD || '',
+      EXAMPLES: o.examples || '',
+      CHARS: chars,
+      BYTES: bytes,
+      RECORD_BYTES: recBytes,
+      COLUMNS: cols.join('|'),
+      ACTIVITY: act.name || '',
+      RECORD: rec.name || ''
+    }).trim();
+  }
+
+  var P = [];
+
+  // ① 역할
+  P.push('# 역할\n' + buildRole(rec, sub, o.years));
+
+  // ② 맥락
+  var ctx = ['# 과제'];
+  ctx.push('- 목표: ' + (rec.goal || '학교생활기록부 특기사항 작성'));
+  ctx.push('- 기록 항목: ' + (rec.name || act.recordKey || ''));
+  if (act.name) ctx.push('- 대상 활동: ' + act.name);
+  if (act.desc) ctx.push('- 활동 개요: ' + String(act.desc).replace(/\n/g, ' '));
+  P.push(ctx.join('\n'));
+
+  // ③ 서술 규칙 (+ 피할 표현 — AI 글에 흔한 번역투·상투어)
+  if (com.WRITING_RULES) P.push('# 서술 규칙\n' + com.WRITING_RULES);
+  if (com.AVOID_RULES && String(com.AVOID_RULES).trim()) P.push('# 피할 표현\n' + String(com.AVOID_RULES).trim());
+
+  // ④ 기재 금지사항 (+ 이 기록 항목에만 해당하는 기재 주의)
+  if (com.NEIS_RULES) P.push('# 학생부 기재 금지사항\n' + com.NEIS_RULES);
+  if (rec.rules && String(rec.rules).trim()) {
+    P.push('# 이 기록 항목의 기재 주의 (' + (rec.name || act.recordKey || '') + ')\n' + String(rec.rules).trim());
+  }
+
+  // ⑤ 관점 · 역량
+  var persp = [];
+  if (rec.view) persp.push(rec.view);
+  if (sub.comp) persp.push(sub.comp);
+  if (persp.length) P.push('# 서술 관점과 역량\n' + persp.join('\n\n'));
+
+  // ⑥ 분량 (단일 출처) — 활동목록 [분량 맞추기]: 메모만큼 · 보통(기본) · 넉넉히
+  // 2026 기재요령: 최대 글자 수 안에서 교사가 자율적으로 입력한다. 분량을 채우려 지어내면 허위·과장 기재가 된다.
+  var amount = activityAmount(act);
+  var len = ['# 분량'];
+  if (bytes < recBytes) {
+    len.push('- 이 활동은 ' + (rec.name || '이 기록 항목') + ' 한 칸(' + recBytes + '바이트) 가운데 한 부분이다. ' +
+             '같은 학생의 다른 활동 기록과 합쳐 들어가므로 이 활동의 몫만 쓴다.');
+  }
+  len.push('- ' + bytes + '바이트(한글 약 ' + chars + '자) 이내로 작성한다. 넘으면 안 된다.');
+  len = len.concat(amountLines(amount, bytes));
+  if (com.BYTE_RULE) len.push(com.BYTE_RULE);
+  P.push(len.join('\n'));
+
+  // ⑦-1 입력 형식
+  if (String(act.mode || '') === '바로쓰기') {
+    P.push('# 입력 자료 형식\n아래 학생 자료는 교사가 수업·활동 중에 관찰하고 자유롭게 적은 메모다. ' +
+           '메모에 있는 사실만 근거로 문장을 다듬어 쓴다.' + (amount === '메모만큼' ? ' 메모가 짧으면 짧게 쓴다.' : ''));
+  } else if (String(act.mode || '') === '보고서') {
+    P.push('# 입력 자료 형식\n아래 학생 자료는 학생이 수업 중에 쓴 보고서에서 뽑아 교사가 확인한 [보고서 요점]과, ' +
+           '교사가 수업에서 직접 본 [교사 관찰 메모]다.\n' +
+           '- 보고서 요점은 학생이 쓴 내용이다. 그대로 옮기지 말고, 교사가 수업과 평가에서 관찰한 탐구 과정과 사고의 변화로 서술한다.\n' +
+           '- 교사 관찰 메모가 있으면 그것을 가장 앞세운다. 요점과 메모가 다르면 메모를 따른다.\n' +
+           '- 보고서 제목, 참고문헌, 연구보고서 실적(제목·주제·참여 인원·소요 시간)은 쓰지 않는다.');
+  } else if (cols.length) {
+    P.push('# 입력 자료 형식\n아래 학생 자료는 다음 항목이 | 로 구분되어 제공된다.\n' + cols.join('|'));
+  }
+
+  // ⑦-2 예시 (문체 예시 → 활동 예시 순)
+  if (o.styleSamples && String(o.styleSamples).trim()) {
+    P.push('# 문체 예시 — 선생님이 예전에 쓴 세특\n내용·소재는 따르지 말고 문장 길이, 여는 방식, 끝맺음, 이음말 같은 쓰는 방식만 따른다.\n\n' +
+           String(o.styleSamples).trim());
+  }
+  if (o.examples && String(o.examples).trim()) {
+    P.push('# 예시\n표현 방식과 서술 흐름을 참고한다. 문장을 그대로 베끼지 않는다. ' +
+           (amount === '넉넉히' ? '' : '예시 결과의 길이와 내용은 그 예시 입력의 양에 맞춘 것이다. ' +
+             (amount === '메모만큼' ? '학생 자료가 예시 입력보다 적으면 결과도 그만큼 짧게 쓴다.' : '학생 자료가 예시 입력보다 적으면 예시보다 짧아도 된다.')) +
+           '\n\n' + String(o.examples).trim());
+  }
+
+  // ⑦-3 성취수준 (해당 기록 종류에만)
+  if (rec.useGrade && com.GRADE_RULE) {
+    P.push('# 성취수준 반영\n' + com.GRADE_RULE);
+  }
+
+  // ⑦-4 내 문체 카드 — 규칙 맨 끝(출력 바로 앞)에 두고, 학생 자료 뒤에도 한 번 더 붙인다(styleTail)
+  if (com.STYLE_CARD && String(com.STYLE_CARD).trim()) {
+    P.push('# 내 문체 (예시와 함께 가장 우선해서 따른다)\n' + String(com.STYLE_CARD).trim());
+  }
+
+  // ⑦-5 마무리 지시문
+  P.push('# 출력\n' + (com.INSTRUCTION || '특기사항 본문만 한 문단으로 출력한다.'));
+
+  return P.join('\n\n');
+}
+
+/** 역할 문장 조립 */
+function buildRole(rec, sub, years) {
+  years = years || 15;
+  var base = rec && rec.role ? rec.role : '고등학교 교사';
+  var filled = fillTokens(base, {
+    교과: (sub && sub.kind === '교과' && sub.name) ? sub.name.replace(/\(.*?\)/g, '').trim() : '',
+    연차: years
+  });
+  filled = filled.replace(/\s{2,}/g, ' ').replace(/^ /, '');
+  // 교과 토큰이 비어 "  교과를" 처럼 남는 경우 정리
+  filled = filled.replace(/^\s*교과를/, '여러 교과를');
+  var who = (sub && sub.role) ? sub.role : '고등학교 교사';
+  if (filled.indexOf(who) === -1 && sub && sub.kind === '교과') {
+    return '당신은 ' + filled + '입니다. (' + who + ')';
+  }
+  return '당신은 ' + filled + '입니다.';
+}
+
+/** 학생 1명의 입력값들을 "컬럼|컬럼" 형태 1줄로 */
+function buildStudentBlock(cols, values, opts) {
+  opts = opts || {};
+  var pairs = [];
+  for (var i = 0; i < cols.length; i++) {
+    var v = values[i];
+    if (v === undefined || v === null || String(v).trim() === '') continue;
+    pairs.push(cols[i] + ': ' + String(v).trim().replace(/\n/g, ' '));
+  }
+  var out = pairs.join('\n');
+  if (opts.grade) out += '\n성취수준: ' + opts.grade;
+  return out;
+}
+
+/**
+ * 결과 검증 — 바이트 / 기재 금지 / 형식 / 맞춤법
+ * 규칙마다 fix(바른 표기)·why(이유·근거)가 있으면 issue 에 함께 싣는다.
+ * spellIssues(16_Rules.gs)가 있으면 띄어쓰기·어미 검사도 더한다(opts.spell === false 면 뺀다).
+ */
+function validateResult(text, limitBytes, banned, formatRules, opts) {
+  text = String(text || '');
+  var issues = [];
+  var b = byteLen(text);
+
+  if (!text.trim()) return { ok: false, bytes: 0, issues: [{ level: 'block', label: '결과 없음', hit: '' }] };
+
+  if (limitBytes && b > limitBytes) {
+    issues.push({ level: 'block', label: '분량 초과', hit: b + ' / ' + limitBytes + '바이트' });
+  } else if (limitBytes && b < limitBytes * 0.7) {
+    issues.push({ level: 'check', label: '분량 부족', hit: b + ' / ' + limitBytes + '바이트' });
+  }
+
+  var all = (banned || []).concat(formatRules || []);
+  for (var i = 0; i < all.length; i++) {
+    var r = all[i];
+    if (!r || !r.re) continue;
+    var m;
+    try { m = text.match(new RegExp(r.re, 'g')); } catch (e) { continue; }
+    if (m && m.length) {
+      var uniq = [];
+      for (var j = 0; j < m.length; j++) if (uniq.indexOf(m[j]) === -1) uniq.push(m[j]);
+      var issue = { level: r.level || 'check', label: r.label, hit: uniq.slice(0, 5).join(', ') };
+      if (r.fix) issue.fix = r.fix;
+      if (r.why) issue.why = r.why;
+      issues.push(issue);
+    }
+  }
+  if (typeof spellIssues === 'function' && !(opts && opts.spell === false)) {
+    issues = issues.concat(spellIssues(text));
+  }
+
+  var blocks = issues.filter(function (x) { return x.level === 'block'; });
+  return { ok: blocks.length === 0, bytes: b, issues: issues };
+}
+
+/** 검증 결과를 셀에 넣을 짧은 문자열로 */
+function formatIssues(v) {
+  if (!v.issues.length) return '통과 (' + v.bytes + 'B)';
+  var parts = v.issues.map(function (x) {
+    return (x.level === 'block' ? '[수정] ' : '[확인] ') + x.label + (x.hit ? ' → ' + x.hit : '') +
+           (x.fix ? ' (바르게: ' + x.fix + ')' : '');
+  });
+  return (v.ok ? '확인필요 ' : '수정필요 ') + '(' + v.bytes + 'B)\n' + parts.join('\n');
+}
+
+/* Node 테스트용 export (Apps Script에서는 무시됨) */
+
+/* ── apps-script/16_Rules.gs ── */
+/**
+ * 세특 작성 도우미 v3 — 기재요령 규칙판 · 맞춤법 · 고쳐쓰기 (순수 로직)
+ * ---------------------------------------------------------------
+ * 해마다 바뀌는 학교생활기록부 기재요령을 "규칙판" 하나로 묶는다.
+ *   · 금지어·형식·맞춤법 검사 표       → [📏 기재요령] 시트
+ *   · 프롬프트의 [학생부 기재 금지사항] → [📐 공통규칙] NEIS_RULES
+ *   · 기록 항목별 기재 주의            → [🧩 기록종류] [기재 주의] 칸 (그 항목 프롬프트에만 붙는다)
+ *   · 기록 항목별 최대 글자 수         → [🧩 기록종류] [글자수] 칸
+ * 새 학년도 기재요령이 나오면 만든이가 rules/latest.json 하나만 고치고,
+ * 사본들은 그것을 받아 선생님이 손대지 않은 칸만 바꾼다(손댄 칸은 그대로 두고 알린다).
+ *
+ * 이 파일은 Apps Script와 Node 양쪽에서 동작한다(테스트: test/rules.test.js).
+ * ---------------------------------------------------------------
+ */
+
+/** 원격 규칙판 주소 — 구글 서버에서 받으므로 학교망에서 github 가 막혀도 된다 */
+var RULES_URL = 'https://raw.githubusercontent.com/sced9120/Prompt-Master/main/rules/latest.json';
+/** 원격 규칙판을 저절로 확인하는 간격 */
+var RULES_CHECK_DAYS = 7;
+
+/** 2026 기재요령의 생성형 AI 원칙 — 시작하기·사용법·검사 창·복사 창에 보여 준다 */
+var AI_NOTICE_2026 =
+  'AI로 생성한 자료를 학교생활기록부 서술형 항목에 그대로 입력하는 것은 금지입니다(2026학년도 기재요령 고 p.19). ' +
+  '이 도구의 결과는 초안입니다. 교사가 평소 직접 관찰·평가한 내용을 바탕으로 고쳐 쓰고, 최종 입력 전에 ' +
+  '학생의 실제 수행과 무관한 허위·과장 기재가 없는지, 기재요령을 지켰는지 반드시 확인하세요.';
+
+/** 맞춤법 표(자주 틀리는 표기) — [📏 기재요령] 시트에 함께 채워져 선생님이 더할 수 있다 */
+var PRESET_SPELL_RULES = [
+  ['역활', '역할'], ['됬', '됐'], ['몇 ?일', '며칠'], ['왠만', '웬만'], ['웬지', '왠지'],
+  ['금새', '금세'], ['희안', '희한'], ['설레임', '설렘'], ['오랫만', '오랜만'],
+  ['일일히', '일일이'], ['깨끗히', '깨끗이'], ['틈틈히', '틈틈이'], ['곰곰히', '곰곰이'],
+  ['꼼꼼이', '꼼꼼히'], ['솔직이', '솔직히'], ['꾸준이', '꾸준히'], ['열심이', '열심히'],
+  ['번번히', '번번이'], ['어떻해', '어떻게 해'], ['할께', '할게'], ['내노라', '내로라'],
+  ['어의없', '어이없'], ['문안하게', '무난하게'], ['뒤쳐', '뒤처'], ['짜집기', '짜깁기'],
+  ['염두해', '염두에 두어'], ['단언컨데', '단언컨대'], ['요컨데', '요컨대'], ['생각컨대', '생각건대'],
+  ['할려고', '하려고'], ['볼려고', '보려고'], ['갈려고', '가려고'], ['들어나', '드러나'], ['들어남', '드러남'],
+  ['가르키', '가리키'], ['어줍잖', '어쭙잖'], ['안밖', '안팎'], ['되여', '되어'], ['바뀌였', '바뀌었']
+].map(function (p) { return { level: 'check', label: '맞춤법', re: p[0], fix: p[1], why: '바른 표기: ' + p[1] }; });
+
+/* ============================================================ 2026 규칙판 */
+/**
+ * 기록 항목별 기재 주의 — 그 기록 항목의 프롬프트에만 붙는다(필요한 규칙만 꺼내 쓰기).
+ * 출처: 2026학년도 학교생활기록부 기재요령 주요 개정사항 안내(고등학교, 교육부·KERIS)
+ */
+var RECORD_RULES_2026 = {
+  '과세특':
+    '- 교사가 수업과 수업에 연계한 수행평가 등에서 수시·상시로 관찰·평가한 내용만 바탕으로 쓴다(고 p.117).\n' +
+    '- 성취기준에 따른 성취수준의 특성, 학습활동 참여도, 자기주도적 학습에 의한 변화와 성장 정도를 중심으로 쓴다.\n' +
+    '- 수업 활동을 단순히 나열하거나 성취기준에 이미 적힌 지식을 그대로 옮기지 않는다(고 p.95).\n' +
+    '- 수학과제 탐구·사회문제 탐구·융합과학 탐구·과학과제 연구·사회과제 연구·윤리문제 탐구 과목은 연구보고서의 제목·주제·참여 인원·소요 시간을 빼고 과정만 쓸 수 있다.',
+  '개세특':
+    '- 정규교육과정의 교육활동에서 교사가 직접 관찰·평가한 내용만 쓴다.',
+  '자율':
+    '- 학교교육계획에 따른 정규교육과정의 자율·자치활동만 쓴다(고 p.81).\n' +
+    '- 이 영역과 연계해 학교교육계획에 따라 실시한 봉사활동은 이 영역 특기사항에 쓸 수 있다(2026학년도 1·2학년, 고 p.86).',
+  '동아리':
+    '- 정규교육과정의 동아리활동만 특기사항을 쓴다(고 p.81).\n' +
+    '- 자율동아리, 정규교육과정 밖의 학교스포츠클럽, 청소년단체 활동은 특기사항을 쓰지 않는다(고등학교, 고 p.78·p.84).\n' +
+    '- 이 영역과 연계해 학교교육계획에 따라 실시한 봉사활동은 이 영역 특기사항에 쓸 수 있다(2026학년도 1·2학년).',
+  '진로':
+    '- 정규교육과정의 진로활동만 쓴다(고 p.81).\n' +
+    '- 희망 진로를 특정 대학명·학과명으로 쓰지 않는다.',
+  '행발':
+    '- 학습·행동·인성 등 학교 교육활동 전반에서 지속적으로 관찰한 행동특성을 바탕으로, 학생의 성장을 지원하는 교육적 관점에서 쓴다(고 p.158).\n' +
+    '- 부정적 행동특성을 쓸 때는 구체적 관찰 사실과 함께 변화 가능성을 쓴다.\n' +
+    '- 다른 항목에 입력할 수 없는 내용(방과후학교 활동 등)은 여기에도 쓰지 않는다(고 p.159).'
+};
+
+/** 2026.1 규칙판의 [기재 주의] — 이 문구 그대로인 칸은 손대지 않은 옛 기본값 (옛 번호 v3.8.7 에서 금지사항과 겹치는 줄 · 분량 줄을 뺌) */
+var RECORD_RULES_2026_1 = {
+  '과세특':
+    '- 교사가 수업과 수업에 연계한 수행평가 등에서 수시·상시로 관찰·평가한 내용만 바탕으로 쓴다(고 p.117).\n' +
+    '- 성취기준에 따른 성취수준의 특성, 학습활동 참여도, 자기주도적 학습에 의한 변화와 성장 정도를 중심으로 쓴다.\n' +
+    '- 수업 활동을 단순히 나열하거나 성취기준에 이미 적힌 지식을 그대로 옮기지 않는다(고 p.95).\n' +
+    '- 교내·외 대회, 방과후학교 활동, K-MOOC·MOOC·KOCW, 연구보고서(소논문) 실적은 쓰지 않는다(고 p.118).\n' +
+    '- 수학과제 탐구·사회문제 탐구·융합과학 탐구·과학과제 연구·사회과제 연구·윤리문제 탐구 과목은 연구보고서의 제목·주제·참여 인원·소요 시간을 빼고 과정만 쓸 수 있다.',
+  '개세특':
+    '- 정규교육과정의 교육활동에서 교사가 직접 관찰·평가한 내용만 쓴다.\n' +
+    '- 교내·외 대회, 방과후학교 활동, K-MOOC·MOOC·KOCW, 연구보고서(소논문) 실적은 쓰지 않는다(고 p.118).',
+  '자율':
+    '- 학교교육계획에 따른 정규교육과정의 자율·자치활동만 쓴다(고 p.81).\n' +
+    '- 이 영역과 연계해 학교교육계획에 따라 실시한 봉사활동은 이 영역 특기사항에 쓸 수 있다(2026학년도 1·2학년, 고 p.86).',
+  '동아리':
+    '- 정규교육과정의 동아리활동만 특기사항을 쓴다(고 p.81).\n' +
+    '- 자율동아리, 정규교육과정 밖의 학교스포츠클럽, 청소년단체 활동은 특기사항을 쓰지 않는다(고등학교, 고 p.78·p.84).\n' +
+    '- 이 영역과 연계해 학교교육계획에 따라 실시한 봉사활동은 이 영역 특기사항에 쓸 수 있다(2026학년도 1·2학년).',
+  '진로':
+    '- 정규교육과정의 진로활동만 쓴다(고 p.81).\n' +
+    '- 희망 진로를 특정 대학명·학과명으로 쓰지 않는다.\n' +
+    '- 최대 500자다(2026학년도부터 700자에서 줄어듦, 고 p.208).',
+  '행발':
+    '- 학습·행동·인성 등 학교 교육활동 전반에서 지속적으로 관찰한 행동특성을 바탕으로, 학생의 성장을 지원하는 교육적 관점에서 쓴다(고 p.158).\n' +
+    '- 부정적 행동특성을 쓸 때는 구체적 관찰 사실과 함께 변화 가능성을 쓴다.\n' +
+    '- 다른 항목에 입력할 수 없는 내용(방과후학교 활동 등)은 여기에도 쓰지 않는다(고 p.159).\n' +
+    '- 최대 300자다(2026학년도부터 500자에서 줄어듦, 고 p.208).'
+};
+
+/** 2026학년도 규칙판 — 원격 규칙판(rules/latest.json)도 같은 모양이다 */
+var RULES_2026 = {
+  id: '2026.2',
+  year: 2026,
+  checked: '2026-10-28',
+  source: '2026학년도 학교생활기록부 기재요령 · 주요 개정사항 안내(고등학교, 교육부·KERIS, 2026-02)',
+  aiNotice: AI_NOTICE_2026,
+  neisRules: NEIS_RULES_2026,
+  chars: { '과세특': 500, '개세특': 500, '자율': 500, '동아리': 500, '진로': 500, '행발': 300 },
+  byRecord: RECORD_RULES_2026,
+  rules: PRESET_BANNED.concat(PRESET_FORMAT_RULES).concat(PRESET_SPELL_RULES),
+  // 직전 기준 — 이 값 그대로인 칸은 손대지 않은 옛 기본값으로 보고 새 값으로 바꾼다
+  history: [
+    { id: '2026.1', neisRules: NEIS_RULES_2026_1, byRecord: RECORD_RULES_2026_1 },
+    { id: '2025', chars: { '진로': 700, '행발': 500 } }
+  ]
+};
+
+/**
+ * 규칙판이 바뀌기 전 판들의 [기재 주의]·NEIS 문구 — 이 문구 그대로면 선생님이 손대지 않은 것.
+ * 다음 학년도 규칙판을 만들 때 직전 판의 문구가 여기에 남도록 rules/latest.json 의 history 에 넣는다.
+ */
+function knownOldTexts(pack, field, key) {
+  var out = [];
+  var add = function (t) { t = normText(t); if (t && out.indexOf(t) < 0) out.push(t); };
+  if (field === 'neisRules') (typeof OLD_NEIS_RULES !== 'undefined' ? OLD_NEIS_RULES : []).forEach(add);
+  [RULES_2026].concat(pack && pack.history ? pack.history : []).forEach(function (h) {
+    if (!h) return;
+    if (field === 'neisRules') add(h.neisRules);
+    else if (field === 'byRecord' && h.byRecord) add(h.byRecord[key]);
+  });
+  return out;
+}
+
+/** 비교용으로 줄 끝 공백·줄바꿈 종류를 맞춘다 */
+function normText(t) {
+  return String(t === null || t === undefined ? '' : t).replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').trim();
+}
+
+/** 규칙판 번호 비교: '2026.1' < '2026.2' < '2027.1' */
+function packNewer(a, b) {
+  var p = function (x) { return String(x || '0').split('.').map(function (n) { return Number(n) || 0; }); };
+  var x = p(a), y = p(b);
+  for (var i = 0; i < Math.max(x.length, y.length); i++) {
+    var d = (x[i] || 0) - (y[i] || 0);
+    if (d) return d > 0;
+  }
+  return false;
+}
+
+/**
+ * 원격에서 받은 규칙판 검사. 깨진 정규식·너무 긴 값은 빼고, 쓸 수 있는 것만 남긴다.
+ * @return {{ok:boolean, pack?:Object, errors:string[]}}
+ */
+function validatePack(raw) {
+  var errors = [];
+  var p = raw;
+  if (typeof p === 'string') { try { p = JSON.parse(p); } catch (e) { return { ok: false, errors: ['JSON 이 아님'] }; } }
+  if (!p || typeof p !== 'object') return { ok: false, errors: ['비어 있음'] };
+  if (!/^\d{4}\.\d+$/.test(String(p.id || ''))) errors.push('id 형식이 아님(예: 2027.1)');
+  var rules = [];
+  (Array.isArray(p.rules) ? p.rules : []).forEach(function (r, i) {
+    if (!r || !r.re || String(r.re).length > 400) { errors.push('rules[' + i + '] 비었거나 너무 김'); return; }
+    try { new RegExp(r.re); } catch (e) { errors.push('rules[' + i + '] 정규식 오류: ' + r.re); return; }
+    rules.push({ level: r.level === 'block' ? 'block' : 'check', label: String(r.label || '기타').slice(0, 40),
+                 re: String(r.re), fix: r.fix ? String(r.fix).slice(0, 60) : '', why: String(r.why || '').slice(0, 300) });
+  });
+  if (!rules.length) errors.push('rules 가 비었음');
+  var chars = {};
+  Object.keys(p.chars || {}).forEach(function (k) {
+    var n = Number(p.chars[k]);
+    if (n >= 50 && n <= 3000) chars[k] = Math.round(n);
+  });
+  var byRecord = {};
+  Object.keys(p.byRecord || {}).forEach(function (k) {
+    var t = String(p.byRecord[k] || '');
+    if (t.length <= 3000) byRecord[k] = t;
+  });
+  var fatal = !/^\d{4}\.\d+$/.test(String(p.id || '')) || !rules.length;
+  if (fatal) return { ok: false, errors: errors };
+  return {
+    ok: true, errors: errors,
+    pack: {
+      id: String(p.id), year: Number(p.year) || Number(String(p.id).slice(0, 4)),
+      checked: String(p.checked || ''), source: String(p.source || '').slice(0, 300),
+      aiNotice: String(p.aiNotice || AI_NOTICE_2026).slice(0, 1200),
+      neisRules: String(p.neisRules || '').slice(0, 6000),
+      chars: chars, byRecord: byRecord, rules: rules,
+      history: Array.isArray(p.history) ? p.history.slice(0, 10) : []
+    }
+  };
+}
+
+/**
+ * 새 규칙판이 프롬프트에 들어가는 글(기재 금지사항 · 기재 주의 · 글자수)을 바꾸는지.
+ * 검사 규칙(정규식)만 바뀐 판은 저절로 반영해도 되지만, 프롬프트 글이 바뀌는 판은 선생님이 보고 반영하게 한다
+ * — 원격 파일 하나가 모든 사본의 프롬프트를 몰래 바꾸지 못하게.
+ */
+function packTouchesPrompt(oldPack, newPack) {
+  var o = oldPack || {}, n = newPack || {};
+  var norm = function (t) { return String(t || '').replace(/\s+/g, ' ').trim(); };
+  if (norm(o.neisRules) !== norm(n.neisRules)) return true;
+  var keys = {};
+  Object.keys(o.byRecord || {}).concat(Object.keys(n.byRecord || {})).forEach(function (k) { keys[k] = 1; });
+  for (var k in keys) if (norm((o.byRecord || {})[k]) !== norm((n.byRecord || {})[k])) return true;
+  var ck = {};
+  Object.keys(o.chars || {}).concat(Object.keys(n.chars || {})).forEach(function (k) { ck[k] = 1; });
+  for (var c in ck) if (Number((o.chars || {})[c]) !== Number((n.chars || {})[c])) return true;
+  return false;
+}
+
+/** 규칙판 → [📏 기재요령] 표의 줄 [사용, 수준, 분류, 찾을 말, 바르게, 이유·근거, 출처] */
+function packRuleRows(pack) {
+  var src = (pack.year || '') + ' 기재요령';
+  return (pack.rules || []).map(function (r) {
+    return [true, r.level === 'block' ? '수정' : '확인', r.label, r.re, r.fix || '', r.why || '',
+            r.label === '맞춤법' ? '맞춤법(기본)' : src];
+  });
+}
+
+/** 표의 한 줄 → 검사 규칙. 사용을 끈 줄·빈 줄·깨진 정규식은 null */
+function ruleFromRow(row) {
+  var use = row[0] === true || String(row[0]).toUpperCase() === 'TRUE';
+  var re = String(row[3] || '').trim();
+  if (!use || !re) return null;
+  try { new RegExp(re); } catch (e) { return null; }
+  var lv = String(row[1] || '').trim();
+  return { level: (lv === '수정' || lv === 'block') ? 'block' : 'check', label: String(row[2] || '기타').trim() || '기타',
+           re: re, fix: String(row[4] || '').trim(), why: String(row[5] || '').trim() };
+}
+
+/** 표의 [출처]가 기본(규칙판)에서 온 줄인지 — 선생님이 더한 '내 학교' 줄은 업데이트 때 남긴다 */
+function isPackRow(src) {
+  src = String(src || '').trim();
+  return !src || /기재요령|맞춤법\(기본\)/.test(src);
+}
+
+/* ============================================================ AI 투 (번역투 · 상투어 · 되풀이) */
+/**
+ * AI 가 쓴 한국어에 흔한 말투 — [확인] 으로만 알린다(자동 고쳐쓰기를 부르지 않음).
+ * 일반 글의 패턴은 epoko77-ai/im-not-ai(MIT, Copyright (c) 2026 epoko77-ai)의 「한글 AI 티」 분류(quick-rules, 괄호 안 번호)를
+ * 학생부 문장에 맞게 골라 정규식으로 다시 썼고, 세특에 흔한 상투어는 이 도구가 더했다. 자세히: docs/THIRD-PARTY.md
+ *
+ * 기재요령 규칙판(RULES_2026)과 따로 둔다 — 규칙판은 해마다 원격으로 통째 바뀌고, 이 줄들은 [📏 기재요령] 시트에
+ * [출처] 'AI 투(기본)' 으로 들어가 선생님이 [사용]을 끌 수 있다(규칙판 업데이트 때도 그대로 남김).
+ * (?=…) 로 "두 번 이상" · "세 번 이상" 일 때만 걸리게 한 줄이 있다.
+ */
+var AI_TELL_SRC = 'AI 투(기본)';
+var AI_TELL_RULES = [
+  { level: 'check', label: 'AI 투 · 번역투', re: '에 있어서|에 있어(?= )', fix: '~에서', why: '"~에 있어(서)"는 번역투 — "~에서"로 (im-not-ai A-3)' },
+  { level: 'check', label: 'AI 투 · 번역투', re: '(와|과) 관련(하여|해서|된|한)(?= )', fix: '~에 관한 · ~의', why: '"~와 관련하여"는 번역투 (im-not-ai A-5)' },
+  { level: 'check', label: 'AI 투 · 번역투', re: '에 기반(하여|해서|해 |한 |을 둔|을 두고)', fix: '~를 근거로 · ~로', why: '"~에 기반하여"는 번역투 (im-not-ai A-6)' },
+  { level: 'check', label: 'AI 투 · 번역투', re: '(관심|흥미|열정|호기심|의문|문제의식|능력|역량|태도|자세)(을|를) (가지고|갖고) 있', fix: '~이 많음 · ~이 있음', why: '"관심을 가지고 있음"은 have 직역 (im-not-ai A-7)' },
+  { level: 'check', label: 'AI 투 · 번역투', re: '되어지|되어진|되어져|되어짐', fix: '~됨', why: '이중 피동 (im-not-ai A-8)' },
+  { level: 'check', label: 'AI 투 · 번역투', re: '에 의해|에 의하여', fix: '한 사람을 주어로', why: '"~에 의해" 피동 (im-not-ai A-9)' },
+  { level: 'check', label: 'AI 투 · 번역투', re: '에서의|으로부터의|에로의', fix: '풀어 쓰기(수업에서의 태도 → 수업에서 보인 태도)', why: '겹조사 (im-not-ai A-19)' },
+  { level: 'check', label: 'AI 투 · 번역투', re: '을 보여(줌|주었|준 |주는)|를 보여(줌|주었|준 |주는)', fix: '"~함"으로 바로(이해력을 보여줌 → 원리를 설명함)', why: '만능 동사 "보여 주다" (im-not-ai A-15)' },
+  { level: 'check', label: 'AI 투 · 관용구', re: '단순(히|한)[^.]{0,24}넘어', fix: '"~만이 아니라"', why: '"단순한 ~을 넘어"는 AI 글에만 흔함 (im-not-ai A-21)' },
+  { level: 'check', label: 'AI 투 · 관용구', re: '이를 통해|이를 바탕으로|이러한 (과정|경험|활동)을 통해', fix: '지우고 앞 문장과 바로 잇기', why: '결산 표현 — 세특 AI 초안에 가장 흔함 (im-not-ai D-1)' },
+  { level: 'check', label: 'AI 투 · 관용구', re: '결론적으로|요약하면|정리하자면|종합하면|종합적으로 볼 때', fix: '지우기', why: '결산 표현 (im-not-ai D-1)' },
+  { level: 'check', label: 'AI 투 · 관용구', re: '시사하는 바가|주목할 만(하|한)|매우 중요(하|한)', fix: '지우거나 구체적인 결과로', why: '의의 과장 (im-not-ai D-2)' },
+  { level: 'check', label: 'AI 투 · 관용구', re: '(주목할|눈여겨볼|인상적인|특기할 만한) 점은', fix: '"X는 ~함"으로 바로', why: '형식명사 강조 (im-not-ai I-2)' },
+  { level: 'check', label: 'AI 투 · 상투어', re: '깊이 있는|깊은 (이해|관심|통찰|성찰|고민)', fix: '무엇을 했는지 장면으로', why: '세특 AI 초안에 흔한 수식어 — 관찰한 행동으로' },
+  { level: 'check', label: 'AI 투 · 상투어', re: '중요성을 (깨달|인식|느끼|알게|체감)', fix: '실제로 바뀐 행동이나 다음 계획으로', why: '"~의 중요성을 깨달음"으로 맺는 상투 결말' },
+  { level: 'check', label: 'AI 투 · 상투어', re: '계기가 (됨|되었|되어|된)|발판(이|을|으로) |밑거름', fix: '그 뒤에 실제로 한 일로', why: '"~하는 계기가 됨" 상투 결말' },
+  { level: 'check', label: 'AI 투 · 상투어', re: '함양(함|하였|했|하는|할)', fix: '구체적인 행동으로', why: '교육과정 용어("역량 함양")를 학생 결과처럼 쓰는 상투어' },
+  { level: 'check', label: 'AI 투 · 상투어', re: '한층 (더 )?성장|한 단계 (더 )?(성장|발전|도약)', fix: '무엇이 달라졌는지로', why: '상투 결말' },
+  { level: 'check', label: 'AI 투 · 상투어', re: '탁월(함|한|하)|월등(함|한|히)', fix: '관찰 사실로', why: '근거 없는 최상급 평가' },
+  { level: 'check', label: 'AI 투 · 상투어', re: '다양한 [가-힣]+(을|를) 통해', fix: '무엇을 했는지 이름을 대기', why: '"다양한 활동을 통해"처럼 막연한 표현' },
+  { level: 'check', label: 'AI 투 · 되풀이', re: '모습을 보(?:임|이|여|였)(?=[\\s\\S]*모습을 보(?:임|이|여|였))', fix: '한 번만 쓰고 나머지는 장면으로', why: '"~하는 모습을 보임"이 두 번 이상' },
+  { level: 'check', label: 'AI 투 · 되풀이', re: '돋보(?:임|이|였)(?=[\\s\\S]*돋보(?:임|이|였))', fix: '한 번만 쓰고 나머지는 장면으로', why: '"돋보임"이 두 번 이상' },
+  { level: 'check', label: 'AI 투 · 쉼표', re: '[가-힣](?:며|면서|지만|고), (?=[\\s\\S]*[가-힣](?:며|면서|지만|고), [\\s\\S]*[가-힣](?:며|면서|지만|고), )', fix: '연결어미 뒤 쉼표 빼기', why: '연결어미(-며 · -고 · -지만) 바로 뒤 쉼표가 세 번 이상 — AI 글의 강한 신호 (im-not-ai C-11)' }
+];
+
+/** [📏 기재요령] 시트에 넣을 AI 투 줄 (packRuleRows 와 같은 모양) */
+function aiTellRuleRows() {
+  return AI_TELL_RULES.map(function (r) { return [true, '확인', r.label, r.re, r.fix || '', r.why || '', AI_TELL_SRC]; });
+}
+
+/** 이 도구가 넣는 줄(규칙판 · 맞춤법 · AI 투)인지 — 선생님이 더한 '내 학교' 줄과 가른다 */
+function isBuiltinRow(src) {
+  return isPackRow(src) || String(src || '').trim() === AI_TELL_SRC;
+}
+
+/** 생성 프롬프트 [📐 공통규칙] AVOID_RULES 의 기본 문구 (00_Presets 의 PRESET_COMMON 과 같다) */
+var AVOID_RULES_DEFAULT = [
+  'AI가 쓴 글에서 흔한 말투는 쓰지 않는다.',
+  '- "~에 있어(서)", "~와 관련하여", "~에 기반하여", "~에 의해", "~에서의", "~을 보여 줌", "이를 통해", "결론적으로", "단순한 ~을 넘어"',
+  '- "~의 중요성을 깨달음", "~하는 계기가 됨", "~을 함양함", "깊이 있는", "탁월함", 되풀이되는 "~하는 모습을 보임"',
+  '- 평가하는 말보다 관찰한 장면(무엇을, 어떻게 했는지)으로 쓴다.'
+].join('\n');
+
+/* ============================================================ AI 투 다듬기 (AI) */
+/** im-not-ai 의 네 원칙(의미 불변 · 걸린 곳만 · 장르 유지 · 과윤문 금지)을 학생부 문장에 맞춘 것 */
+var POLISH_SYSTEM =
+  '# 역할\n당신은 학교생활기록부 문장을 다듬는 한국어 교정자다. AI 초안에 흔한 번역투·상투어·되풀이를 걷어 자연스러운 학생부 문장이 되도록 고칠 곳을 제안한다.\n\n' +
+  '# 지킬 것\n' +
+  '- 사실·수치·고유명사·활동 내용은 바꾸거나 더하지 않는다. 새 내용, 새 평가, 새 상투어를 넣지 않는다.\n' +
+  '- [검사에서 걸린 표현]과 같은 종류의 표현만 고친다. 걸린 곳이 없는 문장은 그대로 둔다.\n' +
+  '- 학생부 문체를 지킨다. 문장은 "~함.", "~음.", "~임."으로 끝내고, 학생을 가리키는 주어를 쓰지 않는다.\n' +
+  '- 고친 글이 원문보다 길어지지 않게 하고, 바꾸는 양은 글 전체의 30%를 넘지 않는다.\n' +
+  '- 고칠 곳마다 글에 있는 그대로의 짧은 구절(from)과 고친 구절(to), 짧은 이유(why)를 쓴다.\n\n' +
+  '# 출력\nJSON 하나만 출력한다. {"changes":[{"from":"원문 구절","to":"고친 구절","why":"짧은 이유"}]}\n고칠 것이 없으면 {"changes":[]}';
+
+/**
+ * @param {string} text
+ * @param {Array<{label:string, hit:string, fix?:string}>} hits  inspect_ 에서 걸린 AI 투 항목
+ */
+function buildPolishUser(text, hits) {
+  var h = (hits || []).filter(function (x) { return x && /^AI 투/.test(x.label || ''); });
+  return '# 글\n' + String(text || '').trim() + '\n\n# 검사에서 걸린 표현\n' +
+    (h.length ? h.map(function (x) { return '- ' + x.label.replace(/^AI 투 · /, '') + ': ' + x.hit + (x.fix ? ' (권장: ' + x.fix + ')' : ''); }).join('\n')
+              : '(규칙에 걸린 것은 없다 — 위 종류의 표현이 눈에 띄는 곳만)');
+}
+
+/* ============================================================ 맞춤법 */
+var JONG_RIEUL = 8, JONG_NIEUN = 4, JONG_SS = 20, JONG_BS = 18;
+/** '안'·'않' 뒤에 오는 되·돼·하·해 (받침이 붙은 된·됨·한·했… 까지) */
+var NEG_NEXT = /^[돼-됳하-햏]/;
+function jongOf_(ch) {
+  var c = ch ? ch.charCodeAt(0) : 0;
+  if (c < 0xAC00 || c > 0xD7A3) return -1;
+  return (c - 0xAC00) % 28;
+}
+
+/**
+ * 표로 잡기 어려운 띄어쓰기·어미 오류 (정확도가 높은 것만, 모두 [확인] 수준)
+ *   · 할수 있다 → 할 수 있다,  할것 → 할 것,  할때 → 할 때,  할줄 알다 → 할 줄 알다
+ *   · 있슴/했슴 → 있음/했음,  않하다 → 안 하다,  해서는 안된다 → 안 된다
+ *   · 같은 낱말 연속, 빈칸 두 번, 문장부호 앞 빈칸, 마침표·쉼표 뒤 붙여 쓰기
+ * @return {Array<{level, label, hit, fix, why}>}
+ */
+function spellIssues(text) {
+  var s = String(text || ''), out = [], seen = {};
+  var push = function (hit, fix, why) {
+    var k = hit + '→' + fix;
+    if (seen[k]) return;
+    seen[k] = 1;
+    out.push({ level: 'check', label: '맞춤법', hit: hit, fix: fix, why: why });
+  };
+  for (var i = 1; i < s.length; i++) {
+    var prev = s.charAt(i - 1), ch = s.charAt(i), next = s.charAt(i + 1), j = jongOf_(prev);
+    if (ch === '수' && j === JONG_RIEUL) {
+      var rest = s.slice(i + 1).replace(/^ +/, '');
+      if (/^(있|없)/.test(rest)) push(prev + '수', prev + ' 수', "의존명사 '수'는 띄어 씀");
+    } else if (ch === '것' && (j === JONG_RIEUL || j === JONG_NIEUN) && ['날', '별', '온', '산'].indexOf(prev) < 0) {
+      push(prev + '것', prev + ' 것', "의존명사 '것'은 띄어 씀");
+    } else if (ch === '때' && j === JONG_RIEUL) {
+      push(prev + '때', prev + ' 때', "'~ㄹ 때'는 띄어 씀");
+    } else if (ch === '줄' && j === JONG_RIEUL && /^ ?(알|몰)/.test(s.slice(i + 1))) {
+      push(prev + '줄', prev + ' 줄', "의존명사 '줄'은 띄어 씀");
+    } else if (ch === '슴' && (j === JONG_SS || j === JONG_BS)) {
+      push(prev + '슴', prev + '음', "명사형은 '~음' (있음, 했음)");
+    } else if (ch === '않' && NEG_NEXT.test(next)) {
+      push('않' + next, '안 ' + next, "부정은 '안 ~' (않은 '~지 않다'에만)");
+    }
+  }
+  var m, re1 = new RegExp('(^|[\\s,.])안(' + NEG_NEXT.source.slice(1) + ')', 'g');
+  while ((m = re1.exec(s))) push('안' + m[2], '안 ' + m[2], "부정의 '안'은 띄어 씀");
+  var re2 = /(^|\s)([가-힣A-Za-z]{2,})\s+\2(?=[\s.,]|$)/g;
+  while ((m = re2.exec(s))) push(m[2] + ' ' + m[2], m[2], '같은 낱말이 잇따라 나옴');
+  if (/ {2,}/.test(s)) push('빈칸 두 번', '빈칸 한 번', '빈칸이 겹침');
+  if ((m = s.match(/\S\s+[.,]/))) push(m[0], m[0].replace(/\s+/, ''), '문장부호 앞에는 빈칸을 두지 않음');
+  if ((m = s.match(/[가-힣][.,][가-힣A-Za-z]/))) push(m[0], m[0].charAt(0) + m[0].charAt(1) + ' ' + m[0].charAt(2), '마침표·쉼표 뒤는 한 칸 띄움');
+  return out;
+}
+
+/* ============================================================ 고쳐쓰기 (하네스) */
+/**
+ * 생성 → 자동 검사 → 걸린 것만 짚어 다시 쓰게 하는 "고쳐쓰기" 요청문.
+ * 규칙(시스템 프롬프트)은 처음 생성과 똑같이 보내므로 회사 쪽 캐시 할인도 그대로 받는다.
+ * @param {string} block      학생 자료
+ * @param {string} draft      첫 결과
+ * @param {Array} issues      validateResult 의 issues 중 고칠 것
+ * @param {number} limitBytes
+ */
+function buildRepairUser(block, draft, issues, limitBytes) {
+  var L = ['# 학생 자료', String(block || '').trim(), '', '# 고쳐 쓸 초안', String(draft || '').trim(), '',
+           '# 자동 검사에서 걸린 점 — 이것만 바로잡는다'];
+  L = L.concat(repairIssueLines(issues, limitBytes));
+  L.push('', '# 출력', '위 점만 바로잡은 특기사항 본문만 한 문단으로 출력한다. 학생 자료에 없는 내용을 새로 넣지 않는다. 설명을 붙이지 않는다.');
+  return L.join('\n');
+}
+
+/** 검사에서 걸린 점 → 고쳐 쓰기 지시 줄 */
+function repairIssueLines(issues, limitBytes) {
+  return (issues || []).map(function (x) {
+    if (x.label === '분량 초과') return '- 분량 초과(' + x.hit + '): ' + limitBytes + '바이트 이내가 되도록 덜 중요한 문장을 줄인다.';
+    if (x.fix) return '- ' + x.label + ': "' + x.hit + '" → "' + x.fix + '"';
+    return '- ' + x.label + ': "' + x.hit + '" ' + (x.why ? '— ' + x.why : '') + ' → 이 내용을 빼거나 기재요령에 맞게 바꾼다.';
+  });
+}
+
+/**
+ * 여러 학생의 고쳐 쓰기를 한 번에 — 규칙(시스템 프롬프트)을 학생마다 되풀이해 보내지 않는다.
+ * 답은 묶음 생성과 같은 JSON {"results":[{"id","text"}]} 이라 parseBatchResult 로 읽는다.
+ * @param {Array<{id:string, block:string, draft:string, issues:Array}>} items
+ */
+function buildBatchRepairUser(items, limitBytes) {
+  var L = ['# 고쳐 쓸 학생 ' + items.length + '명',
+           '학생마다 따로, 그 학생의 [걸린 점]만 바로잡는다. 다른 학생의 자료를 섞지 않고, 학생 자료에 없는 내용을 새로 넣지 않는다.'];
+  items.forEach(function (it) {
+    L.push('', '## ' + it.id, '### 학생 자료', String(it.block || '').trim(), '', '### 고쳐 쓸 초안', String(it.draft || '').trim(),
+           '', '### 걸린 점');
+    L = L.concat(repairIssueLines(it.issues, limitBytes));
+  });
+  L.push('', '# 출력 형식', 'JSON 하나만 출력한다. 설명이나 코드 블록 표시를 붙이지 않는다. text 는 고친 특기사항 본문 한 문단.');
+  L.push('{"results":[' + items.map(function (it) { return '{"id":"' + it.id + '","text":"고친 본문"}'; }).join(',') + ']}');
+  return L.join('\n');
+}
+
+/** 고쳐 쓸 만한지: [수정] 수준이 하나라도 있으면 */
+function needsRepair(v) {
+  return !!(v && v.issues && v.issues.some(function (x) { return x.level === 'block' && x.label !== '결과 없음'; }));
+}
+
+/** 두 검사 결과 중 나은 쪽: [수정] 수가 적은 쪽, 같으면 [확인] 수가 적은 쪽 */
+function betterResult(a, b) {
+  var cnt = function (v, lv) { return v.issues.filter(function (x) { return x.level === lv; }).length; };
+  var ab = cnt(a, 'block'), bb = cnt(b, 'block');
+  if (ab !== bb) return bb < ab ? 'b' : 'a';
+  return cnt(b, 'check') < cnt(a, 'check') ? 'b' : 'a';
+}
+
+/* ============================================================ 근거 확인 */
+/**
+ * "AI 결과가 학생 자료에 있는 내용인가" — 2026 기재요령의 허위·과장 확인을 돕는 검토 요청.
+ * 결과는 JSON {"unsupported":[{"quote","why"}]}.
+ */
+var GROUND_SYSTEM =
+  '# 역할\n당신은 학교생활기록부 문장을 검토하는 교사다.\n\n' +
+  '# 할 일\n[학생 자료]와 [특기사항 초안]을 비교해, 초안에서 학생 자료로 뒷받침되지 않는 내용을 찾는다.\n' +
+  '- 자료에 없는 활동, 결과, 수치, 횟수, 도서·인물, 과장된 평가(예: 탁월함, 뛰어남)를 찾는다.\n' +
+  '- 자료의 표현을 자연스럽게 바꾼 것, 자료에서 바로 읽히는 의미 부여는 문제 삼지 않는다.\n' +
+  '- 근거가 없는 구절만 초안 원문 그대로 짧게 뽑는다.\n\n' +
+  '# 출력\nJSON 하나만 출력한다. {"unsupported":[{"quote":"초안의 구절","why":"자료에 없는 이유"}]}\n없으면 {"unsupported":[]}';
+
+function buildGroundUser(source, draft) {
+  return '# 학생 자료\n' + String(source || '').trim() + '\n\n# 특기사항 초안\n' + String(draft || '').trim();
+}
+
+function parseGroundResult(text) {
+  var t = String(text || '').replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
+  var j = null;
+  try { j = JSON.parse(t); } catch (e) {
+    var a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a >= 0 && b > a) { try { j = JSON.parse(t.slice(a, b + 1)); } catch (e2) {} }
+  }
+  var list = j && Array.isArray(j.unsupported) ? j.unsupported : (Array.isArray(j) ? j : []);
+  return list.map(function (x) {
+    return { quote: String((x && (x.quote || x.text)) || '').trim(), why: String((x && x.why) || '').trim() };
+  }).filter(function (x) { return x.quote; });
+}
+
+/* ============================================================ 맞춤법 (AI) */
+var SPELL_SYSTEM =
+  '# 역할\n당신은 한국어 맞춤법·띄어쓰기 교정자다.\n\n' +
+  '# 할 일\n[글]의 맞춤법, 띄어쓰기, 오탈자, 문장부호만 바로잡는다.\n' +
+  '- 내용, 낱말 선택, 문장 순서, 문체는 바꾸지 않는다. 학교생활기록부 문장이라 "~함.", "~음." 처럼 끝나는 것은 그대로 둔다.\n' +
+  '- 고칠 곳마다 글에 있는 그대로의 짧은 구절(from)과 바른 표기(to)를 쓴다.\n\n' +
+  '# 출력\nJSON 하나만 출력한다. {"changes":[{"from":"틀린 구절","to":"바른 구절","why":"짧은 이유"}]}\n고칠 것이 없으면 {"changes":[]}';
+
+function parseSpellResult(text, original) {
+  var t = String(text || '').replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
+  var j = null;
+  try { j = JSON.parse(t); } catch (e) {
+    var a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a >= 0 && b > a) { try { j = JSON.parse(t.slice(a, b + 1)); } catch (e2) {} }
+  }
+  var src = String(original || '');
+  return (j && Array.isArray(j.changes) ? j.changes : []).map(function (c) {
+    return { from: String((c && c.from) || ''), to: String((c && c.to) || ''), why: String((c && c.why) || '') };
+  }).filter(function (c) { return c.from && c.from !== c.to && src.indexOf(c.from) >= 0; });
+}
+
+/** 고칠 목록을 글에 적용 (앞에서부터 한 번씩) */
+function applyChanges(text, changes) {
+  var s = String(text || '');
+  (changes || []).forEach(function (c) {
+    var i = s.indexOf(c.from);
+    if (i >= 0) s = s.slice(0, i) + c.to + s.slice(i + c.from.length);
+  });
+  return s;
+}
+
+/* ============================================================ 키 없이 (복사·붙여넣기) */
+/**
+ * Gemini 앱(학교 계정)·ChatGPT·Claude 같은 대화창에 붙여 넣을 요청문.
+ * 대화창은 JSON 대신 [S1] 같은 표시로 나눠 받는 편이 안정적이다.
+ * @param {Array<{id:string, block:string}>} items
+ * @param {string=} heading  한 명일 때 자료 제목 (기본 '학생 자료', 압축은 '통합할 문장들')
+ */
+function buildManualUser(items, heading) {
+  heading = heading || '학생 자료';
+  if (items.length === 1) {
+    return '# ' + heading + '\n' + String(items[0].block || '').trim() + '\n\n# 출력\n위 규칙대로 특기사항 본문만 한 문단으로 출력한다. 설명, 제목, 따옴표를 붙이지 않는다.';
+  }
+  var L = ['# 이번에 작성할 학생 ' + items.length + '명',
+           '아래 학생들의 특기사항을 한 명씩 따로 작성한다.',
+           '- 위의 모든 규칙(분량 포함)을 학생마다 따로 지킨다. 분량은 학생 한 명 기준이다.',
+           '- 다른 학생의 자료를 섞지 않는다. 그 학생 자료에 없는 내용을 지어내지 않는다.',
+           '- 학생마다 첫 문장과 문장 구조를 다르게 한다.'];
+  items.forEach(function (it) { L.push('', '## ' + it.id, String(it.block || '').trim()); });
+  L.push('', '# 출력 형식',
+         '학생마다 [번호] 한 줄을 쓰고 다음 줄에 특기사항 본문만 쓴다. 다른 설명은 붙이지 않는다.',
+         items.map(function (it) { return '[' + it.id + ']\n(본문)'; }).join('\n'));
+  return L.join('\n');
+}
+
+/**
+ * 대화창에서 복사해 온 답 → id → 본문.
+ * [S1] / S1: / **S1** / ## S1 같은 표시를 모두 받고, JSON 으로 왔으면 그것도 읽는다.
+ */
+function parseManualAnswer(text, ids) {
+  var t = String(text || '').replace(/\r\n?/g, '\n').trim();
+  var map = {};
+  if (!t) return { map: map, missing: ids.slice() };
+  if (ids.length === 1 && !/\[?\*{0,2}#*\s*S1\b/.test(t)) {
+    map[ids[0]] = t;
+    return { map: map, missing: [] };
+  }
+  var re = /(^|\n)\s*(?:#+\s*)?(?:\*\*)?\[?\s*(S\d+)\s*\]?(?:\*\*)?\s*[:：]?[ \t]*/g, m, marks = [];
+  while ((m = re.exec(t))) marks.push({ id: m[2], start: m.index + m[0].length, at: m.index });
+  if (marks.length) {
+    marks.forEach(function (mk, i) {
+      var body = t.slice(mk.start, i + 1 < marks.length ? marks[i + 1].at : t.length).trim();
+      if (ids.indexOf(mk.id) >= 0 && body && !map[mk.id]) map[mk.id] = body;
+    });
+  } else if (typeof parseBatchResult === 'function') {
+    map = parseBatchResult(t, ids).map;
+  }
+  return { map: map, missing: ids.filter(function (id) { return !map[id]; }) };
+}
+
+/* ============================================================ AI 앱으로 내보내기 */
+var RECORD_SLUG = { '과세특': 'subject', '개세특': 'individual', '자율': 'autonomy', '동아리': 'club', '진로': 'career', '행발': 'behavior' };
+
+/** 스킬 이름: 영문 소문자·숫자·하이픈만, 64자 이내 */
+function skillName(recordKey, n) {
+  return ('saeteuk-' + (RECORD_SLUG[recordKey] || 'record') + '-' + (Number(n) || 1)).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 64);
+}
+
+/** Gemini Gem 안내 · ChatGPT/Claude 프로젝트 지침에 붙여 넣을 글 */
+function buildGemText(system) {
+  return String(system || '').trim() + '\n\n# 사용법\n교사가 학생 자료를 붙여 넣으면 위 규칙대로 특기사항 본문만 쓴다. ' +
+    '여러 명이면 [S1] [S2] 처럼 학생마다 표시 한 줄을 쓰고 다음 줄에 본문을 쓴다.';
+}
+
+/**
+ * Claude 스킬(SKILL.md) — 시트가 조립한 규칙을 그대로 담는다. 시트를 고치면 다시 내보내야 한다.
+ * @param {{name:string, activity:string, record:string, system:string, notice:string, rulesId:string}} o
+ */
+function buildSkillMd(o) {
+  var desc = (o.activity + ' 활동의 학교생활기록부 ' + o.record + ' 초안을 2026학년도 기재요령에 맞춰 쓴다. ' +
+              '교사가 학생 관찰 자료(메모·입력 항목)를 주고 세특·특기사항 초안을 부탁할 때 쓴다.').replace(/\s+/g, ' ');
+  return [
+    '---',
+    'name: ' + o.name,
+    'description: ' + desc.slice(0, 1000),
+    '---',
+    '',
+    '# ' + o.activity + ' — ' + o.record + ' 초안 쓰기',
+    '',
+    '세특 작성 도우미(구글 시트)에서 내보낸 규칙입니다. 기재요령 규칙판 ' + o.rulesId + '.',
+    '',
+    '## 규칙',
+    '',
+    String(o.system || '').trim(),
+    '',
+    '## 여러 학생을 한 번에 받을 때',
+    '',
+    '학생마다 [S1] [S2] 처럼 표시 한 줄을 쓰고 다음 줄에 그 학생의 본문만 쓴다. 학생 자료를 서로 섞지 않는다.',
+    '',
+    '## 꼭 지킬 것',
+    '',
+    '- ' + String(o.notice || '').trim(),
+    '- 결과는 초안이다. 교사가 직접 관찰한 사실과 맞는지 확인하고 고쳐 쓰도록 답 끝에 한 줄로 알린다.',
+    ''
+  ].join('\n');
+}
+
+/* Node 테스트용 export (Apps Script에서는 무시됨) */
+
+/* ── apps-script/17_Design.gs ── */
+/**
+ * 세특 작성 도우미 v3 — 🪄 예시로 칸 채우기 (순수 함수: 시트·네트워크 없음, Node 시험 가능)
+ * ---------------------------------------------------------------
+ * 교사가 "이렇게 나왔으면" 하는 결과(세특 예시)를 1~5편 주면, 같은 활동의 다른 학생도 그런 글이 나오도록
+ * 프롬프트의 빈칸을 거꾸로 채운다 — 활동 이름 · 활동 개요 · 입력 항목 · 예시마다의 학생 자료.
+ * 바이트 한도는 AI 가 아니라 예시 길이로 셈한다(suggestBytes).
+ *
+ * 세특 프롬프트 공방(웹·시트 안)의 [AI로 칸 채우기] 탭이 쓴다. 웹은 요청문 복사 → 답 붙여 넣기,
+ * 시트 안에서 API 키가 있으면 studioDesign()(88_Studio.gs)이 바로 부른다. 답은 같은 parseDesignAnswer 로 읽는다.
+ */
+
+var DESIGN_SYSTEM = [
+  '당신은 학교생활기록부 특기사항(세특) 프롬프트를 설계하는 조수입니다.',
+  '교사가 "이렇게 나오면 좋겠다"는 완성된 특기사항 예시를 줍니다. 같은 활동의 다른 학생에게도 이런 글이 나오도록,',
+  '프롬프트의 빈칸(활동 개요, 입력 항목, 예시마다의 학생 자료)을 채웁니다.',
+  '',
+  '# 지킬 것',
+  '- 예시 글에 있는 내용만 근거로 한다. 예시에 없는 활동 내용이나 학생 정보를 지어내지 않는다.',
+  '- 활동 개요: 이 활동이 무엇이고, 이 활동의 세특에서 무엇이 드러나야 하는지 1~2문장.',
+  '- 입력 항목: 교사가 학생마다 적을 칸 이름 3~6개. 예시 글의 문장들이 어느 칸의 메모에서 왔을지 거꾸로 생각해,',
+  '  과정이 드러나게 정한다(예: 탐구 주제, 고른 까닭, 방법, 알게 된 점, 교사 관찰). 짧은 명사구로 쓰고 | 로 나눈다.',
+  '  반·번호·이름·성취수준·최종본·AI 결과·바이트·검증은 쓰지 않는다. 교사가 정해 둔 입력 항목이 있으면 되도록 그대로 쓴다.',
+  '- 예시마다: 그 글을 쓰기 위해 교사가 적었을 법한 학생 자료를 입력 항목별로 짧게(한 칸에 한두 문장, 메모체) 쓴다.',
+  '  예시 글에 있는 사실만 옮기고, "우수함", "뛰어남" 같은 평가 말은 빼고 관찰한 사실만 남긴다.',
+  '  교사가 이미 적어 둔 학생 자료가 있으면 내용은 바꾸지 말고 입력 항목에 맞게 나누기만 한다.',
+  '- 학생 이름, 대학명·기관명, 수상, 자격증, 공인어학시험처럼 학생부에 쓸 수 없는 것은 옮기지 않는다.',
+  '',
+  '# 출력 — 아래 모양 그대로. 머리말·설명·마크다운 없이',
+  '활동 이름: (짧게, 20자 이내)',
+  '활동 개요: (1~2문장)',
+  '입력 항목: 항목1|항목2|항목3',
+  '[예시1]',
+  '항목1: …',
+  '항목2: …',
+  '항목3: …',
+  '[예시2]',
+  '항목1: …',
+  '(예시 수만큼)'
+].join('\n');
+
+/**
+ * AI 에게 보낼 사용자 글
+ * @param {{record?:{name,chars}, subject?:{key,name,kind}, name?:string, desc?:string, columns?:string[],
+ *          bytes?:number, examples:Array<{in?:string, out:string}>}} p
+ */
+function buildDesignUser(p) {
+  p = p || {};
+  var rec = p.record || {}, sub = p.subject || {};
+  var L = [];
+  L.push('기록 항목: ' + (rec.name || '학교생활기록부 특기사항') + (p.bytes ? ' (이 활동은 ' + p.bytes + '바이트 이내)' : ''));
+  if (sub.kind === '교과' && (sub.name || sub.key)) L.push('교과: ' + String(sub.name || sub.key).replace(/\(.*?\)/g, '').trim());
+  if (String(p.name || '').trim()) L.push('교사가 정한 활동 이름: ' + String(p.name).trim());
+  if (String(p.desc || '').trim()) L.push('교사가 적은 활동 개요: ' + String(p.desc).trim().replace(/\s*\n\s*/g, ' '));
+  var cols = (p.columns || []).map(function (c) { return String(c).trim(); }).filter(String);
+  if (cols.length) L.push('교사가 정한 입력 항목(되도록 그대로): ' + cols.join('|'));
+  var ex = (p.examples || []).filter(function (e) { return e && String(e.out || '').trim(); });
+  ex.forEach(function (e, i) {
+    L.push('');
+    L.push('# 예시' + (i + 1));
+    if (String(e.in || '').trim()) {
+      L.push('## 교사가 적어 둔 학생 자료 (내용은 그대로, 입력 항목에 맞게 나누기만)');
+      L.push(String(e.in).trim());
+    }
+    L.push('## 이렇게 나오면 좋겠다는 결과');
+    L.push(String(e.out).trim());
+  });
+  L.push('');
+  L.push('예시는 ' + ex.length + '편이다. [예시1]부터 [예시' + ex.length + ']까지 모두 쓴다.');
+  return L.join('\n');
+}
+
+var DESIGN_RESERVED = ['반', '번호', '이름', '성취수준', '생성', '모델', 'AI 결과', '최종본', '바이트', '검증'];
+
+/**
+ * AI 답 → 칸 채우기 제안
+ * @param {string} text
+ * @param {number} n 보낸 예시 수(모자라면 missing 에 적는다)
+ * @return {{name:string, desc:string, columns:string[], examples:string[], missing:string[]}}
+ *   examples[i] = "항목: 값" 줄들(입력 항목 순서) — 공방의 예시 학생 자료 칸에 그대로 넣는다
+ */
+function parseDesignAnswer(text, n) {
+  var t = String(text || '').replace(/\r/g, '').replace(/^\s*```[a-z]*\s*$/gim, '').replace(/\*\*/g, '');
+  var head = {}, blocks = [], cur = null;
+  t.split('\n').forEach(function (raw) {
+    var line = raw.replace(/\s+$/, '');
+    var mb = /^\s*(?:#+\s*)?\[?\s*예시\s*(\d+)\s*\]?\s*:?\s*$/.exec(line);
+    if (mb) { cur = []; blocks[Number(mb[1]) - 1] = cur; return; }
+    var mh = /^\s*(?:[-*•]\s*)?(활동\s*이름|활동명|활동\s*개요|입력\s*항목)\s*[:：]\s*(.*)$/.exec(line);
+    if (mh && !cur) { head[mh[1].replace(/\s+/g, '')] = mh[2].trim(); return; }
+    if (cur && line.trim()) cur.push(line.trim().replace(/^[-*•]\s*/, ''));
+  });
+  var name = String(head['활동이름'] || head['활동명'] || '').trim().slice(0, 30);
+  var desc = String(head['활동개요'] || '').trim();
+  var seen = {};
+  var columns = String(head['입력항목'] || '').split(/[|,]/).map(function (x) { return x.trim(); })
+    .filter(function (x) { if (!x || seen[x] || DESIGN_RESERVED.indexOf(x) >= 0) return false; seen[x] = 1; return true; }).slice(0, 12);
+  var examples = [];
+  for (var i = 0; i < Math.max(n || 0, blocks.length); i++) {
+    var lines = blocks[i] || [];
+    if (!columns.length) { examples.push(lines.join('\n')); continue; }
+    var vals = exampleValuesFrom(columns, lines.join('\n'));
+    examples.push(columns.map(function (c, k) { return vals[k] ? c + ': ' + vals[k] : ''; }).filter(String).join('\n'));
+  }
+  var missing = [];
+  if (!columns.length) missing.push('입력 항목');
+  if (!desc) missing.push('활동 개요');
+  for (var k = 0; k < (n || 0); k++) if (!examples[k]) missing.push('예시' + (k + 1) + ' 학생 자료');
+  return { name: name, desc: desc, columns: columns, examples: examples.slice(0, Math.max(n || 0, 0) || examples.length), missing: missing };
+}
+
+/**
+ * 예시 결과 길이로 바이트 한도 제안 — 엔진이 한도의 90% 안팎을 쓰게 하므로 가장 긴 예시 ÷ 0.9, 10 단위 올림.
+ * 한 칸(cap)을 넘지 않고, 150바이트보다 작게 하지 않는다. 예시가 없으면 0.
+ */
+function suggestBytes(texts, cap) {
+  var max = 0;
+  (texts || []).forEach(function (t) { var b = byteLen(String(t || '').trim()); if (b > max) max = b; });
+  if (!max) return 0;
+  var s = Math.ceil(max / 0.9 / 10) * 10;
+  return Math.max(150, Math.min(Number(cap) || s, s));
+}
+
+
+/* ── apps-script/19_Subjects.gs ── */
+/**
+ * 세특 작성 도우미 v3 — 📚 새 교과 만들기 (순수 함수: 시트·네트워크 없음, Node 시험 가능)
+ * ---------------------------------------------------------------
+ * 교과 이름 + 교육과정 자료(성취기준·교과 역량을 붙여 넣거나 드라이브 PDF) → [📚 교과영역] 한 줄
+ * (키·표시명·분류·역할 표현·역량·서술 관점)과 추천 입력 항목.
+ *
+ * 같은 "이름: 값" 글 모양 하나를 AI 답, 세특 프롬프트 공방(웹)에서 만든 교과, 선생님끼리 나누는 글에
+ * 함께 쓴다 — 어느 쪽에서 만든 것이든 [📚 새 교과 만들기] 창의 붙여 넣기 칸에 넣으면 읽힌다.
+ *
+ * 자료 없이 만든 줄에는 [교육과정 확인 필요] 를 붙이게 하고, 저장 전에 교사에게 보여 준다
+ * (AI 가 교과 역량 이름을 그럴듯하게 지어내는 일을 막으려고).
+ */
+
+var SUBJECT_UNSURE = '[교육과정 확인 필요]';
+var SUBJECT_SOURCE_MAX = 30000;   // 붙여 넣은 교육과정 글은 이만큼만 보낸다(글자)
+
+/** 답에서 알아듣는 이름들 → 필드 */
+var SUBJECT_FIELDS = [
+  { f: 'key', names: ['키'] },
+  { f: 'name', names: ['표시명', '과목명', '교과명'] },
+  { f: 'kind', names: ['분류'] },
+  { f: 'role', names: ['역할 표현', '역할'] },
+  { f: 'comps', names: ['핵심역량', '교과 역량', '역량'] },
+  { f: 'look', names: ['관찰 모습', '관찰할 모습'] },
+  { f: 'comp', names: ['역량·서술 관점', '역량 서술 관점', '서술 관점'] },
+  { f: 'columns', names: ['입력 항목', '추천 입력 항목'] },
+  { f: 'basis', names: ['근거', '출처'] }
+];
+
+var SUBJECT_SYSTEM = [
+  '당신은 2022 개정 교육과정에 밝은 고등학교 교육과정 전문가입니다.',
+  '교사가 학교생활기록부 과목별 세부능력 및 특기사항(세특)을 AI 로 쓸 때 프롬프트에 넣을 "교과 정보"를 만듭니다.',
+  '',
+  '# 지킬 것',
+  '- 교사가 준 교육과정 자료(교과 역량·핵심 아이디어·성취기준)가 있으면 그 자료의 말로 쓴다. 자료에 없는 역량 이름을 지어내지 않는다.',
+  '- 자료가 없거나 모자라면 일반적인 교과 지식으로 쓰되, 확실하지 않은 줄 끝에 ' + SUBJECT_UNSURE + ' 를 붙인다.',
+  '- 관찰 모습은 교사가 수업·평가 장면에서 실제로 볼 수 있는 학생의 행동으로 4~6줄 쓴다. 각 줄은 "~하는 모습"으로 끝낸다.',
+  '- 관찰 모습에는 결과보다 탐구 과정·사고의 전개·태도의 변화가 드러나게 한다.',
+  '- 입력 항목은 교사가 학생마다 적을 칸 이름 3~5개. 짧은 명사구로 쓰고 | 로 나눈다. 반·번호·이름·성취수준·최종본은 쓰지 않는다.',
+  '- 대학명·기관명·수상·자격증·공인어학시험처럼 학생부에 쓸 수 없는 것을 예로 들지 않는다.',
+  '',
+  '# 출력 — 아래 모양 그대로. 머리말·설명·마크다운 없이',
+  '키: (짧은 이름, 띄어쓰기 없이. 예: 화학, 공통국어1, 인공지능기초)',
+  '표시명: (교과·과목의 정식 이름)',
+  '분류: 교과',
+  '역할 표현: 고등학교 ○○교사',
+  '핵심역량: (교과 역량 이름을 쉼표로)',
+  '관찰 모습:',
+  '- …하는 모습',
+  '- …하는 모습',
+  '입력 항목: 항목1|항목2|항목3',
+  '근거: (무엇을 보고 썼는지 — 교사가 준 자료의 어느 부분 / 일반 지식)'
+].join('\n');
+
+/**
+ * AI 에게 보낼 사용자 글
+ * @param {{name:string, level?:string, source?:string, note?:string, files?:string[]}} p
+ */
+function buildSubjectUser(p) {
+  p = p || {};
+  var L = [];
+  L.push('교과(과목) 이름: ' + String(p.name || '').trim());
+  L.push('학교급: ' + (String(p.level || '').trim() || '고등학교'));
+  if (p.note && String(p.note).trim()) L.push('우리 학교·수업에서 강조할 점: ' + String(p.note).trim().replace(/\s*\n\s*/g, ' '));
+  var src = String(p.source || '').trim();
+  var files = (p.files || []).filter(String);
+  if (src || files.length) {
+    L.push('');
+    L.push('# 교육과정 자료 (교사가 준 것 — 이 자료의 말로 쓴다)');
+    if (files.length) L.push('첨부 파일: ' + files.join(', '));
+    if (src) L.push(src.length > SUBJECT_SOURCE_MAX ? src.slice(0, SUBJECT_SOURCE_MAX) + '\n…(뒤는 줄임)' : src);
+  } else {
+    L.push('');
+    L.push('# 교육과정 자료');
+    L.push('(없음 — 일반적인 교과 지식으로 쓰고, 확실하지 않은 줄 끝에 ' + SUBJECT_UNSURE + ' 를 붙인다)');
+  }
+  return L.join('\n');
+}
+
+/** 시트 이름·키에 못 쓰는 문자를 지우고 띄어쓰기를 없앤 짧은 키 */
+function subjectKeyOf(raw) {
+  return String(raw || '').replace(/\(.*?\)/g, '').replace(/[\[\]\*\/\\\?:'"\s]/g, '').trim().slice(0, 20);
+}
+
+/** "이름: 값" 줄이면 [필드, 값], 아니면 null */
+function subjectFieldOf_(line) {
+  var m = /^\s*(?:[-*•]\s*)?\**\s*([가-힣·\s]{1,12}?)\s*\**\s*[:：]\s*(.*)$/.exec(line);
+  if (!m) return null;
+  var label = m[1].replace(/\s+/g, ' ').trim();
+  for (var i = 0; i < SUBJECT_FIELDS.length; i++) {
+    if (SUBJECT_FIELDS[i].names.indexOf(label) >= 0) return [SUBJECT_FIELDS[i].f, m[2].trim()];
+  }
+  return null;
+}
+
+/**
+ * AI 답(또는 공방·다른 선생님이 준 글) → 교과 한 줄
+ * @return {{key,name,kind,role,comp,columns:string[],basis,unsure:boolean,missing:string[]}}
+ */
+function parseSubjectAnswer(text) {
+  var t = String(text || '').replace(/\r/g, '').replace(/^\s*```[a-z]*\s*$/gim, '').replace(/\*\*/g, '');
+  var got = {}, cur = null;
+  t.split('\n').forEach(function (raw) {
+    var line = raw.replace(/\s+$/, '');
+    var fv = subjectFieldOf_(line);
+    if (fv) { cur = fv[0]; got[cur] = got[cur] ? got[cur] + '\n' + fv[1] : fv[1]; return; }
+    if (!line.trim() || /^\s*#/.test(line)) return;
+    if (cur === 'look' || cur === 'comp' || cur === 'comps' || cur === 'basis') got[cur] = (got[cur] ? got[cur] + '\n' : '') + line.trim();
+  });
+  var name = String(got.name || '').trim();
+  var key = subjectKeyOf(got.key || name);
+  if (!name) name = key;
+  var plain = name.replace(/\(.*?\)/g, '').trim() || key;
+  var kind = /공통/.test(got.kind || '') ? '공통' : '교과';
+  var role = String(got.role || '').trim() || ('고등학교 ' + plain + '교사');
+
+  var comp = String(got.comp || '').trim();
+  if (!comp) {
+    var comps = String(got.comps || '').trim().replace(/\.$/, '');
+    var look = String(got.look || '').split('\n').map(function (x) { return x.trim(); }).filter(String)
+      .map(function (x) { return /^[-•·*]\s*/.test(x) ? '- ' + x.replace(/^[-•·*]\s*/, '') : '- ' + x; });
+    var lines = [];
+    if (comps) lines.push(plain + '과 핵심역량: ' + comps + '.');
+    comp = lines.concat(look).join('\n');
+  }
+
+  var columns = String(got.columns || '').split(/[|,\n]/).map(function (x) { return x.trim(); })
+    .filter(function (x) { return x && ['반', '번호', '이름', '성취수준', '최종본', 'AI 결과', '생성', '모델', '바이트', '검증'].indexOf(x) < 0; });
+  var seen = {};
+  columns = columns.filter(function (x) { if (seen[x]) return false; seen[x] = 1; return true; }).slice(0, 8);
+
+  var missing = [];
+  if (!key) missing.push('키');
+  if (!comp) missing.push('역량·관찰 모습');
+  return {
+    key: key, name: name, kind: kind, role: role, comp: comp, columns: columns,
+    basis: String(got.basis || '').trim(),
+    unsure: (comp + '\n' + (got.basis || '')).indexOf(SUBJECT_UNSURE) >= 0,
+    missing: missing
+  };
+}
+
+/** 교과 한 줄 → 나누는 글(공방·시트·다른 선생님 모두 이 모양을 읽는다) */
+function formatSubjectBlock(sub) {
+  sub = sub || {};
+  var L = ['키: ' + (sub.key || ''), '표시명: ' + (sub.name || sub.key || ''), '분류: ' + (sub.kind || '교과'),
+           '역할 표현: ' + (sub.role || ''), '역량·서술 관점:'];
+  String(sub.comp || '').split('\n').forEach(function (x) { if (x.trim()) L.push(x); });
+  var cols = Array.isArray(sub.columns) ? sub.columns : String(sub.columns || '').split('|');
+  cols = cols.map(function (x) { return String(x).trim(); }).filter(String);
+  if (cols.length) L.push('입력 항목: ' + cols.join('|'));
+  if (sub.basis) L.push('근거: ' + String(sub.basis).replace(/\s*\n\s*/g, ' '));
+  return L.join('\n');
+}
+
+
+
+var COMMON = {};
+PRESET_COMMON.forEach(function (r) { COMMON[r.key] = r.body; });
+return {
+  version: APP.VERSION, rulesId: RULES_2026.id, rulesYear: RULES_2026.year, aiNotice: AI_NOTICE_2026,
+  records: PRESET_RECORD_TYPES.map(function (r) {
+    return { key: r.key, name: r.name, chars: r.chars, useGrade: r.useGrade, role: r.role, goal: r.goal, view: r.view, note: r.note,
+             rules: RECORD_RULES_2026.hasOwnProperty(r.key) ? RECORD_RULES_2026[r.key] : '' };
+  }),
+  subjects: PRESET_SUBJECTS, common: COMMON,
+  oldNeis: NEIS_RULES_2026_1, oldWrite: OLD_COMMON_2026_1.WRITING_RULES, rules: RULES_2026.rules.concat(AI_TELL_RULES),
+  packCount: RULES_2026.rules.length, aiTellCount: AI_TELL_RULES.length,
+  buildGemText: buildGemText, buildSkillMd: buildSkillMd, skillName: skillName,
+  byteLen: byteLen, buildPrompt: buildPrompt, activityBytes: activityBytes, splitBytes: splitBytes,
+  validateResult: validateResult, parseColumns: parseColumns, exampleValuesFrom: exampleValuesFrom,
+  DESIGN_SYSTEM: DESIGN_SYSTEM, buildDesignUser: buildDesignUser, parseDesignAnswer: parseDesignAnswer, suggestBytes: suggestBytes,
+  SUBJECT_SYSTEM: SUBJECT_SYSTEM, SUBJECT_UNSURE: SUBJECT_UNSURE, buildSubjectUser: buildSubjectUser,
+  parseSubjectAnswer: parseSubjectAnswer, formatSubjectBlock: formatSubjectBlock, subjectKeyOf: subjectKeyOf
+};
+})();
+/* @@ENGINE-END */
+</script>
+<script>
+/* @@ICONS — tools/build-studio.js 가 넣는 자리. 손으로 고치지 마세요. */
+const ICONS = {
+ "arrow": "<svg class=\"ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\" style=\"--ic:#3093EC\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><g style=\"stroke:var(--ic)\"><path d=\"M4.5 12h15\"/><path d=\"m13.5 6 6 6-6 6\"/></g></svg>",
+ "check": "<svg class=\"ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\" style=\"--ic:#43B966\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path style=\"stroke:var(--ic)\" d=\"m4.75 12.5 4.5 4.5 10-10\"/></svg>",
+ "close": "<svg class=\"ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\" style=\"--ic:#F05465\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path style=\"stroke:var(--ic)\" d=\"M6 6l12 12M18 6 6 18\"/></svg>",
+ "copy": "<svg class=\"ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\" style=\"--ic:#5D73EA\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5\"/><g><rect style=\"fill:var(--ic);fill-opacity:.2\" x=\"8.5\" y=\"8.5\" width=\"11.5\" height=\"11.5\" rx=\"2\"/></g></svg>",
+ "diamond": "<svg class=\"ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\" style=\"--ic:#26B7D3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path style=\"fill:var(--ic);fill-opacity:.2\" d=\"M6.5 4h11l4 5.5L12 20.5 2.5 9.5z\"/><path d=\"M2.5 9.5h19M9.5 4 8 9.5l4 11 4-11L14.5 4\"/></svg>",
+ "document": "<svg class=\"ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\" style=\"--ic:#3093EC\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path style=\"fill:var(--ic);fill-opacity:.2\" d=\"M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z\"/><path d=\"M14 3v4a1 1 0 0 0 1 1h4\"/><path style=\"stroke:var(--ic)\" d=\"M8.5 12.5h7\"/><path style=\"stroke:var(--ic)\" d=\"M8.5 16h4.5\"/></svg>",
+ "grid": "<svg class=\"ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\" style=\"--ic:#3093EC\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect style=\"fill:var(--ic);fill-opacity:.2\" x=\"3.5\" y=\"3.5\" width=\"7\" height=\"7\" rx=\"1.75\"/><rect style=\"fill:var(--ic);stroke:none\" x=\"13.5\" y=\"3.5\" width=\"7\" height=\"7\" rx=\"1.75\"/><rect x=\"13.5\" y=\"3.5\" width=\"7\" height=\"7\" rx=\"1.75\"/><rect style=\"fill:var(--ic);fill-opacity:.2\" x=\"3.5\" y=\"13.5\" width=\"7\" height=\"7\" rx=\"1.75\"/><rect style=\"fill:var(--ic);fill-opacity:.2\" x=\"13.5\" y=\"13.5\" width=\"7\" height=\"7\" rx=\"1.75\"/></svg>",
+ "next": "<svg class=\"ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\" style=\"--ic:#43B966\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path style=\"fill:var(--ic);fill-opacity:.2\" d=\"M5 5.4v13.2a.9.9 0 0 0 1.4.75l9.6-6.6a.9.9 0 0 0 0-1.5L6.4 4.65A.9.9 0 0 0 5 5.4z\"/><path style=\"stroke:var(--ic)\" d=\"M19.5 5v14\"/></svg>",
+ "plus": "<svg class=\"ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\" style=\"--ic:#43B966\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path style=\"stroke:var(--ic)\" d=\"M12 5v14M5 12h14\"/></svg>",
+ "save": "<svg class=\"ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\" style=\"--ic:#5D73EA\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path style=\"fill:var(--ic);fill-opacity:.2\" d=\"M5 3.5h11.5l4 4V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5z\"/><path d=\"M7.5 3.5v4a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-4\"/><path style=\"stroke:var(--ic)\" d=\"M13 5.25v1.5\"/><path d=\"M7 20.5V14a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v6.5\"/></svg>",
+ "sparkle": "<svg class=\"ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\" style=\"--ic:#8968F4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path style=\"fill:var(--ic);fill-opacity:.2\" d=\"M10 4c.55 4.3 2.2 5.95 6.5 6.5-4.3.55-5.95 2.2-6.5 6.5-.55-4.3-2.2-5.95-6.5-6.5C7.8 9.95 9.45 8.3 10 4z\"/><path style=\"fill:var(--ic);stroke:none\" d=\"M18 13.5c.3 2.1 1.1 2.9 3.2 3.2-2.1.3-2.9 1.1-3.2 3.2-.3-2.1-1.1-2.9-3.2-3.2 2.1-.3 2.9-1.1 3.2-3.2z\"/><path style=\"stroke:var(--ic)\" d=\"M18.5 4.5h.01\"/></svg>",
+ "trash": "<svg class=\"ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\" style=\"--ic:#F05465\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><g><path d=\"M3.5 6.5h17\"/><path d=\"M9 6.5V4.75c0-.69.56-1.25 1.25-1.25h3.5c.69 0 1.25.56 1.25 1.25V6.5\"/></g><g><path style=\"fill:var(--ic);fill-opacity:.2\" d=\"m5.5 6.5 1.07 12.66A2 2 0 0 0 8.56 21h6.88a2 2 0 0 0 1.99-1.84L18.5 6.5\"/><path style=\"stroke:var(--ic)\" d=\"M10 10.5v6M14 10.5v6\"/></g></svg>",
+ "undo": "<svg class=\"ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\" style=\"--ic:#3093EC\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4.5 9h10a5.25 5.25 0 0 1 0 10.5H11\"/><path style=\"stroke:var(--ic)\" d=\"M8.5 5 4.5 9l4 4\"/></svg>",
+ "wand": "<svg class=\"ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\" style=\"--ic:#AC5CD7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m3.5 20.5 11-11\"/><path style=\"stroke:var(--ic)\" d=\"m14.5 9.5 2.5-2.5\"/><path style=\"stroke:var(--ic)\" d=\"M18.5 2.5v3M17 4h3\"/><path style=\"stroke:var(--ic)\" d=\"M20.5 9.5v2M19.5 10.5h2\"/><path style=\"stroke:var(--ic)\" d=\"M11.5 3v2M10.5 4h2\"/></svg>"
+};
+/* @@ICONS-END */
+function putIcon(el, id) { el.insertAdjacentHTML('afterbegin', ICONS[id]); }
+/* ────────── 데이터 — 엔진(시트와 같은 것)에서 ────────── */
+// 시트 안(구글 Apps Script 창)에서 열리면 그 시트의 기록종류·교과·공통규칙·기재요령을 받아 바꿔 끼운다
+const SHEET = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
+let RECORDS = ENGINE.records;
+let BUILTIN = ENGINE.subjects;
+let COMMON = ENGINE.common;
+let RULESET = ENGINE.rules;
+let DEFAULT_RULES = { write: COMMON.WRITING_RULES, neis: COMMON.NEIS_RULES };
+const UNSURE = ENGINE.SUBJECT_UNSURE;
+// 2026 기재요령 이전 공방의 기본 문구 — 손대지 않은 채 저장돼 있으면 새 문구로 바꾼다
+const OLD_NEIS_HEAD = '다음은 학교생활기록부에 기재할 수 없다. 결과물에 절대 포함하지 않는다.\n- 교외 대회·경시대회 수상 실적, 교내외 수상 사실 및 등수';
+const OLD_WRITE_HEAD = '- 문장 종결은 명사형 어미(~함, ~음, ~임)를 사용한다.\n- 존댓말·구어체를 쓰지 않고, 문단 구분 없이 한 문단으로 작성한다.\n- \'학생은\', \'학생이\' 등 학생을 지칭하는 주어를 쓰지 않는다. 학생 이름도 쓰지 않는다.\n- 하이픈, 가운뎃점, 따옴표 등';
+
+/* ────────── 상태 ────────── */
+const $ = id => document.getElementById(id);
+const store = {
+  get(k){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch(e){ return null; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+};
+const SEED = {
+  recKey:'동아리', subKey:'공통', bytes:1500, name:'전기전자 데이터 탐구',
+  cols:['탐구 주제','주제를 고른 이유','자료와 분석 방법','알게 된 점','한계와 다음 계획'],
+  desc:'노트북과 공공데이터만으로 진행한 학생 주도 탐구. 장비 실험 없이 데이터와 AI 도구로 검증하게 했다.',
+  examples:[{ in:'탐구 주제: 여름철 시간대별 전력 수요와 기온의 관계\n주제를 고른 이유: 정전 뉴스를 보고 수요 예측이 어떻게 이루어지는지 궁금해짐\n자료와 분석 방법: 전력거래소 공개 데이터와 기상청 기온 자료를 시간 단위로 결합해 산점도와 상관계수로 비교\n알게 된 점: 기온이 28도를 넘는 구간부터 수요 증가폭이 급격히 커지는 비선형 구간이 나타남\n한계와 다음 계획: 습도와 요일 효과를 넣지 못해 설명력이 낮았고, 다음에는 변수를 늘려 다시 볼 계획',
+  out:'여름철 전력 수급 기사에서 출발하여 기온과 시간대별 전력 수요의 관계를 탐구 주제로 설정함. 전력거래소와 기상청의 공개 자료를 시간 단위로 결합하는 과정에서 두 자료의 기준 시각이 다르다는 점을 스스로 발견하고 기준을 맞추어 재구성함. 산점도와 상관계수로 비교한 뒤 기온 28도 부근부터 수요 증가폭이 커지는 비선형 구간을 찾아내어, 단순 비례 관계로 설명하려던 처음의 가정을 스스로 수정함. 습도와 요일 효과를 반영하지 못해 설명력이 낮았다는 한계를 먼저 밝히고 변수를 늘려 다시 분석하겠다는 계획을 세우는 등, 자료에 근거해 자신의 결론을 검토하는 태도가 뚜렷함.' }],
+  years:15, rWrite:DEFAULT_RULES.write, rNeis:DEFAULT_RULES.neis
+};
+const SAVED = store.get('saeteuk-studio') || {};
+let ST = Object.assign({}, SEED, SAVED);
+if (!Array.isArray(SAVED.examples) && (SAVED.exIn || SAVED.exOut)) ST.examples = [{ in: SAVED.exIn || '', out: SAVED.exOut || '' }];   // 예전 공방은 예시 한 편
+delete ST.exIn; delete ST.exOut;
+ST.examples = (Array.isArray(ST.examples) ? ST.examples : []).filter(e => e && typeof e === 'object').slice(0, 5)
+  .map(e => ({ in: String(e.in || ''), out: String(e.out || '') }));
+if (!ST.examples.length) ST.examples = [{ in: '', out: '' }];
+if (SAVED.bytes === undefined && Number(SAVED.chars)) ST.bytes = Number(SAVED.chars) * 3;              // 예전 공방은 글자수로 저장
+delete ST.chars;
+if (String(ST.rNeis || '').indexOf(OLD_NEIS_HEAD) === 0) ST.rNeis = DEFAULT_RULES.neis;
+if (String(ST.rWrite || '').indexOf(OLD_WRITE_HEAD) === 0) ST.rWrite = DEFAULT_RULES.write;
+// 옛 번호 v3.8.6 까지의 기본 문구 그대로 저장돼 있으면 지금의 짧은 문구로
+if (ST.rNeis === ENGINE.oldNeis) ST.rNeis = DEFAULT_RULES.neis;
+if (ST.rWrite === ENGINE.oldWrite) ST.rWrite = DEFAULT_RULES.write;
+let MINE = (store.get('saeteuk-studio-subjects') || []).filter(s => s && s.key && s.comp);
+
+const save = () => store.set('saeteuk-studio', ST);
+const allSubjects = () => MINE.concat(BUILTIN.filter(b => !MINE.some(m => m.key === b.key)));
+const recOf = () => RECORDS.find(r => r.key === ST.recKey) || RECORDS[0];
+const subOf = () => allSubjects().find(s => s.key === ST.subKey) || BUILTIN[0];
+const capOf = rec => rec.chars * 3;
+const limitOf = () => ENGINE.activityBytes({ bytes: ST.bytes }, recOf());
+const AMOUNT_NOTES = {
+  '메모만큼': '메모가 한두 줄이면 결과도 한두 문장. 관찰을 더 적어야 길어집니다.',
+  '보통': '메모가 짧아도 한도의 60% 안팎까지, 메모 속 행동을 구체적으로 풀고 교과 역량과 잇습니다.',
+  '넉넉히': '메모 양과 관계없이 한도의 90% 안팎. 메모에 없는 활동이나 수치는 만들지 않습니다.'
+};
+if (!AMOUNT_NOTES[ST.amount]) ST.amount = '보통';
+const fmt = n => Number(n).toLocaleString('ko-KR');
+
+/* ────────── 엔진 호출 ────────── */
+const filledExamples = () => ST.examples.filter(e => e.out && e.out.trim());
+function examplesBlock(){
+  return filledExamples().map((e, i) => '## 예시' + (i + 1) + ' 입력\n' + (e.in || '').trim() + '\n## 예시' + (i + 1) + ' 결과\n' + e.out.trim()).join('\n\n');
+}
+function buildPrompt(){
+  const key = (ST.name || '활동').replace(/[\[\]*\/\\?:']/g, '').trim().slice(0, 20);
+  return ENGINE.buildPrompt({
+    activity: { key, name: ST.name, recordKey: ST.recKey, subjectKey: ST.subKey, bytes: limitOf(),
+                columns: ST.cols.join('|'), desc: ST.desc, mode: '자동', amount: ST.amount },
+    record: recOf(), subject: subOf(),
+    common: Object.assign({}, COMMON, { WRITING_RULES: ST.rWrite, NEIS_RULES: ST.rNeis, STYLE_CARD: '' }),
+    examples: examplesBlock(), years: ST.years || 15
+  });
+}
+const validate = (text, limit) => ENGINE.validateResult(text, limit, RULESET, []);
+
+/* ────────── 렌더 ────────── */
+function fillRecords(){
+  $('rec').textContent = '';
+  RECORDS.forEach(r => {
+    const o = document.createElement('option');
+    o.value = r.key; o.textContent = r.name + ' · ' + r.chars + '자';
+    $('rec').appendChild(o);
+  });
+  if (!RECORDS.some(r => r.key === ST.recKey)) { ST.recKey = RECORDS[0].key; ST.bytes = capOf(RECORDS[0]); }
+  $('rec').value = ST.recKey;
+}
+fillRecords();
+
+function fillSubjects(){
+  const sel = $('sub');
+  sel.textContent = '';
+  const groups = [['내가 만든 교과', MINE], [SHEET ? '이 시트의 교과영역' : '기본', BUILTIN.filter(b => !MINE.some(m => m.key === b.key))]];
+  groups.forEach(([label, list]) => {
+    if (!list.length) return;
+    const g = document.createElement('optgroup');
+    g.label = label;
+    list.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.key; o.textContent = s.key + ' — ' + s.name;
+      g.appendChild(o);
+    });
+    sel.appendChild(g);
+  });
+  if (!allSubjects().some(s => s.key === ST.subKey)) ST.subKey = '공통';
+  sel.value = ST.subKey;
+  renderMine();
+}
+
+function renderChips(){
+  const box = $('chips');
+  box.textContent = '';
+  ST.cols.forEach((c, i) => {
+    const el = document.createElement('span');
+    el.className = 'chip';
+    el.append(document.createTextNode(c));
+    const b = document.createElement('button');
+    b.type = 'button'; b.innerHTML = ICONS.close;
+    b.setAttribute('aria-label', c + ' 삭제');
+    b.onclick = () => { ST.cols.splice(i, 1); renderChips(); render(); };
+    el.appendChild(b);
+    box.appendChild(el);
+  });
+}
+
+function tsvRow(){
+  const key = (ST.name || '활동').replace(/[\[\]*\/\\?:']/g, '').trim().slice(0, 20);
+  return [key, ST.name, ST.recKey, ST.subKey, limitOf(),
+          ST.cols.join('|'), (ST.desc || '').replace(/\t|\n/g, ' '), '자동', '',
+          key + ' ▸입력', key + ' ▸예시', ST.amount === '보통' ? '' : ST.amount].join('\t');
+}
+
+function renderBytes(){
+  const rec = recOf(), cap = capOf(rec), lim = limitOf();
+  document.querySelectorAll('#amount button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.amount === ST.amount)));
+  $('amountNote').textContent = AMOUNT_NOTES[ST.amount];
+  $('bytes').max = cap;
+  if (document.activeElement !== $('bytes')) $('bytes').value = lim;
+  $('bytesHint').textContent = '약 ' + fmt(Math.floor(lim / 3)) + '자 · 한 칸 ' + fmt(cap) + '의 ' + Math.round(lim / cap * 100) + '%';
+  $('shareBar').style.width = Math.round(lim / cap * 100) + '%';
+  document.querySelectorAll('[data-split]').forEach(b => {
+    const n = Number(b.dataset.split);
+    b.setAttribute('aria-pressed', ENGINE.splitBytes(cap, n)[0] === lim ? 'true' : 'false');
+  });
+  $('recNote').textContent = [rec.note, rec.useGrade ? '성취수준 지침이 함께 들어갑니다.' : ''].filter(Boolean).join(' ');
+}
+
+function render(){
+  renderBytes();
+  const prompt = buildPrompt();
+  $('promptOut').textContent = prompt;
+  $('promptBytes').textContent = fmt(ENGINE.byteLen(prompt));
+  $('rowOut').textContent = tsvRow();
+  if (SHEET) renderSheetRow();
+  renderDesignState();
+
+  const limit = limitOf();
+  $('checkLimit').textContent = fmt(limit);
+  const text = $('checkIn').value;
+  const v = validate(text, limit);
+  $('checkBytes').textContent = fmt(v.bytes);
+  const track = $('track');
+  track.classList.toggle('over', v.bytes > limit);
+  track.firstElementChild.style.width = Math.min(100, (v.bytes / limit) * 100) + '%';
+
+  const out = $('checkOut');
+  out.textContent = '';
+  const line = (cls, tag, label, hit, why) => {
+    const d = document.createElement('div');
+    d.className = 'issue ' + cls;
+    const t = document.createElement('span'); t.className = 'tag'; t.textContent = tag;
+    const s = document.createElement('span'); s.append(label);
+    if (hit) { const h = document.createElement('span'); h.className = 'hit'; h.textContent = '  ' + hit; s.appendChild(h); }
+    if (why) { const w = document.createElement('span'); w.className = 'why'; w.textContent = why; s.appendChild(w); }
+    d.append(t, s); out.appendChild(d);
+  };
+  if (!text.trim()) line('check', '대기', '문장을 붙여넣으면 분량과 2026 기재요령·맞춤법을 점검합니다.');
+  else if (!v.issues.length) line('pass', '통과', '걸리는 표현이 없습니다. 내용의 사실 여부는 직접 확인하세요.');
+  else v.issues.forEach(i => line(i.level === 'block' ? 'block' : 'check', i.level === 'block' ? '수정' : '확인', i.label, i.hit,
+    [i.fix ? '바르게: ' + i.fix : '', i.why || ''].filter(Boolean).join(' · ')));
+  save();
+}
+
+/* ────────── 활동 설계 바인딩 ────────── */
+function bind(id, key){
+  const el = $(id);
+  el.value = ST[key] ?? '';
+  el.addEventListener('input', () => { ST[key] = el.value; render(); });
+}
+bind('name', 'name');
+bind('desc', 'desc');
+bind('rWrite', 'rWrite');
+bind('rNeis', 'rNeis');
+
+$('rec').addEventListener('change', () => {
+  ST.recKey = $('rec').value;
+  ST.bytes = capOf(recOf());
+  $('bytes').value = ST.bytes;
+  render();
+});
+$('sub').addEventListener('change', () => { ST.subKey = $('sub').value; render(); });
+$('amount').addEventListener('click', e => {
+  const b = e.target.closest('button[data-amount]');
+  if (!b) return;
+  ST.amount = b.dataset.amount; render();
+});
+$('bytes').addEventListener('input', () => { ST.bytes = Number($('bytes').value) || capOf(recOf()); render(); });
+$('bytes').addEventListener('change', () => { $('bytes').value = limitOf(); ST.bytes = limitOf(); render(); });
+document.querySelectorAll('[data-split]').forEach(b => b.addEventListener('click', () => {
+  ST.bytes = ENGINE.splitBytes(capOf(recOf()), Number(b.dataset.split))[0];
+  $('bytes').value = ST.bytes;
+  render();
+}));
+$('checkIn').addEventListener('input', render);
+
+$('colInput').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ',') return;
+  e.preventDefault();
+  const parts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+  parts.forEach(p => { if (!ST.cols.includes(p) && ST.cols.length < 12) ST.cols.push(p); });
+  e.target.value = '';
+  renderChips(); render();
+});
+
+$('resetRules').addEventListener('click', () => {
+  ST.rWrite = DEFAULT_RULES.write; ST.rNeis = DEFAULT_RULES.neis;
+  $('rWrite').value = ST.rWrite; $('rNeis').value = ST.rNeis;
+  render(); toast('기본 규칙으로 되돌렸습니다');
+});
+
+function renderExamples(){
+  const box = $('exList');
+  box.textContent = '';
+  ST.examples.forEach((e, i) => {
+    const card = document.createElement('div');
+    card.className = 'excard';
+    const top = document.createElement('div');
+    top.className = 'labrow';
+    const t = document.createElement('span'); t.className = 'lab'; t.textContent = '예시 ' + (i + 1);
+    top.appendChild(t);
+    if (ST.examples.length > 1) {
+      const del = document.createElement('button');
+      del.type = 'button'; del.className = 'linkbtn'; del.textContent = '지우기'; del.insertAdjacentHTML('afterbegin', ICONS.trash);
+      del.setAttribute('aria-label', '예시 ' + (i + 1) + ' 지우기');
+      del.onclick = () => { ST.examples.splice(i, 1); renderExamples(); render(); };
+      top.appendChild(del);
+    }
+    const area = (id, label, rows, key, ph) => {
+      const l = document.createElement('label'); l.className = 'sublab'; l.htmlFor = id; l.textContent = label;
+      const ta = document.createElement('textarea'); ta.id = id; ta.rows = rows; ta.value = e[key] || ''; ta.placeholder = ph;
+      ta.addEventListener('input', () => { e[key] = ta.value; render(); });
+      return [l, ta];
+    };
+    card.append(top,
+      ...area('exIn' + i, '학생 자료', 3, 'in', '항목: 내용 — 비워 두면 [AI로 칸 채우기]가 만들어 줍니다'),
+      ...area('exOut' + i, '이렇게 나왔으면 하는 결과', 4, 'out', '완성된 세특 한 편'));
+    box.appendChild(card);
+  });
+  $('exAdd').disabled = ST.examples.length >= 5;
+}
+$('exAdd').addEventListener('click', () => {
+  if (ST.examples.length >= 5) return;
+  ST.examples.push({ in: '', out: '' });
+  renderExamples(); render();
+  $('exOut' + (ST.examples.length - 1)).focus();
+});
+
+/* ────────── AI로 칸 채우기 ────────── */
+let DESIGN = null, BEFORE = null, SHEET_MODEL = '';
+const designInput = () => ({ record: recOf(), subject: subOf(), name: ST.name, desc: ST.desc, columns: ST.cols, bytes: limitOf(), examples: filledExamples() });
+function renderDesignState(){
+  const n = filledExamples().length;
+  $('dsState').textContent = n
+    ? '결과 예시 ' + n + '편 · ' + (ST.cols.length ? '정해 둔 입력 항목 ' + ST.cols.length + '개는 되도록 그대로 씁니다' : '입력 항목은 AI가 정합니다')
+    : '왼쪽 [예시]의 결과 칸이 비었습니다. 먼저 한 편 이상 넣어 주세요.';
+  $('dsCopy').disabled = !n; $('dsAuto').disabled = !n;
+}
+function showDesign(d, msg){
+  const fx = filledExamples();
+  DESIGN = d;
+  DESIGN.bytes = ENGINE.suggestBytes(fx.map(e => e.out), capOf(recOf()));
+  const longest = Math.max(0, ...fx.map(e => ENGINE.byteLen(e.out)));
+  const rows = [
+    ['활동 이름', (ST.name || '').trim() ? '그대로 — ' + ST.name : (d.name || '(제안 없음)')],
+    ['활동 개요', d.desc || '(그대로)'],
+    ['입력 항목', d.columns.join(' · ')],
+    ['바이트 한도', DESIGN.bytes ? fmt(limitOf()) + ' → ' + fmt(DESIGN.bytes) + '바이트 (가장 긴 예시 ' + fmt(longest) + '바이트를 90%로 보고)' : '(그대로)']
+  ];
+  const dl = $('dsSum');
+  dl.textContent = '';
+  rows.forEach(([k, v]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl.append(dt, dd); });
+  const box = $('dsEx');
+  box.textContent = '';
+  fx.forEach((e, i) => {
+    const w = document.createElement('div'); w.className = 'dsex';
+    const l = document.createElement('span'); l.className = 'sublab'; l.textContent = '예시 ' + (i + 1) + ' 학생 자료';
+    const pre = document.createElement('pre'); pre.className = 'out'; pre.textContent = d.examples[i] || '(못 읽음 — 넣은 뒤 직접 채우세요)';
+    w.append(l, pre); box.appendChild(w);
+  });
+  $('dsPreview').hidden = false; $('dsUndo').hidden = true;
+  $('dsMsg').textContent = msg || (d.missing.length ? '못 채운 것: ' + d.missing.join(', ') + ' — 넣은 뒤 직접 고치세요.' : '읽었습니다. 아래를 확인하고 [왼쪽 칸에 모두 넣기].');
+}
+$('dsCopy').addEventListener('click', () => {
+  if (!filledExamples().length) { toast('왼쪽 예시의 결과 칸을 먼저 채워 주세요'); return; }
+  copy(ENGINE.DESIGN_SYSTEM + '\n\n' + ENGINE.buildDesignUser(designInput()), '요청문을 복사했습니다 · AI 대화창에 붙여 넣으세요');
+});
+$('dsParse').addEventListener('click', () => {
+  const d = ENGINE.parseDesignAnswer($('dsAnswer').value, filledExamples().length);
+  if (!d.columns.length) { $('dsMsg').textContent = '읽지 못했습니다 — "입력 항목:" 줄과 [예시1] … 이 든 답을 통째로 붙여 넣으세요.'; return; }
+  showDesign(d);
+});
+$('dsAuto').addEventListener('click', () => {
+  if (!SHEET) return;
+  const b = $('dsAuto');
+  b.disabled = true; $('dsMsg').textContent = '예시를 읽고 칸을 채우는 중… (20~40초)';
+  const p = designInput();
+  SHEET.withSuccessHandler(r => { b.disabled = false; showDesign(r.design, '✓ 채웠습니다. 아래를 확인하고 [왼쪽 칸에 모두 넣기]. ' + (r.usage || '')); })
+    .withFailureHandler(e => { b.disabled = false; $('dsMsg').textContent = e.message; })
+    .studioDesign({ recordKey: ST.recKey, subjectKey: ST.subKey, name: p.name, desc: p.desc, columns: p.columns, bytes: p.bytes, examples: p.examples });
+});
+$('dsApply').addEventListener('click', () => {
+  if (!DESIGN) return;
+  BEFORE = JSON.parse(JSON.stringify({ name: ST.name, desc: ST.desc, cols: ST.cols, bytes: ST.bytes, examples: ST.examples }));
+  if (DESIGN.name && !(ST.name || '').trim()) ST.name = DESIGN.name;
+  if (DESIGN.desc) ST.desc = DESIGN.desc;
+  if (DESIGN.columns.length) ST.cols = DESIGN.columns.slice(0, 12);
+  if (DESIGN.bytes) ST.bytes = DESIGN.bytes;
+  let k = 0;
+  ST.examples.forEach(e => { if (e.out && e.out.trim()) { if (DESIGN.examples[k]) e.in = DESIGN.examples[k]; k++; } });
+  $('name').value = ST.name; $('desc').value = ST.desc; $('bytes').value = limitOf();
+  renderChips(); renderExamples(); render();
+  $('dsUndo').hidden = false;
+  toast('왼쪽 칸에 넣었습니다 · 프롬프트를 다시 조립했습니다');
+});
+$('dsUndo').addEventListener('click', () => {
+  if (!BEFORE) return;
+  Object.assign(ST, { name: BEFORE.name, desc: BEFORE.desc, cols: BEFORE.cols, bytes: BEFORE.bytes, examples: BEFORE.examples });
+  $('name').value = ST.name; $('desc').value = ST.desc; $('bytes').value = limitOf();
+  renderChips(); renderExamples(); render();
+  $('dsUndo').hidden = true; BEFORE = null;
+  toast('넣기 전으로 되돌렸습니다');
+});
+
+const tabs = [...document.querySelectorAll('.tab')];
+tabs.forEach(t => t.addEventListener('click', () => {
+  tabs.forEach(o => {
+    const on = o === t;
+    o.setAttribute('aria-selected', on ? 'true' : 'false');
+    $(o.getAttribute('aria-controls')).hidden = !on;
+  });
+}));
+
+$('toDesign').addEventListener('click', () => { $('tab-design').click(); $('tab-design').scrollIntoView({ block: 'nearest' }); });
+
+/* ────────── 새 교과 ────────── */
+let EDIT = null;   // 지금 고치는 교과
+
+function readFields(){
+  return {
+    key: ENGINE.subjectKeyOf($('fKey').value || $('fName').value), name: $('fName').value.trim(), kind: '교과',
+    role: $('fRole').value.trim(), comp: $('fComp').value.trim(),
+    columns: $('fCols').value.split(/[|,]/).map(s => s.trim()).filter(Boolean)
+  };
+}
+function showSubject(s, msg){
+  EDIT = s;
+  $('nsOver').checked = false;
+  $('nsOverBox').hidden = !(SHEET && BUILTIN.some(b => b.key === s.key));
+  $('fKey').value = s.key; $('fName').value = s.name; $('fRole').value = s.role;
+  $('fComp').value = s.comp; $('fCols').value = (s.columns || []).join('|');
+  $('nsConfirm').checked = false;
+  $('nsUnsure').hidden = s.comp.indexOf(UNSURE) < 0;
+  $('nsEdit').hidden = false;
+  $('nsMsg').textContent = msg || '';
+}
+function renderMine(){
+  $('mineBox').hidden = !MINE.length;
+  const box = $('mineChips');
+  box.textContent = '';
+  MINE.forEach((s, i) => {
+    const el = document.createElement('span');
+    el.className = 'chip';
+    const open = document.createElement('button');
+    open.type = 'button'; open.className = 'open'; open.textContent = s.name || s.key;
+    open.onclick = () => { showSubject(Object.assign({ columns: [] }, s), '내가 만든 교과를 불러왔습니다.'); $('nsEdit').scrollIntoView({ block: 'nearest' }); };
+    const del = document.createElement('button');
+    del.type = 'button'; del.innerHTML = ICONS.close; del.setAttribute('aria-label', (s.name || s.key) + ' 지우기');
+    del.onclick = () => { MINE.splice(i, 1); store.set('saeteuk-studio-subjects', MINE); fillSubjects(); render(); toast('지웠습니다'); };
+    el.append(open, del);
+    box.appendChild(el);
+  });
+}
+
+$('toNew').addEventListener('click', () => {
+  $('newSubject').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  setTimeout(() => $('nsName').focus({ preventScroll: true }), 250);
+});
+$('nsCopy').addEventListener('click', () => {
+  const name = $('nsName').value.trim();
+  if (!name) { $('nsName').focus(); toast('교과(과목) 이름을 먼저 적어 주세요'); return; }
+  const text = ENGINE.SUBJECT_SYSTEM + '\n\n' + ENGINE.buildSubjectUser({
+    name, level: $('nsLevel').value, source: $('nsSource').value, note: $('nsNote').value
+  });
+  copy(text, '요청문을 복사했습니다 · AI 대화창에 붙여 넣으세요');
+});
+$('nsParse').addEventListener('click', () => {
+  const s = ENGINE.parseSubjectAnswer($('nsAnswer').value);
+  if (s.missing.length) { $('nsMsg').textContent = '읽지 못한 것: ' + s.missing.join('·') + ' — "키:", "관찰 모습:" 줄이 든 답을 통째로 붙여 넣으세요.'; return; }
+  showSubject(s, MINE.some(m => m.key === s.key) || BUILTIN.some(b => b.key === s.key)
+    ? '읽었습니다. 같은 키(' + s.key + ')가 있어 쓰면 그 교과를 바꿉니다.' : '읽었습니다. 아래에서 고친 뒤 쓰세요.');
+});
+$('fComp').addEventListener('input', () => { $('nsUnsure').hidden = $('fComp').value.indexOf(UNSURE) < 0; });
+$('nsSave').addEventListener('click', () => {
+  const s = readFields();
+  if (!s.key || !s.comp) { toast('키와 역량 · 서술 관점을 채워 주세요'); return; }
+  if (s.comp.indexOf(UNSURE) >= 0 && !$('nsConfirm').checked) { $('nsConfirm').focus(); toast('[교육과정 확인 필요] 줄을 맞춰 본 뒤 체크해 주세요'); return; }
+  s.comp = s.comp.split(UNSURE).join('').replace(/[ \t]+(\n|$)/g, '$1').trim();
+  if (!s.name) s.name = s.key;
+  if (!s.role) s.role = '고등학교 ' + s.name.replace(/\(.*?\)/g, '').trim() + '교사';
+  if (SHEET) { saveToSheet(s); return; }
+  MINE = [s].concat(MINE.filter(m => m.key !== s.key));
+  store.set('saeteuk-studio-subjects', MINE);
+  useSubject(s);
+});
+function useSubject(s){
+  ST.subKey = s.key;
+  if ($('nsUseCols').checked && s.columns.length) { ST.cols = s.columns.slice(0, 12); renderChips(); }
+  if (ST.recKey === '행발' || ST.recKey === '자율' || ST.recKey === '동아리' || ST.recKey === '진로') { ST.recKey = '과세특'; $('rec').value = ST.recKey; ST.bytes = capOf(recOf()); }
+  fillSubjects();
+  showSubject(Object.assign({}, s), '');
+  render();
+  toast('"' + s.name + '" 교과로 프롬프트를 다시 조립했습니다');
+  window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+}
+function saveToSheet(s){
+  const b = $('nsSave');
+  b.disabled = true; $('nsMsg').textContent = '시트에 저장하는 중…';
+  SHEET.withSuccessHandler(r => {
+    b.disabled = false;
+    BUILTIN = [Object.assign({}, s, { key: r.key })].concat(BUILTIN.filter(x => x.key !== r.key));
+    MINE = MINE.filter(m => m.key !== r.key);
+    store.set('saeteuk-studio-subjects', MINE);
+    useSubject(Object.assign({}, s, { key: r.key }));
+    $('nsMsg').textContent = '✓ ' + r.message;
+  }).withFailureHandler(e => {
+    b.disabled = false; $('nsMsg').textContent = e.message;
+    if (/이미/.test(e.message)) $('nsOverBox').hidden = false;
+  }).subjectSave(s, { confirmed: true, overwrite: $('nsOver').checked });
+}
+$('nsShare').addEventListener('click', () => {
+  const s = readFields();
+  if (!s.key || !s.comp) { toast('먼저 교과를 읽거나 채워 주세요'); return; }
+  copy(ENGINE.formatSubjectBlock(s), '나누는 글을 복사했습니다');
+});
+
+/* ────────── 시트 안에서 ────────── */
+let MADE = '';
+function renderSheetRow(){
+  const rec = recOf(), sub = subOf(), lim = limitOf();
+  const rows = [
+    ['활동 이름', ST.name || '(비었음 — 왼쪽에서 적어 주세요)'],
+    ['기록 종류', rec.name],
+    ['교과 · 영역', sub.key + ' — ' + sub.name],
+    ['바이트 한도', fmt(lim) + '바이트 (약 ' + fmt(Math.floor(lim / 3)) + '자' + (lim < capOf(rec) ? ', 한 칸 ' + fmt(capOf(rec)) + ' 가운데' : ', 한 칸 전체') + ')'],
+    ['입력 항목', ST.cols.length ? ST.cols.join(' · ') : '(없음 — 1개 이상 필요)'],
+    ['예시', filledExamples().length ? filledExamples().length + '편 (예시 시트로)' : '없음']
+  ];
+  const dl = $('rowSummary');
+  dl.textContent = '';
+  rows.forEach(([k, v]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl.append(dt, dd); });
+  $('mkAct').disabled = !ST.name || !ST.name.trim() || !ST.cols.length;
+}
+function startSheetMode(){
+  $('tab-row').textContent = '시트에 만들기';
+  $('rowWeb').hidden = true; $('rowSheet').hidden = false;
+  $('nsSaveNote').textContent = '이 교과 쓰기를 누르면 이 시트의 [📚 교과영역]에 바로 저장됩니다. 나누는 글은 같은 교과 선생님께 보낼 때 쓰세요.';
+  $('sheetNote').hidden = false;
+  $('sheetNote').textContent = '이 시트의 기록종류 · 교과영역 · 공통규칙 · 기재요령을 불러오는 중…';
+  document.querySelector('details.rules summary').textContent = '공통 규칙 손보기 — 이 시트의 [📐 공통규칙]을 불러옵니다(여기서 고친 것은 이 창의 프롬프트에만)';
+  $('mkAct').addEventListener('click', () => {
+    const b = $('mkAct');
+    b.disabled = true; $('mkMsg').textContent = '활동 시트를 만드는 중…';
+    SHEET.withSuccessHandler(r => {
+      $('mkMsg').textContent = '✓ ' + r.message;
+      MADE = r.inSheet; $('openAct').hidden = false; renderSheetRow();
+    }).withFailureHandler(e => { $('mkMsg').textContent = e.message; renderSheetRow(); })
+      .studioCreateActivity({ name: ST.name, recordKey: ST.recKey, subjectKey: ST.subKey, bytes: limitOf(), amount: ST.amount,
+                              columns: ST.cols, desc: ST.desc, examples: filledExamples() });
+  });
+  $('openAct').addEventListener('click', () => {
+    SHEET.withSuccessHandler(() => google.script.host.close()).withFailureHandler(e => { $('mkMsg').textContent = e.message; }).studioOpenSheet(MADE);
+  });
+  SHEET.withSuccessHandler(c => {
+    if (c.records && c.records.length) RECORDS = c.records;
+    if (c.subjects && c.subjects.length) BUILTIN = c.subjects;
+    COMMON = Object.assign({}, ENGINE.common, c.common || {});
+    if (c.rules && c.rules.length) RULESET = c.rules;
+    DEFAULT_RULES = { write: COMMON.WRITING_RULES, neis: COMMON.NEIS_RULES };
+    ST.rWrite = DEFAULT_RULES.write; ST.rNeis = DEFAULT_RULES.neis;
+    $('rWrite').value = ST.rWrite; $('rNeis').value = ST.rNeis;
+    if (c.years) ST.years = c.years;
+    SHEET_MODEL = c.model || '';
+    $('dsAuto').hidden = !SHEET_MODEL;
+    fillRecords(); fillSubjects();
+    $('sheetNote').textContent = '이 시트의 기록종류 ' + RECORDS.length + '개 · 교과영역 ' + BUILTIN.length + '개 · 기재요령 규칙 ' + RULESET.length +
+      '개를 쓰고 있습니다. 활동은 [시트에 만들기] 탭에서, 새 교과는 아래에서 이 시트에 바로 저장됩니다.';
+    render();
+  }).withFailureHandler(e => { $('sheetNote').textContent = '시트 자료를 불러오지 못해 기본값으로 보여 줍니다: ' + e.message; }).studioContext();
+}
+
+/* ────────── Gem · 스킬 ────────── */
+$('gemCopy').addEventListener('click', () => copy(ENGINE.buildGemText(buildPrompt()), 'Gem 지침을 복사했습니다 · 새 Gem의 [안내]에 붙여 넣으세요'));
+$('skillCopy').addEventListener('click', () => {
+  const rec = recOf();
+  copy(ENGINE.buildSkillMd({ name: ENGINE.skillName(ST.recKey, 1), activity: ST.name || '활동', record: rec.name,
+    system: buildPrompt(), notice: ENGINE.aiNotice, rulesId: ENGINE.rulesId }), 'SKILL.md 글을 복사했습니다');
+});
+
+/* ────────── 공통 ────────── */
+let toastTimer;
+function toast(msg){
+  const el = $('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+}
+async function copy(text, done){
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(done || '복사했습니다');
+  } catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast(done || '복사했습니다'); }
+    catch(e2){ toast('복사에 실패했습니다. 직접 선택해 주세요'); }
+    ta.remove();
+  }
+}
+document.querySelectorAll('[data-copy]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const text = $(btn.dataset.copy).textContent;
+    copy(text, '복사했습니다 · ' + fmt(ENGINE.byteLen(text)) + '바이트');
+  });
+});
+
+$('foot').innerHTML = '';
+[
+  '분량과 금지어는 2026학년도 학교생활기록부 기재요령 기준입니다(규칙판 ' + ENGINE.rulesId + ' 규칙 ' + ENGINE.packCount + '개 · AI 투 검사 ' + ENGINE.aiTellCount + '개, 스프레드시트 도구 ' + ENGINE.version + '와 같은 엔진). AI 투 검사의 일반 글 패턴은 im-not-ai(MIT)의 한글 AI 티 분류를 참고했습니다. 진로활동은 700자에서 500자로, 행동특성 및 종합의견은 500자에서 300자로 줄었고, 2022 개정 공통과목 세특은 1·2를 합산해 500자입니다.',
+  ENGINE.aiNotice,
+  '바이트는 나이스 기준(한글 3, 영문·숫자·공백·기호 1, 줄바꿈 2)으로 셉니다. 입력한 내용과 만든 교과는 이 브라우저에만 저장되며 어디로도 전송되지 않습니다.'
+].forEach(t => { const p = document.createElement('p'); p.style.margin = '0 0 6px'; p.textContent = t; $('foot').appendChild(p); });
+
+document.querySelectorAll('[data-icon]').forEach(el => putIcon(el, el.dataset.icon));
+fillSubjects();
+renderChips();
+renderExamples();
+render();
+if (SHEET) startSheetMode();
+</script>

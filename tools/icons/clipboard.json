@@ -1,0 +1,28 @@
+{
+ "id": "clipboard",
+ "version": "2.0.13",
+ "color": "#24B6A1",
+ "svg": "<rect class=\"s\" x=\"5\" y=\"4.5\" width=\"14\" height=\"16.5\" rx=\"2\"/><g data-part=\"clip\"><rect class=\"f\" x=\"8.5\" y=\"2.75\" width=\"7\" height=\"3.5\" rx=\"1\"/><rect x=\"8.5\" y=\"2.75\" width=\"7\" height=\"3.5\" rx=\"1\"/></g><path data-part=\"lines\" d=\"M8.5 11h7M8.5 14.5h7M8.5 18h4\"/><path data-part=\"check\" class=\"a\" d=\"m8.75 14.25 2.25 2.25 4.5-4.75\"/>",
+ "poses": {
+  "*": {
+   "check": {
+    "draw": 0,
+    "opacity": 0
+   }
+  },
+  "done": {
+   "lines": {
+    "opacity": 0,
+    "scale": [
+     0.6,
+     1
+    ]
+   },
+   "check": {
+    "draw": 1,
+    "opacity": 1
+   }
+  }
+ },
+ "defaultState": "idle"
+}

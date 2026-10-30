@@ -1,0 +1,6 @@
+{
+ "id": "layers",
+ "version": "2.0.13",
+ "color": "#5D73EA",
+ "svg": "<path data-part=\"l3\" d=\"m3 16.25 9 4.75 9-4.75\"/><path data-part=\"l2\" class=\"a\" d=\"m3 12 9 4.75L21 12\"/><path data-part=\"l1\" class=\"s\" d=\"m12 3 9 4.75-9 4.75-9-4.75z\"/>"
+}

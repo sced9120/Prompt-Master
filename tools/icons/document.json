@@ -1,0 +1,6 @@
+{
+ "id": "document",
+ "version": "2.0.13",
+ "color": "#3093EC",
+ "svg": "<path class=\"s\" d=\"M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z\"/><path d=\"M14 3v4a1 1 0 0 0 1 1h4\"/><path data-part=\"l1\" class=\"a\" d=\"M8.5 12.5h7\"/><path data-part=\"l2\" class=\"a\" d=\"M8.5 16h4.5\"/>"
+}

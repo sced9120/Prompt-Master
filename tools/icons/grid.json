@@ -1,0 +1,6 @@
+{
+ "id": "grid",
+ "version": "2.0.13",
+ "color": "#3093EC",
+ "svg": "<rect data-part=\"t1\" class=\"s\" x=\"3.5\" y=\"3.5\" width=\"7\" height=\"7\" rx=\"1.75\"/><rect data-part=\"t2\" class=\"f\" x=\"13.5\" y=\"3.5\" width=\"7\" height=\"7\" rx=\"1.75\"/><rect data-part=\"t2o\" x=\"13.5\" y=\"3.5\" width=\"7\" height=\"7\" rx=\"1.75\"/><rect data-part=\"t3\" class=\"s\" x=\"3.5\" y=\"13.5\" width=\"7\" height=\"7\" rx=\"1.75\"/><rect data-part=\"t4\" class=\"s\" x=\"13.5\" y=\"13.5\" width=\"7\" height=\"7\" rx=\"1.75\"/>"
+}

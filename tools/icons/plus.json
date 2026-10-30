@@ -1,0 +1,6 @@
+{
+ "id": "plus",
+ "version": "2.0.13",
+ "color": "#43B966",
+ "svg": "<path data-part=\"mark\" class=\"a\" d=\"M12 5v14M5 12h14\"/>"
+}

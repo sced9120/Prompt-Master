@@ -1,0 +1,6 @@
+{
+ "id": "undo",
+ "version": "2.0.13",
+ "color": "#3093EC",
+ "svg": "<path d=\"M4.5 9h10a5.25 5.25 0 0 1 0 10.5H11\"/><path data-part=\"head\" class=\"a\" d=\"M8.5 5 4.5 9l4 4\"/>"
+}

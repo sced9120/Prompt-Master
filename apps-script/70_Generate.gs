@@ -1,0 +1,600 @@
+/**
+ * 세특 작성 도우미 v3 — 생성 실행
+ *
+ * 한 학생의 흐름 (하네스):
+ *   ① 규칙 조립(기록종류·교과·공통규칙·기재 주의 — 그 활동에 필요한 것만)
+ *   ② 생성 → ③ 자동 검사([📏 기재요령] 표 + 맞춤법)
+ *   ④ [수정]이 나오면 걸린 점만 짚어 한 번 더 고쳐 쓰게 한다(자동 고쳐쓰기)
+ *   ⑤ (켜 두었으면) 학생 자료에 없는 내용이 들어갔는지 근거 확인
+ * 키가 없거나 모델이 [키 없이(복사·붙여넣기)] 인 줄은 ②~⑤ 대신 복사·붙여넣기 창으로 넘긴다.
+ * 📄 보고서 시트는 ①앞에 [보고서 요점]이 빈 학생의 요점을 먼저 뽑고, 한 명씩 생성한다(긴 자료가 예시를 덮지 않게).
+ * ✒️ 내 문체 카드가 있으면 학생 자료 바로 뒤에 한 번 더 붙여 몇 번째 학생이든 같은 문체로 쓰게 한다.
+ */
+
+/** (예전 이름 — 새 코드는 canStartCall_ 를 쓴다) */
+var RUN_BUDGET_MS = 300000;
+
+/** 현재 시트가 어떤 활동의 입력 시트인지 */
+function activityOfSheet_(name) {
+  var acts = getActivities_();
+  for (var i = 0; i < acts.length; i++) if (acts[i].inSheet === name) return acts[i];
+  return null;
+}
+
+function generateChecked() {
+  var sheet = ss_().getActiveSheet();
+  var act = activityOfSheet_(sheet.getName());
+  if (!act) {
+    if (recordKeyOfCompile_(sheet.getName())) { compileChecked(); return; }
+    ui_().alert(APP.MENU, '활동 입력 시트에서 실행하세요.\n(시트 이름이 "○○ ▸입력" 인 시트)', ui_().ButtonSet.OK);
+    return;
+  }
+  var rows = checkedRows_(sheet);
+  if (!rows.length) { toast_('[생성] 체크된 행이 없습니다.'); return; }
+  autoRulesCheck_();
+  autoUpdateCheck_();
+  runGeneration_(act, sheet, rows);
+}
+
+function generateSelection() {
+  var sheet = ss_().getActiveSheet();
+  var act = activityOfSheet_(sheet.getName());
+  if (!act) { ui_().alert(APP.MENU, '활동 입력 시트에서 실행하세요.', ui_().ButtonSet.OK); return; }
+  var rows = selectedRows_(sheet);
+  if (!rows.length) { toast_('데이터 행을 선택하세요.'); return; }
+  runGeneration_(act, sheet, rows);
+}
+
+/** 메뉴 ⑥: 모델과 상관없이 체크된 행을 복사·붙여넣기로 */
+function openManualForChecked() {
+  var sheet = ss_().getActiveSheet();
+  var act = activityOfSheet_(sheet.getName());
+  if (!act) {
+    if (recordKeyOfCompile_(sheet.getName())) { compileChecked({ manual: true }); return; }
+    ui_().alert(APP.MENU, '활동 입력 시트(○○ ▸입력)나 최종취합 시트에서 실행하세요.', ui_().ButtonSet.OK);
+    return;
+  }
+  var rows = checkedRows_(sheet);
+  if (!rows.length) rows = selectedRows_(sheet);
+  if (!rows.length) { toast_('[생성]을 체크하거나 행을 선택하세요.'); return; }
+  runGeneration_(act, sheet, rows, { manual: true });
+}
+
+function selectedRows_(sheet) {
+  var r = sheet.getActiveRange();
+  var rows = [];
+  if (!r) return rows;
+  for (var i = 0; i < r.getNumRows(); i++) {
+    var row = r.getRow() + i;
+    if (row >= APP.DATA_ROW) rows.push(row);
+  }
+  return rows;
+}
+
+function checkedRows_(sheet) {
+  var c = colOf_(sheet, APP.HEAD_ROW, '생성');
+  if (!c) return [];
+  var last = sheet.getLastRow();
+  if (last < APP.DATA_ROW) return [];
+  var v = sheet.getRange(APP.DATA_ROW, c, last - APP.DATA_ROW + 1, 1).getValues();
+  var rows = [];
+  for (var i = 0; i < v.length; i++) if (v[i][0] === true) rows.push(APP.DATA_ROW + i);
+  return rows;
+}
+
+/**
+ * 이 학생 줄의 AI 자료(이름은 마스킹 설정을 따름). 자료가 비었으면 null.
+ * block = 학생 자료만(근거 확인·고쳐쓰기에 씀), user = block + 문체 카드(생성 요청에 씀).
+ * 보고서 시트에서 [보고서 요점]이 비고 [보고서]가 있으면 needsExtract.
+ */
+function studentJob_(act, sheet, row, rec, masked, tail, read) {
+  var cols = parseColumns(act.columns);
+  // read: 미리 한꺼번에 읽어 둔 줄(rowReader_). 없으면 이 줄만 한 번 읽는다 — 칸마다 따로 읽지 않는다.
+  var all = read ? read(row) : sheet.getRange(row, 1, 1, 4 + cols.length).getValues()[0];
+  var vals = cols.map(function (c, i) { return all[4 + i] === undefined ? '' : all[4 + i]; });
+  var filled = vals.some(function (v) { return String(v).trim() !== ''; });
+  if (!filled) return null;
+  var needsExtract = false;
+  if (act.mode === '보고서') {
+    var iR = cols.indexOf(REPORT_COL), iP = cols.indexOf(POINTS_COL);
+    needsExtract = iP >= 0 && !String(vals[iP]).trim() && iR >= 0 && !!String(vals[iR]).trim();
+  }
+  var grade = all[3];
+  var block = blockFor_(act, vals, (rec && rec.useGrade) ? grade : '');
+  if (!masked) block = '학생 이름: ' + all[2] + '\n' + block;
+  return { row: row, block: block, user: block + (tail || ''), needsExtract: needsExtract,
+           label: String(all[0]) + '반 ' + String(all[1]) + '번 ' + String(all[2]) };
+}
+
+/**
+ * 여러 줄을 한 번에 읽어 두고 줄 번호로 꺼내 쓰는 함수를 돌려준다(시트 호출을 줄 수만큼 하지 않게).
+ * @return {function(number):Array}  row → 그 줄의 값(1열부터)
+ */
+function rowReader_(sheet, rows) {
+  if (!rows || !rows.length) return function () { return []; };
+  var lo = Math.min.apply(null, rows), hi = Math.max.apply(null, rows);
+  var w = Math.max(1, sheet.getLastColumn());
+  var v = sheet.getRange(lo, 1, hi - lo + 1, w).getValues();
+  return function (row) { return v[row - lo] || []; };
+}
+
+/**
+ * 실행 시간 관리 — Apps Script 한 번 실행은 6분(360초)에서 끊긴다.
+ * 호출 하나가 재시도까지 길게는 1분쯤 걸리므로, 남은 시간이 그보다 적으면 새 호출을 시작하지 않는다.
+ */
+var RUN_HARD_MS = 330000;      // 결과 쓰기·알림에 30초를 남긴 마지막 선
+var CALL_RESERVE_MS = 70000;   // 호출 하나(재시도 포함)에 잡아 두는 시간
+function canStartCall_(startedAt) { return Date.now() - startedAt + CALL_RESERVE_MS < RUN_HARD_MS; }
+
+/** 규칙 검사 + (기준 글이 있으면) 문체 검사 */
+function inspectStyled_(txt, limit, ref) {
+  var v = inspect_(txt, limit);
+  var d = ref ? styleDrift(ref, txt) : null;
+  if (d) v.issues.push(d);
+  return v;
+}
+
+/** 알림 — 트리거(설문지 제출 · 자동 생성)에서는 창을 띄울 수 없으므로 토스트로 */
+function notify_(msg, quiet) {
+  if (quiet) { toast_(msg, APP.MENU, 10); return; }
+  try { ui_().alert(APP.MENU, msg, ui_().ButtonSet.OK); } catch (e) { toast_(msg, APP.MENU, 10); }
+}
+
+/** 지금 생성하지 못한 줄 — [생성] 체크를 켜 두고 [검증] 칸에 까닭을 적어 둔다(트리거에서 놓친 줄을 선생님이 알아보게) */
+var PENDING_MARK = '⏳ 생성 대기';
+function markPending_(sheet, rows, why) {
+  var cGen = colOf_(sheet, APP.HEAD_ROW, '생성'), cV = colOf_(sheet, APP.HEAD_ROW, '검증');
+  rows.forEach(function (r) {
+    if (cGen) sheet.getRange(r, cGen).setValue(true);
+    if (cV) sheet.getRange(r, cV).setValue(PENDING_MARK + ' — ' + why + ' 메뉴 ⑥ [체크된 행 생성]을 누르면 이어서 만듭니다.');
+  });
+}
+
+/**
+ * 실제 생성 루프
+ * @param {{manual?:boolean, quiet?:boolean, lockWaitMs?:number, startedAt?:number}=} opt
+ *   manual: 모든 줄을 복사·붙여넣기로 · quiet: 트리거에서 부름(창 대신 토스트, 못 한 줄은 대기 표시)
+ *   lockWaitMs: 다른 생성이 끝나기를 기다릴 시간 · startedAt: 이 실행이 시작된 때(시간 한도 계산)
+ * @return {{busy?:boolean, ok?:number, left?:number}}
+ */
+function runGeneration_(act, sheet, rows, opt) {
+  opt = opt || {};
+  var startedAt = opt.startedAt || Date.now();
+  var lock = LockService.getDocumentLock();
+  if (!lock.tryLock(opt.lockWaitMs || 5000)) {
+    if (opt.quiet) markPending_(sheet, rows, '다른 생성이 돌고 있어 이 줄은 아직 만들지 못했습니다.');
+    else toast_('다른 생성 작업이 실행 중입니다. 끝난 뒤 다시 눌러 주세요.');
+    return { busy: true };
+  }
+  var manualJobs = [], manualNote = '', extractPending = null;
+  var okN = 0, skipN = 0, errN = 0, subN = 0, leftN = 0, backupN = 0, fixN = 0, leftRows = [];
+  __deadline = startedAt + RUN_HARD_MS;
+  try {
+    var maxN = Number(cfg_('1회 최대 생성 건수', 25));
+    if (rows.length > maxN && !opt.manual) {
+      var later = rows.slice(maxN);
+      rows = rows.slice(0, maxN);
+      if (opt.quiet) markPending_(sheet, later, '한 번에 ' + maxN + '건까지만 만듭니다.');
+      else notify_('한 번에 ' + maxN + '건까지 처리합니다. 앞에서부터 ' + maxN + '건만 진행합니다.\n' +
+        '(설정 시트에서 늘릴 수 있지만, 실행 시간 제한으로 실패할 수 있습니다.)');
+    }
+
+    var head = APP.HEAD_ROW;
+    var cGen = colOf_(sheet, head, '생성');
+    var cModel = colOf_(sheet, head, '모델');
+    var cAi = colOf_(sheet, head, 'AI 결과');
+    var cValid = colOf_(sheet, head, '검증');
+    var limit = bytesFor_(act);
+    var system = promptFor_(act);
+    var defModel = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
+    var autoValidate = cfgBool_('결과 자동검증', true);
+    var autoRepair = cfgBool_('자동 고쳐쓰기', true);
+    var autoGround = cfgBool_('근거 자동 확인', false);
+    var batchN = Math.max(1, Math.min(10, Number(cfg_('한 번에 묶을 학생 수', 5)) || 1));
+    if (act.mode === '보고서') batchN = 1;     // 보고서는 자료가 길어 한 명씩 — 예시가 묻히지 않게
+    var rec = findByKey(getRecordTypes_(), act.recordKey);
+    var masked = maskName_();
+    var tail = styleTail_();
+    var styleRef = styleReference_(act);
+    var has = keyStatus_();
+    var anyApi = has.gemini || has.openai || has.anthropic;
+    usageReset_();
+    var read = rowReader_(sheet, rows);
+
+    // 1) 행마다 학생 자료와 모델을 먼저 모은다 (시트는 한 번에 읽어 둔 값을 쓴다)
+    var jobs = [], extractRows = [];
+    var modelOf = function (row, rd) { return (cModel ? normModel(rd(row)[cModel - 1]) : '') || defModel; };
+    var route = function (job) {
+      var prov = providerOf_(job.model);
+      // 키 없이 쓰기: 고른 모델이 복사·붙여넣기이거나, API 키가 하나도 없는데 키가 필요한 모델이면
+      if (opt.manual || prov === 'manual' || (!anyApi && prov !== 'subscription' && !providerUsable(prov, has))) {
+        if (!opt.manual && prov !== 'manual') {
+          manualNote = 'API 키가 없어 [키 없이 — 복사·붙여넣기]로 진행합니다. 키를 넣으면 메뉴 ⑥ 한 번으로 자동 생성됩니다.';
+        }
+        manualJobs.push(job);
+      } else jobs.push(job);
+    };
+    rows.forEach(function (row) {
+      var job = studentJob_(act, sheet, row, rec, masked, tail, read);
+      if (!job) { skipN++; if (cGen) sheet.getRange(row, cGen).setValue(false); return; }
+      if (job.needsExtract) { extractRows.push(row); return; }
+      job.model = modelOf(row, read);
+      route(job);
+    });
+
+    // 1-1) 📄 보고서: 요점이 빈 학생은 요점부터 — API 면 뽑고 바로 이어서 생성, 키가 없으면 요점 창만 연다
+    if (extractRows.length) {
+      if (!opt.manual && apiModelForChecks_()) {
+        var ex = runExtraction_(act, sheet, extractRows, { quiet: true });
+        var read2 = rowReader_(sheet, ex.rows);     // 요점이 새로 들어갔으니 다시 읽는다
+        ex.rows.forEach(function (row) {
+          var j = studentJob_(act, sheet, row, rec, masked, tail, read2);
+          if (!j) return;
+          j.model = modelOf(row, read2);
+          route(j);
+        });
+        if (ex.failed) errN += ex.failed;
+      } else {
+        extractPending = extractRows;
+      }
+    }
+
+    var finish = function (job, res, repaired) {
+      var txt = cleanResult_(res.text);
+      sheet.getRange(job.row, cAi).setValue(txt);
+      if (autoValidate && cValid) {
+        var v = formatIssues(inspectStyled_(txt, limit, styleRef));
+        if (repaired) v += '\n(자동 고쳐쓰기 1회)';
+        if (res.backup) v += '\n(예비 모델 ' + res.model + ' 로 생성)';
+        if (res.ground) v += '\n' + res.ground;
+        sheet.getRange(job.row, cValid).setValue(v);
+      }
+      if (cGen) sheet.getRange(job.row, cGen).setValue(false);
+      okN++; if (res.backup) backupN++;
+    };
+    var fail = function (job, e) {
+      sheet.getRange(job.row, cAi).setValue('⚠ 실패: ' + redactSecrets(e.message));
+      if (cGen) sheet.getRange(job.row, cGen).setValue(false);
+      errN++;
+    };
+
+    /**
+     * ③~⑤ 한 묶음의 초안을 검사 → [수정]이 나온 학생만 고쳐 쓰기 → (켰으면) 근거 확인 → 시트에 쓴다.
+     * 고쳐 쓸 학생이 둘 이상이면 한 번의 호출로 묶는다 — 규칙(시스템 프롬프트)을 학생마다 되풀이해 보내지 않게.
+     * 남은 시간이 모자라면 고쳐쓰기·근거 확인을 건너뛰고 초안을 그대로 쓴다(검증 칸에 [수정]이 남는다).
+     */
+    var polishChunk = function (done) {
+      var todo = [];
+      done.forEach(function (d) {
+        d.repaired = false;
+        if (!autoRepair) return;
+        d.draft = cleanResult_(d.res.text);
+        d.v1 = inspect_(d.draft, limit);
+        if (needsRepair(d.v1)) todo.push(d);
+      });
+      if (todo.length && canStartCall_(startedAt)) {
+        var fixed = {};
+        try {
+          if (todo.length > 1) {
+            var ids = todo.map(function (d, n) { return 'S' + (n + 1); });
+            var r2 = callWithBackup_(system, buildBatchRepairUser(todo.map(function (d, n) {
+              return { id: ids[n], block: d.job.block, draft: d.draft,
+                       issues: d.v1.issues.filter(function (x) { return x.level === 'block'; }) };
+            }), limit) + tail, todo[0].res.model || todo[0].job.model, { json: true, schema: BATCH_SCHEMA });
+            var pr = parseBatchResult(r2.text, ids);
+            todo.forEach(function (d, n) { if (pr.map[ids[n]]) fixed[n] = { text: pr.map[ids[n]], model: r2.model, backup: r2.backup }; });
+          } else {
+            var d0 = todo[0];
+            fixed[0] = callWithBackup_(system, buildRepairUser(d0.job.block, d0.draft,
+              d0.v1.issues.filter(function (x) { return x.level === 'block'; }), limit) + tail, d0.res.model || d0.job.model);
+          }
+        } catch (e) { logSoft_('자동 고쳐쓰기', e); }
+        todo.forEach(function (d, n) {
+          var f = fixed[n];
+          var t2 = f && cleanResult_(f.text);
+          if (t2 && betterResult(d.v1, inspect_(t2, limit)) === 'b') {
+            d.res = { text: t2, model: f.model, backup: d.res.backup || f.backup };
+            d.repaired = true; fixN++;
+          }
+        });
+      }
+      done.forEach(function (d) {
+        if (autoGround && canStartCall_(startedAt)) {
+          try { d.res.ground = groundText_(groundCheck_(d.job.block, cleanResult_(d.res.text), d.res.model || d.job.model)); } catch (e) { logSoft_('근거 확인', e); }
+        }
+        finish(d.job, d.res, d.repaired);
+      });
+    };
+
+    // 2) 같은 모델끼리 batchN 명씩 묶어서 부른다
+    var i = 0;
+    while (i < jobs.length) {
+      // Apps Script 한 번 실행은 약 6분까지. 새 호출을 마칠 시간이 없으면 멈추고, 남은 행은 체크를 그대로 둔다.
+      if (!canStartCall_(startedAt)) {
+        leftRows = leftRows.concat(jobs.slice(i).map(function (j) { return j.row; }));
+        leftN += jobs.length - i; break;
+      }
+      var first = jobs[i];
+      if (providerOf_(first.model) === 'subscription') {
+        sheet.getRange(first.row, cAi).setFormula(subscriptionFormula_(system, first.user));
+        subN++; i++;
+        continue;   // 수식 결과는 시트가 계산하므로 체크 유지
+      }
+      var chunk = [first], k = i + 1;
+      while (chunk.length < batchN && k < jobs.length && jobs[k].model === first.model) { chunk.push(jobs[k]); k++; }
+      i = k;
+      toast_((i) + '/' + jobs.length + ' 생성 중… (' + first.model + (chunk.length > 1 ? ' · ' + chunk.length + '명 묶음' : '') + ')', act.name);
+
+      var got = chunk.length > 1 ? generateBatch_(system, chunk, first.model, tail) : {};
+      if (got.error) { chunk.forEach(function (job) { fail(job, got.error); }); SpreadsheetApp.flush(); continue; }
+      var done = [];
+      chunk.forEach(function (job) {
+        if (got[job.row]) { done.push({ job: job, res: got[job.row] }); return; }
+        // 묶음 응답에서 빠진 학생은 한 명씩 다시 — 시간이 없으면 남겨 둔다
+        if (!canStartCall_(startedAt)) { leftN++; leftRows.push(job.row); return; }
+        try { done.push({ job: job, res: callWithBackup_(system, job.user, job.model) }); }
+        catch (e) { fail(job, e); }
+      });
+      try { polishChunk(done); }
+      catch (e) { done.forEach(function (d) { try { finish(d.job, d.res, false); } catch (e2) { fail(d.job, e2); } }); }
+      SpreadsheetApp.flush();
+    }
+
+    var msg = '완료 ' + okN + '건';
+    if (fixN) msg += ' (그중 자동 고쳐쓰기 ' + fixN + '건 · ' + Math.round(fixN * 100 / Math.max(1, okN)) + '%)';
+    if (subN) msg += ' / 구독수식 ' + subN + '건(AI 결과 칸을 선택하고 [생성 및 삽입]을 눌러 주세요)';
+    if (skipN) msg += ' / 자료 없음 ' + skipN + '건';
+    if (errN) msg += ' / 실패 ' + errN + '건';
+    if (backupN) msg += ' / 예비 모델 ' + backupN + '건';
+    var used = usageText_();
+    if (leftN) {
+      notify_(msg + '\n\n실행 시간 제한(약 6분)에 가까워져 ' + leftN + '건을 남기고 멈췄습니다.\n' +
+        '남은 행은 [생성] 체크가 그대로 있으니 메뉴 ⑥ 을 한 번 더 누르세요.\n' +
+        '(자주 멈춘다면 [⚙️ 설정]의 1회 최대 생성 건수를 줄이거나 더 빠른 모델을 쓰세요)' +
+        (used ? '\n\n' + used : ''), opt.quiet);
+    } else if (jobs.length || skipN) toast_(msg + (used ? '\n' + used : ''), act.name);
+  } finally { lock.releaseLock(); }
+
+  __deadline = 0;
+  // 트리거에서는 창을 띄울 수 없다 — 창이 필요한 줄은 대기로 표시해 둔다
+  if (opt.quiet) {
+    if (leftRows.length) markPending_(sheet, leftRows, '실행 시간 제한(약 6분) 안에 다 만들지 못했습니다.');
+    var needUi = (extractPending || []).concat(manualJobs.map(function (j) { return j.row; }));
+    if (needUi.length) markPending_(sheet, needUi, '키 없이(복사·붙여넣기) 쓰는 줄이라 창에서 해야 합니다.');
+    return { ok: okN, left: leftN };
+  }
+  // 3) 키 없이 + 보고서 요점이 빈 학생 — 요점 창부터 (창은 한 번에 하나만 열린다)
+  if (extractPending && extractPending.length) {
+    runExtraction_(act, sheet, extractPending, { manual: true });
+    return { ok: okN, left: leftN };
+  }
+  // 4) 키 없이 쓰는 줄 — 복사·붙여넣기 창 (잠금을 푼 뒤에 연다)
+  if (manualJobs.length) {
+    openManualDialog_({
+      kind: 'generate', sheet: sheet.getName(), target: 'AI 결과', check: '생성',
+      title: act.name, limit: bytesFor_(act), system: promptFor_(act), jobs: manualJobs, note: manualNote
+    });
+  }
+  return { ok: okN, left: leftN };
+}
+
+/**
+ * 여러 학생을 한 번의 호출로 생성한다.
+ * @return {Object} row → {text, model, backup}. 호출 자체가 실패하면 {error: Error}.
+ *         응답에서 빠진 학생은 결과에 없으므로, 부르는 쪽이 한 명씩 다시 부른다.
+ */
+function generateBatch_(system, chunk, model, tail) {
+  var ids = chunk.map(function (job, n) { return 'S' + (n + 1); });
+  var user = buildBatchUser(chunk.map(function (job, n) { return { id: ids[n], block: job.block || job.user }; })) + (tail || '');
+  var res;
+  try {
+    // 학생 한 명에 1,200토큰쯤을 잡는다(Claude 는 출력 한도를 꼭 적어야 해서 — 모자라면 답이 잘린다)
+    res = callWithBackup_(system, user, model, { json: true, schema: BATCH_SCHEMA, maxTokens: Math.max(8000, chunk.length * 1200) });
+  } catch (e) {
+    // 답이 잘렸으면 반씩 나눠 다시 — 한 명씩 다시 부르는 것보다 호출이 적다
+    if (e.kind === 'truncated' && chunk.length > 1 && canStartCall_(__deadline ? __deadline - RUN_HARD_MS : Date.now())) {
+      var half = Math.ceil(chunk.length / 2);
+      var a = generateBatch_(system, chunk.slice(0, half), model, tail);
+      if (a.error) return a;
+      var b = generateBatch_(system, chunk.slice(half), model, tail);
+      if (b.error) return b;
+      Object.keys(b).forEach(function (k) { a[k] = b[k]; });
+      return a;
+    }
+    if (e.kind === 'truncated') return {};  // 한 명이면 부르는 쪽이 한 명씩 다시
+    return e.kind ? { error: e } : {};     // API 오류면 모두 실패로, 그 밖(빈 응답 등)은 한 명씩 다시
+  }
+  var parsed = parseBatchResult(res.text, ids);
+  var out = {};
+  chunk.forEach(function (job, n) {
+    var t = parsed.map[ids[n]];
+    if (t) out[job.row] = { text: t, model: res.model, backup: res.backup };
+  });
+  return out;
+}
+
+/* ------------------------------------------------------- 근거 확인 */
+/** 학생 자료 ↔ 초안 → 자료에 없는 구절 목록 */
+function groundCheck_(source, draft, model) {
+  var res = callWithBackup_(GROUND_SYSTEM, buildGroundUser(source, draft), model, { json: true });
+  return parseGroundResult(res.text);
+}
+
+function groundText_(list) {
+  if (!list || !list.length) return '[근거] 학생 자료에 없는 내용 못 찾음';
+  return list.slice(0, 4).map(function (x) {
+    return '[확인] 자료에 없는 내용 → "' + x.quote.slice(0, 40) + '"' + (x.why ? ' (' + x.why.slice(0, 40) + ')' : '');
+  }).join('\n');
+}
+
+/** 근거 확인·검사 창에 쓸 모델 — 활동용 모델의 키가 없으면 키가 있는 회사의 기본 모델. 없으면 '' */
+function apiModelForChecks_() {
+  var model = normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
+  var p = providerOf_(model);
+  if (p !== 'subscription' && p !== 'manual' && modelUsable_(model)) return model;
+  var withKey = PROVIDERS.filter(function (x) { return getKey_(x); })[0];
+  return withKey ? PROVIDER_DEFAULT_MODEL[withKey] : '';
+}
+
+/** 메뉴 ⑧: 선택한 행의 AI 결과(또는 최종본)가 학생 자료에 있는 내용인지 */
+function groundCheckSelection() {
+  var sheet = ss_().getActiveSheet();
+  var act = activityOfSheet_(sheet.getName());
+  if (!act) { ui_().alert(APP.MENU, '활동 입력 시트(○○ ▸입력)에서 확인할 행을 선택한 뒤 실행하세요.', ui_().ButtonSet.OK); return; }
+  var rows = selectedRows_(sheet);
+  if (!rows.length) { toast_('확인할 학생 행을 선택하세요.'); return; }
+  var model = apiModelForChecks_();
+  if (!model) {
+    ui_().alert(APP.MENU, '근거 확인은 API 키가 있어야 자동으로 됩니다.\n\n키 없이 하려면 메뉴 [🔍 맞춤법 · 금지어 검사] 창에 글과 학생 자료를 넣고 ' +
+      '[Gemini 앱에서 근거 확인 — 요청 복사]를 누르세요.', ui_().ButtonSet.OK);
+    return;
+  }
+  var rec = findByKey(getRecordTypes_(), act.recordKey);
+  var cAi = colOf_(sheet, APP.HEAD_ROW, 'AI 결과'), cFi = colOf_(sheet, APP.HEAD_ROW, '최종본'), cV = colOf_(sheet, APP.HEAD_ROW, '검증');
+  var n = 0, found = 0, t0 = Date.now();
+  usageReset_();
+  var read = rowReader_(sheet, rows);
+  for (var i = 0; i < rows.length; i++) {
+    if (!canStartCall_(t0)) break;
+    var job = studentJob_(act, sheet, rows[i], rec, true, '', read);
+    var draft = String(cFi ? sheet.getRange(rows[i], cFi).getValue() : '').trim() || String(sheet.getRange(rows[i], cAi).getValue()).trim();
+    if (!job || !draft || draft.indexOf('⚠') === 0) continue;
+    toast_((i + 1) + '/' + rows.length + ' 근거 확인 중…', APP.MENU);
+    try {
+      var list = groundCheck_(job.block, draft, model);
+      if (list.length) found++;
+      var prev = String(sheet.getRange(rows[i], cV).getValue()).split('\n')
+        .filter(function (l) { return !/^\[근거\]|자료에 없는 내용/.test(l); }).join('\n');
+      sheet.getRange(rows[i], cV).setValue((prev ? prev + '\n' : '') + groundText_(list));
+      n++;
+    } catch (e) {
+      sheet.getRange(rows[i], cV).setValue('근거 확인 실패: ' + redactSecrets(e.message));
+    }
+  }
+  toast_('근거 확인 ' + n + '건 · 자료에 없는 내용이 보인 학생 ' + found + '명 — [검증] 칸을 보세요.' +
+         (usageText_() ? '\n' + usageText_() : ''), APP.MENU);
+}
+
+/* ------------------------------------------------------- 자동 생성 트리거 */
+function enableAutoTrigger() {
+  disableAutoTrigger();
+  ScriptApp.newTrigger('onEditInstalled')
+    .forSpreadsheet(ss_()).onEdit().create();
+  ui_().alert(APP.MENU,
+    '자동 생성을 켰습니다.\n[생성] 체크박스를 체크하면 그 줄이 바로 생성됩니다.\n\n' +
+    '※ 여러 명을 한꺼번에 처리할 때는 메뉴 ⑥ [체크된 행 생성] 이 더 빠르고 안정적입니다.\n' +
+    '※ 모델이 [키 없이(복사·붙여넣기)]인 줄은 자동으로 하지 않고, 메뉴 ⑥ 에서 창을 엽니다.',
+    ui_().ButtonSet.OK);
+}
+
+function disableAutoTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'onEditInstalled') ScriptApp.deleteTrigger(t);
+  });
+}
+
+function onEditInstalled(e) {
+  try {
+    if (!e || !e.range) return;
+    var sheet = e.range.getSheet();
+    var act = activityOfSheet_(sheet.getName());
+    if (!act) return;
+    var cGen = colOf_(sheet, APP.HEAD_ROW, '생성');
+    if (!cGen || e.range.getColumn() !== cGen) return;
+    if (e.range.getRow() < APP.DATA_ROW) return;
+    if (e.value !== 'TRUE' && e.range.getValue() !== true) return;
+    var cModel = colOf_(sheet, APP.HEAD_ROW, '모델');
+    var model = (cModel ? normModel(sheet.getRange(e.range.getRow(), cModel).getValue()) : '') ||
+                normModel(cfg_('활동용 모델', DEFAULT_MODEL));
+    // 복사·붙여넣기 창은 메뉴에서 연다 — 트리거에서는 창을 띄울 수 없다(키가 하나도 없을 때도 같음)
+    if (providerOf_(model) === 'manual' || !PROVIDERS.some(function (p) { return getKey_(p); })) return;
+    runGeneration_(act, sheet, [e.range.getRow()], { quiet: true });
+  } catch (err) {
+    logSoft_('자동 생성(체크 트리거)', err);
+    try { toast_('자동 생성 오류: ' + redactSecrets(err.message)); } catch (e2) {}
+  }
+}
+
+/* ------------------------------------------------------------- 재검증 */
+function revalidateAll() {
+  var acts = getActivities_();
+  var n = 0;
+  acts.forEach(function (a) {
+    var s = sh_(a.inSheet);
+    if (!s) return;
+    var cAi = colOf_(s, APP.HEAD_ROW, 'AI 결과');
+    var cFinal = colOf_(s, APP.HEAD_ROW, '최종본');
+    var cValid = colOf_(s, APP.HEAD_ROW, '검증');
+    if (!cValid) return;
+    var last = s.getLastRow();
+    if (last < APP.DATA_ROW) return;
+    var cnt = last - APP.DATA_ROW + 1;
+    var ai = s.getRange(APP.DATA_ROW, cAi, cnt, 1).getValues();
+    var fin = cFinal ? s.getRange(APP.DATA_ROW, cFinal, cnt, 1).getValues() : ai;
+    var limit = bytesFor_(a);
+    var out = [];
+    for (var i = 0; i < cnt; i++) {
+      var t = String(fin[i][0] || '').trim() || String(ai[i][0] || '').trim();
+      out.push([t ? formatIssues(inspect_(t, limit)) : '']);
+      if (t) n++;
+    }
+    s.getRange(APP.DATA_ROW, cValid, cnt, 1).setValues(out);
+  });
+  // 최종취합 (기록종류별)
+  compileSheets_().forEach(function (cp) {
+    var cF = colOf_(cp, APP.HEAD_ROW, '최종본');
+    var cV = colOf_(cp, APP.HEAD_ROW, '검증');
+    var last2 = cp.getLastRow();
+    if (!cF || !cV || last2 < APP.DATA_ROW) return;
+    var cnt2 = last2 - APP.DATA_ROW + 1;
+    var f2 = cp.getRange(APP.DATA_ROW, cF, cnt2, 1).getValues();
+    var lim2 = compileLimitOf_(cp.getName());
+    var o2 = [];
+    for (var j = 0; j < cnt2; j++) {
+      var t2 = String(f2[j][0] || '').trim();
+      o2.push([t2 ? formatIssues(inspect_(t2, lim2)) : '']);
+      if (t2) n++;
+    }
+    cp.getRange(APP.DATA_ROW, cV, cnt2, 1).setValues(o2);
+  });
+  toast_(n + '건 재검증 완료', APP.MENU);
+}
+
+/* ------------------------------------------------- 고쳐 쓰면 바로 검사 */
+/**
+ * 단순 트리거(onEdit)에서 부른다 — 입력·취합 시트의 [최종본]이나 [AI 결과]를 고치면
+ * [검증] 칸을 바로 새로 쓴다. AI 를 부르지 않으므로 권한 승인 없이도 돈다.
+ * @return {boolean} 이 편집을 처리했는지
+ */
+function recheckOnEdit_(e) {
+  var s = e.range.getSheet();
+  var name = s.getName();
+  var limit = 0, act = null;
+  if (name.indexOf(APP.SH.COMPILE_PREFIX) === 0) limit = compileLimitOf_(name);
+  else if (name.slice(-APP.SUFFIX.IN.length) === APP.SUFFIX.IN) { act = activityOfSheet_(name); if (act) limit = bytesFor_(act); }
+  if (!limit) return false;
+  var r1 = e.range.getRow(), nr = e.range.getNumRows();
+  if (r1 + nr - 1 < APP.DATA_ROW) return false;
+  var cFi = colOf_(s, APP.HEAD_ROW, '최종본');
+  var cAi = colOf_(s, APP.HEAD_ROW, act ? 'AI 결과' : 'AI 압축결과');
+  var cV = colOf_(s, APP.HEAD_ROW, '검증');
+  var c1 = e.range.getColumn(), c2 = c1 + e.range.getNumColumns() - 1;
+  var hit = function (c) { return c && c1 <= c && c <= c2; };
+  if (!cV || (!hit(cFi) && !hit(cAi))) return false;
+  // 붙여 넣은 줄이 많아도 시트는 한 번에 읽고 한 번에 쓴다(단순 트리거는 30초 제한)
+  var from = Math.max(r1, APP.DATA_ROW), to = Math.min(r1 + nr - 1, APP.DATA_ROW + 499);
+  if (to < from) return true;
+  var n = to - from + 1;
+  var fins = cFi ? s.getRange(from, cFi, n, 1).getValues() : null;
+  var ais = cAi ? s.getRange(from, cAi, n, 1).getValues() : null;
+  var olds = s.getRange(from, cV, n, 1).getValues();
+  var out = [];
+  for (var i = 0; i < n; i++) {
+    var fin = fins ? String(fins[i][0]).trim() : '';
+    var t = fin || (ais ? String(ais[i][0]).trim() : '');
+    if (t.indexOf('⚠') === 0) { out.push([olds[i][0]]); continue; }
+    out.push([t ? formatIssues(inspect_(t, limit)) + (fin ? '\n(최종본 기준)' : '') : '']);
+  }
+  s.getRange(from, cV, n, 1).setValues(out);
+  return true;
+}

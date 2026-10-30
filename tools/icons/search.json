@@ -1,0 +1,21 @@
+{
+ "id": "search",
+ "version": "2.0.13",
+ "color": "#8968F4",
+ "svg": "<g data-part=\"lens\"><circle class=\"s\" cx=\"10.5\" cy=\"10.5\" r=\"6.75\"/><path d=\"m15.4 15.4 5.1 5.1\"/><path data-part=\"glint\" class=\"a\" d=\"M7.6 9.1a3.2 3.2 0 0 1 2-2\"/></g>",
+ "poses": {
+  "*": {
+   "glint": {
+    "opacity": 0,
+    "draw": 0
+   }
+  },
+  "searching": {
+   "glint": {
+    "opacity": 1,
+    "draw": 1
+   }
+  }
+ },
+ "defaultState": "idle"
+}

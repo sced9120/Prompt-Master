@@ -1,0 +1,24 @@
+{
+ "id": "save",
+ "version": "2.0.13",
+ "color": "#5D73EA",
+ "svg": "<path class=\"s\" d=\"M5 3.5h11.5l4 4V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5z\"/><path d=\"M7.5 3.5v4a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-4\"/><path class=\"a\" d=\"M13 5.25v1.5\"/><path d=\"M7 20.5V14a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v6.5\"/><path data-part=\"arrow\" class=\"a\" d=\"M12 14.75v3.75M10.25 16.75 12 18.5l1.75-1.75\"/><path data-part=\"check\" class=\"a\" d=\"m9.75 16.75 1.5 1.5 3-3\"/>",
+ "poses": {
+  "*": {
+   "check": {
+    "draw": 0,
+    "opacity": 0
+   },
+   "arrow": {
+    "opacity": 0
+   }
+  },
+  "saved": {
+   "check": {
+    "draw": 1,
+    "opacity": 1
+   }
+  }
+ },
+ "defaultState": "idle"
+}
