@@ -246,5 +246,14 @@ t('시트를 열면 [🚀 시작하기] · [⚙️ 설정] 머리의 옛 판 번
   eq(D.refreshVersionLabels_(), 0, '두 번째는 고칠 것 없음');
 });
 
+console.log('\n[분량 맞추기 — 보통은 한도의 3분의 2]');
+t('1500바이트 보통 = 메모가 짧아도 1000바이트 안팎, 넉넉히 1350, 메모만큼은 바닥 없음', () => {
+  const D = boot();
+  ok(/짧아도 1000바이트 안팎은 쓴다/.test(D.amountLines('보통', 1500).join('\n')), D.amountLines('보통', 1500).join(' / '));
+  ok(/1350바이트 안팎/.test(D.amountLines('넉넉히', 1500).join('\n')));
+  ok(!/1000바이트/.test(D.amountLines('메모만큼', 1500).join('\n')));
+  ok(/짧아도 600바이트 안팎/.test(D.amountLines('보통', 900).join('\n')), '행발 900 → 600');
+});
+
 console.log(fail ? '\n실패 ' + fail + '개 / 통과 ' + pass + '개' : '\n통과 ' + pass + '개');
 if (fail) process.exit(1);
