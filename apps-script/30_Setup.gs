@@ -14,6 +14,7 @@ function onOpen() {
   m.addSeparator();
   m.addItem('⑥ 체크된 행 생성', 'generateChecked');
   m.addItem('⑦ 최종취합 시트 생성/갱신', 'buildCompile');
+  m.addItem('📤 나이스 업로드 파일 만들기 (나이스 양식에 최종본 채우기)', 'openNeisDialog');
   m.addSeparator();
   m.addSubMenu(ui.createMenu('①②③ 준비 — 설치 · AI 연결 · 학생 명단')
     .addItem('① 처음 설치 / 구조 복구', 'installAll')

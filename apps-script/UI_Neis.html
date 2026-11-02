@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root { --line:#dde3dd; --muted:#6b7280; --accent:#35583f; --accent-soft:#e3ece4; --warn:#8f2f20; --ok:#2c6340; --bg:#f6f8f6; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; padding:14px 18px; color:#16202a; font:13.5px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
+  label { font-weight:600; font-size:12px; }
+  select { padding:6px 8px; border:1px solid #c9d1c9; border-radius:6px; font:inherit; min-width:300px; }
+  .card { border:1px solid var(--line); border-radius:9px; padding:11px 13px; margin-top:10px; }
+  .card h3 { margin:0 0 4px; font-size:14px; }
+  .note { font-size:12px; color:var(--muted); line-height:1.55; }
+  ol { margin:3px 0 2px; padding-left:18px; font-size:12.5px; }
+  button { font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; padding:7px 13px; border:1px solid #c9d1c9; border-radius:6px; background:#fff; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.small { padding:4px 10px; font-size:12px; }
+  button:disabled { opacity:.5; cursor:default; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+  .msg { font-size:12.5px; } .msg.ok { color:var(--ok); } .msg.err { color:var(--warn); }
+  .warn { background:#f8eae6; color:#6b2417; border-radius:7px; padding:7px 10px; font-size:12px; margin-top:8px; }
+  .file { border:1px solid var(--line); border-radius:8px; padding:9px 11px; margin-top:8px; }
+  .file .top { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+  .file .nm { font-weight:700; font-size:13px; word-break:break-all; }
+  .sum { display:flex; gap:12px; flex-wrap:wrap; font-size:12.5px; }
+  .sum b { font-variant-numeric:tabular-nums; }
+  .list { max-height:170px; overflow:auto; border:1px solid var(--line); border-radius:7px; margin-top:6px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  td { padding:3px 8px; border-bottom:1px solid #eef1ee; vertical-align:top; }
+  td.n { text-align:right; font-variant-numeric:tabular-nums; color:var(--muted); white-space:nowrap; }
+  .tag { display:inline-block; font-size:11px; font-weight:700; border-radius:999px; padding:1px 8px; white-space:nowrap; }
+  .tag.ok { background:#e3ece4; color:#2c6340; } .tag.no { background:#f8eae6; color:#8f2f20; }
+  .chk { font-weight:400; font-size:12.5px; display:flex; gap:5px; align-items:center; }
+  details { margin-top:6px; font-size:12px; } summary { cursor:pointer; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="note">나이스에서 내려받은 <b>엑셀 양식</b>(학생 줄만 있고 특기사항 칸이 빈 파일)에 이 시트의 <b>[최종본]</b>을 채워 돌려드립니다.
+  받은 파일을 나이스에 그대로 올리면 됩니다. 파일은 이 창에서만 다루고 어디에도 저장하지 않습니다.</div>
+
+<div class="card">
+  <h3>1. 나이스 양식 고르기 (여러 개 한꺼번에)</h3>
+  <ol>
+    <li>나이스의 과목 세특 · 동아리 · 자율 · 진로 · 행발 입력 화면에서 <b>엑셀 양식을 내려받습니다</b>(반 · 과목마다 한 파일).</li>
+    <li>받은 파일들을 아래에서 <b>한꺼번에</b> 고릅니다(Ctrl 또는 Shift 를 누른 채로 여러 개). 열지 말고 그대로 고르세요.</li>
+  </ol>
+  <div class="actions"><input type="file" id="file" accept=".xlsx" multiple><span class="msg" id="mFile"></span></div>
+</div>
+
+<div class="card">
+  <h3>2. 넣을 글</h3>
+  <div class="actions">
+    <label for="src">[최종본]을 가져올 시트</label><select id="src"></select>
+  </div>
+  <div class="actions">
+    <label class="chk"><input type="checkbox" id="flag"> [검증]에 [수정]이 남은 학생도 넣기</label>
+    <label class="chk"><input type="checkbox" id="over"> 양식에 이미 내용이 있으면 덮어쓰기</label>
+  </div>
+  <div class="warn">[최종본]만 들어갑니다. [AI 결과]는 넣지 않습니다. 2026 기재요령은 AI가 만든 글을 그대로 입력하지 말라고 하니, [최종본]은 선생님이 읽고 고친 글이어야 합니다.</div>
+</div>
+
+<div class="card" id="pv" hidden>
+  <h3>3. 미리 보기 · 받기</h3>
+  <div class="sum" id="total"></div>
+  <div id="files"></div>
+  <div class="actions">
+    <button class="primary" id="bAll">⬇ 모두 받기</button><span class="msg" id="mAll"></span>
+  </div>
+  <div class="note">받은 파일을 나이스의 같은 화면에서 <b>엑셀 올리기</b>로 올리고, 나이스 화면에서 한 번 더 확인한 뒤 저장하세요.
+    여러 파일을 받을 때 크롬이 "여러 파일 다운로드"를 물으면 [허용]을 누르세요.</div>
+  <details>
+    <summary>나이스가 받은 파일을 올리지 못하면 (대안)</summary>
+    <ol>
+      <li>나이스에서 받은 <b>원래 양식</b>을 엑셀로 엽니다.</li>
+      <li>그 파일 줄의 <b>[📋 특기사항 열 복사]</b>를 누릅니다. 양식의 학생 순서대로 [최종본]이 한 열로 복사됩니다(빠진 학생은 빈 줄).</li>
+      <li>엑셀에서 특기사항 열의 <b>첫 학생 칸</b>(대개 J2)을 누르고 붙여 넣은 뒤, 같은 이름 · 엑셀 형식(.xlsx)으로 저장해 나이스에 올립니다.</li>
+    </ol>
+  </details>
+</div>
+
+<div class="actions" style="justify-content:flex-end"><button id="bClose">닫기</button></div>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var FILES = [], AUTO = true;   // AUTO: 양식마다 종류에 맞는 시트를 서버가 고른다
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+function say(id, t, cls) { var e = $(id); if (!e) return; e.className = 'msg ' + (cls || ''); e.textContent = t || ''; }
+function download(blob, name) { var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
+function copyText(text, id) {
+  var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+  document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  say(id, ok ? '✓ 복사했습니다. 엑셀에서 특기사항 열의 첫 학생 칸에 붙여 넣으세요.' : '복사가 막혔습니다.', ok ? 'ok' : 'err');
+}
+function opts(f) { return { b64: f.b64, source: AUTO ? '' : $('src').value, includeFlagged: $('flag').checked, overwrite: $('over').checked, fileName: f.name }; }
+
+function drawFile(i) {
+  var f = FILES[i], el = $('f' + i);
+  if (f.err) { el.innerHTML = '<div class="top"><span class="nm">' + esc(f.name) + '</span></div><div class="msg err">' + esc(f.err) + '</div>'; return; }
+  if (!f.pv) { el.innerHTML = '<div class="top"><span class="nm">' + esc(f.name) + '</span><span class="msg">읽는 중…</span></div>'; return; }
+  var r = f.pv, fm = r.form, no = r.plan.length - r.fill;
+  var info = [fm.year && fm.year + '학년도', fm.term && fm.term + '학기', fm.subject, fm.kind ? '(' + fm.kind + ')' : ''].filter(Boolean).join(' ');
+  var rows = r.plan.slice().sort(function (a, b) { return (a.ok ? 1 : 0) - (b.ok ? 1 : 0); });
+  el.innerHTML =
+    '<div class="top"><span class="nm">' + esc(f.name) + '</span><span class="note">' + esc(info) + ' · ' + esc(fm.contentHead) + ' ← ' + esc(r.source.sheet) + '</span></div>' +
+    '<div class="sum"><span>학생 <b>' + r.plan.length + '</b>명</span><span>넣을 학생 <b>' + r.fill + '</b>명</span>' +
+      (no ? '<span style="color:#8f2f20">빠지는 학생 <b>' + no + '</b>명</span>' : '') + '</div>' +
+    '<details' + (no ? ' open' : '') + '><summary>학생별로 보기</summary><div class="list"><table>' + rows.map(function (x) {
+      return '<tr><td>' + (x.ok ? '<span class="tag ok">넣음</span>' : '<span class="tag no">빠짐</span>') + '</td><td>' + esc(x.label) + '</td>' +
+             '<td>' + esc(x.why) + '</td><td class="n">' + (x.bytes ? x.bytes + 'B' : '') + '</td></tr>';
+    }).join('') + '</table></div></details>' +
+    '<div class="actions"><button class="small primary" data-get="' + i + '"' + (r.fill ? '' : ' disabled') + '>⬇ 이 파일 받기</button>' +
+    '<button class="small" data-copy="' + i + '"' + (r.fill ? '' : ' disabled') + '>📋 특기사항 열 복사</button><span class="msg" id="m' + i + '"></span></div>';
+}
+
+function drawTotal() {
+  var done = FILES.filter(function (f) { return f.pv; });
+  var fill = done.reduce(function (s, f) { return s + f.pv.fill; }, 0), all = done.reduce(function (s, f) { return s + f.pv.plan.length; }, 0);
+  var bad = FILES.filter(function (f) { return f.err; }).length;
+  $('total').innerHTML = '<span>파일 <b>' + FILES.length + '</b>개</span><span>학생 <b>' + all + '</b>명 중 넣을 학생 <b>' + fill + '</b>명</span>' +
+                         (bad ? '<span style="color:#8f2f20">읽지 못한 파일 <b>' + bad + '</b>개</span>' : '');
+  $('bAll').disabled = !done.some(function (f) { return f.pv.fill; });
+}
+
+function previewOne(i) {
+  var f = FILES[i]; f.pv = null; f.err = ''; drawFile(i);
+  google.script.run
+    .withSuccessHandler(function (r) { f.pv = r; drawFile(i); drawTotal(); })
+    .withFailureHandler(function (e) { f.err = e.message; drawFile(i); drawTotal(); })
+    .neisPreview(opts(f));
+}
+function previewAll() {
+  if (!FILES.length) return;
+  $('files').innerHTML = FILES.map(function (f, i) { return '<div class="file" id="f' + i + '"></div>'; }).join('');
+  $('pv').hidden = false;
+  FILES.forEach(function (f, i) { previewOne(i); });
+  drawTotal();
+}
+
+function getOne(i, done) {
+  var f = FILES[i];
+  say('m' + i, '만드는 중…');
+  google.script.run
+    .withSuccessHandler(function (r) {
+      var bin = atob(r.b64), arr = new Uint8Array(bin.length);
+      for (var k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
+      download(new Blob([arr], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), r.file);
+      say('m' + i, '✓ ' + r.fill + '명을 채운 파일을 받았습니다' + (r.skip ? ' (' + r.skip + '명은 빠짐)' : '') + '.', 'ok');
+      if (done) done(true);
+    })
+    .withFailureHandler(function (e) { say('m' + i, e.message, 'err'); if (done) done(false); })
+    .neisBuild(opts(f));
+}
+
+$('file').onchange = function () {
+  var list = Array.prototype.slice.call(this.files || []);
+  if (!list.length) return;
+  AUTO = true; FILES = []; say('mFile', '');
+  var left = list.length;
+  list.forEach(function (file, i) {
+    var rd = new FileReader();
+    rd.onload = function () { FILES[i] = { name: file.name, b64: String(rd.result).split(',')[1] || '' }; if (--left === 0) previewAll(); };
+    rd.onerror = function () { FILES[i] = { name: file.name, b64: '', err: '파일을 읽지 못했습니다.' }; if (--left === 0) previewAll(); };
+    rd.readAsDataURL(file);
+  });
+};
+$('src').onchange = function () { AUTO = !$('src').value; previewAll(); };
+$('flag').onchange = previewAll; $('over').onchange = previewAll;
+
+$('files').onclick = function (e) {
+  var b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.get !== undefined) getOne(Number(b.dataset.get));
+  if (b.dataset.copy !== undefined) {
+    var f = FILES[Number(b.dataset.copy)];
+    copyText(f.pv.column.join('\n'), 'm' + b.dataset.copy);
+  }
+};
+$('bAll').onclick = function () {
+  var todo = FILES.map(function (f, i) { return f.pv && f.pv.fill ? i : -1; }).filter(function (i) { return i >= 0; });
+  var b = this, n = 0, good = 0; b.disabled = true; say('mAll', '0 / ' + todo.length);
+  (function next() {
+    if (n >= todo.length) { b.disabled = false; say('mAll', '✓ 파일 ' + good + '개를 받았습니다.', good === todo.length ? 'ok' : 'err'); return; }
+    getOne(todo[n++], function (okay) { if (okay) good++; say('mAll', n + ' / ' + todo.length); setTimeout(next, 700); });
+  })();
+};
+$('bClose').onclick = function () { google.script.host.close(); };
+
+google.script.run.withSuccessHandler(function (c) {
+  $('src').innerHTML = '<option value="">자동 — 양식 종류에 맞는 최종취합 시트</option>' +
+    c.sources.map(function (s) { return '<option value="' + esc(s.sheet) + '">' + esc(s.label) + '</option>'; }).join('');
+  if (!c.sources.length) say('mFile', '[최종본]이 있는 시트가 없습니다. 메뉴 ⑦ [최종취합 시트 생성/갱신]부터 누르세요.', 'err');
+}).neisContext();
+</script>
+</body>
+</html>

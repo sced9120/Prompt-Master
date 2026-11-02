@@ -1,16 +1,16 @@
 /******************************************************************************
- * 세특 작성 도우미 v3.0.0 — 설치용 합본
+ * 세특 작성 도우미 v3.0.1 — 설치용 합본
  *
  * 이 파일 하나에 모든 스크립트가 들어 있습니다.
  * Apps Script 편집기에서 Code.gs 의 내용을 전부 지우고 이 파일을 통째로 붙여넣으세요.
- * HTML 파일 16개는 각각 같은 이름으로 따로 만들어야 합니다:
- *   UI_ApiKey, UI_Bytes, UI_Check, UI_Export, UI_Form, UI_Manual, UI_Observe, UI_OcrGuide, UI_Onboard, UI_Quick, UI_Roster, UI_Studio, UI_Style, UI_Subject, UI_Update, UI_Wizard
+ * HTML 파일 17개는 각각 같은 이름으로 따로 만들어야 합니다:
+ *   UI_ApiKey, UI_Bytes, UI_Check, UI_Export, UI_Form, UI_Manual, UI_Neis, UI_Observe, UI_OcrGuide, UI_Onboard, UI_Quick, UI_Roster, UI_Studio, UI_Style, UI_Subject, UI_Update, UI_Wizard
  *
  * 원본은 모듈별로 나뉘어 있습니다: github.com/sced9120/Prompt-Master
  * 고칠 때는 apps-script/ 의 해당 파일을 고치고 node tools/build.js 를 다시 돌리세요.
  * 이 파일을 직접 고치면 다음 빌드 때 덮어써집니다.
  *
- * 빌드: 2026-10-30  ·  원본 36개 파일
+ * 빌드: 2026-11-02  ·  원본 38개 파일
  *****************************************************************************/
 
 /* ==========================================================================
@@ -27,7 +27,7 @@
  */
 
 var APP = {
-  VERSION: 'v3.0.0',
+  VERSION: 'v3.0.1',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -1206,6 +1206,206 @@ if (typeof module !== 'undefined' && module.exports) {
     sortModelIds: sortModelIds, modelStatusText: modelStatusText,
     thinkingFor: thinkingFor, BATCH_SCHEMA: BATCH_SCHEMA, buildBatchUser: buildBatchUser,
     parseBatchResult: parseBatchResult, estimateTokens: estimateTokens
+  };
+}
+
+
+/* ==========================================================================
+   13_NeisForm.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 📤 나이스 업로드 양식 채우기 (순수 함수 — Node 시험 가능)
+ *
+ * 나이스에서 내려받은 엑셀 양식(학생 줄이 채워져 있고 특기사항 칸만 빈 파일)에
+ * 시트의 [최종본]을 학생별로 넣어, 그 파일을 그대로 나이스에 다시 올리게 한다.
+ *   · 파일은 다시 만들지 않는다. 시트 XML 에서 특기사항 칸만 바꿔 끼우고 나머지(학생개인번호 · 과목코드 · 서식)는 손대지 않는다.
+ *   · 학년 · 반 · 번호 · 성명이 모두 맞는 학생에게만 넣는다(쌤패스와 같은 원칙). 하나라도 어긋나면 넣지 않고 까닭을 보여 준다.
+ *   · [최종본]만 쓴다. [AI 결과]는 넣지 않는다(2026 기재요령: AI 생성 글을 그대로 입력하지 않는다).
+ *
+ * 확인한 양식(2026-11, 사용자가 준 파일)
+ *   과목 세특: 학년도 | 학기 | 학년 | 학생개인번호 | 과목 | 과목코드 | 반/번호 | 성명 | 학적변동 구분 | 세부능력 및 특기사항 | 영재·발명교육 기록사항
+ *   동아리:   영역 구분(동아리활동_특기사항) | 학년도 | 학년 | 학과 | 반 | 번호 | 동아리활동 부서명 | 학생개인번호 | 성명 | 특기사항
+ *   모든 칸이 inlineStr 이고, 빈 특기사항 칸은 <c r="J2" s="4"></c> 처럼 서식만 있는 칸으로 들어 있다.
+ */
+
+/** 특기사항이 들어갈 열의 머리글 — 앞의 것이 먼저 (공백 · 줄바꿈은 지우고 견준다) */
+var NEIS_CONTENT_HEADS = ['세부능력및특기사항', '행동특성및종합의견', '특기사항', '종합의견'];
+
+/** 영역 구분 · 머리글 → 시트의 기록종류 키 */
+var NEIS_AREA_KEYS = [
+  { re: /동아리/, key: '동아리' }, { re: /자율/, key: '자율' }, { re: /진로/, key: '진로' },
+  { re: /행동특성|종합의견/, key: '행발' }, { re: /개인별/, key: '개세특' }, { re: /세부능력/, key: '과세특' }
+];
+
+function neisHead_(h) { return String(h === null || h === undefined ? '' : h).replace(/\s+/g, ''); }
+function neisName_(s) { return String(s === null || s === undefined ? '' : s).replace(/\s+/g, ''); }
+function neisNum_(s) { var n = parseInt(String(s === null || s === undefined ? '' : s).replace(/[^\d]/g, ''), 10); return isNaN(n) ? null : n; }
+
+/** 열 번호(0부터) → 'A', 'J', 'AB' */
+function colLetterOf(i) {
+  var s = '';
+  for (var n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s;
+  return s;
+}
+
+/** workbook 의 첫 시트가 어느 XML 파일인지 */
+function neisSheetPath_(parts) {
+  var wb = parts['xl/workbook.xml'] || '';
+  var sm = wb.match(/<sheet\b([^>]*)\/?>/);
+  if (!sm) throw new Error('엑셀 파일 모양이 아닙니다(시트가 없음).');
+  var name = xmlUnescape((sm[1].match(/\bname="([^"]*)"/) || [])[1] || '');
+  var rid = (sm[1].match(/\br:id="([^"]+)"/) || [])[1];
+  var path = 'xl/worksheets/sheet1.xml', rm, relRe = /<Relationship\b([^>]*)\/?>/g;
+  while ((rm = relRe.exec(parts['xl/_rels/workbook.xml.rels'] || ''))) {
+    if ((rm[1].match(/\bId="([^"]+)"/) || [])[1] !== rid) continue;
+    var t = (rm[1].match(/\bTarget="([^"]+)"/) || [])[1] || '';
+    path = t.charAt(0) === '/' ? t.slice(1) : 'xl/' + t.replace(/^\.\//, '');
+  }
+  return { name: name, path: path };
+}
+
+/**
+ * 나이스 양식 읽기
+ * @param {Object<string,string>} parts  xlsx 안의 XML 파일들 {경로: 글}
+ * @return {{sheetName:string, sheetPath:string, kind:string, subject:string, year:string, term:string,
+ *           contentCol:number, contentHead:string, head:string[],
+ *           rows:Array<{r:number, year:?number, cls:?number, no:?number, name:string, status:string, content:string}>}}
+ */
+function readNeisForm(parts) {
+  var p = {};
+  Object.keys(parts || {}).forEach(function (k) { p[String(k).replace(/^\/+/, '')] = parts[k]; });
+  var sp = neisSheetPath_(p);
+  var grid = parseSheetXml(p[sp.path] || '', parseSharedStrings(p['xl/sharedStrings.xml'] || ''));
+  if (!grid.length) throw new Error('양식에 줄이 없습니다.');
+  var head = (grid[0] || []).map(function (h) { return String(h === null || h === undefined ? '' : h); });
+  var H = head.map(neisHead_);
+  var at = function (name) { return H.indexOf(name); };
+  var contentCol = -1;
+  for (var i = 0; i < NEIS_CONTENT_HEADS.length && contentCol < 0; i++) contentCol = at(NEIS_CONTENT_HEADS[i]);
+  var cYear = at('학년'), cCls = at('반'), cNo = at('번호'), cClsNo = at('반/번호'), cName = at('성명');
+  if (cName < 0) cName = at('이름');
+  if (contentCol < 0) throw new Error('특기사항 칸을 찾지 못했습니다. 나이스에서 내려받은 양식 그대로인지 확인해 주세요. (머리글: ' + head.join(' | ') + ')');
+  if (cName < 0 || (cClsNo < 0 && (cCls < 0 || cNo < 0))) throw new Error('반 · 번호 · 성명 칸을 찾지 못했습니다. (머리글: ' + head.join(' | ') + ')');
+
+  var cArea = at('영역구분'), cSub = at('과목'), cStatus = at('학적변동구분'), cY = at('학년도'), cTerm = at('학기');
+  var rows = [];
+  for (var r = 1; r < grid.length; r++) {
+    var g = grid[r] || [];
+    var v = function (c) { return c < 0 ? '' : String(g[c] === null || g[c] === undefined ? '' : g[c]).trim(); };
+    var cls = cCls >= 0 ? v(cCls) : v(cClsNo).split('/')[0];
+    var no = cNo >= 0 ? v(cNo) : (v(cClsNo).split('/')[1] || '');
+    if (!v(cName) && !cls && !no) continue;
+    rows.push({ r: r + 1, year: neisNum_(v(cYear)), cls: neisNum_(cls), no: neisNum_(no), name: v(cName),
+                status: v(cStatus), content: v(contentCol) });
+  }
+  var first = grid[1] || [];
+  var area = cArea >= 0 ? String(first[cArea] || '') : '';
+  var probe = area + ' ' + H[contentCol] + ' ' + (cSub >= 0 ? '세부능력' : '');
+  var kind = '';
+  for (var k = 0; k < NEIS_AREA_KEYS.length && !kind; k++) if (NEIS_AREA_KEYS[k].re.test(probe)) kind = NEIS_AREA_KEYS[k].key;
+  return {
+    sheetName: sp.name, sheetPath: sp.path, kind: kind,
+    subject: cSub >= 0 ? String(first[cSub] || '').trim() : '',
+    year: cY >= 0 ? String(first[cY] || '').trim() : '', term: cTerm >= 0 ? String(first[cTerm] || '').trim() : '',
+    contentCol: contentCol, contentHead: head[contentCol].replace(/\s+/g, ' '), head: head, rows: rows
+  };
+}
+
+/** 시트의 A열(반 또는 "학년-반") → {year, cls} */
+function neisClassOf_(label) {
+  var s = String(label === null || label === undefined ? '' : label).trim();
+  var m = s.match(/^(\d+)\s*[-–]\s*(\d+)/);
+  if (m) return { year: Number(m[1]), cls: Number(m[2]) };
+  return { year: null, cls: neisNum_(s) };
+}
+
+/**
+ * 양식의 학생 줄 ↔ 시트의 [최종본] 맞추기
+ * @param {Array} formRows  readNeisForm().rows
+ * @param {Array<{cls:*, no:*, name:string, text:string, check?:string}>} src  시트 줄 (cls 는 A열 값)
+ * @param {{limit?:number, overwrite?:boolean, includeFlagged?:boolean}} opt
+ * @return {Array<{r:number, label:string, ok:boolean, why:string, text:string, bytes:number}>}
+ */
+function matchNeisRows(formRows, src, opt) {
+  opt = opt || {};
+  var list = (src || []).map(function (s) {
+    var c = neisClassOf_(s.cls);
+    return { year: c.year, cls: c.cls, no: neisNum_(s.no), name: neisName_(s.name), text: String(s.text || '').replace(/\r\n?/g, '\n').trim(),
+             check: String(s.check || '') };
+  });
+  return (formRows || []).map(function (f) {
+    var label = (f.year ? f.year + '학년 ' : '') + (f.cls === null ? '?' : f.cls) + '반 ' + (f.no === null ? '?' : f.no) + '번 ' + f.name;
+    var out = { r: f.r, label: label, ok: false, why: '', text: '', bytes: 0 };
+    if (f.status && f.status !== '재학') { out.why = '학적변동: ' + f.status; return out; }
+    if (f.content && !opt.overwrite) { out.why = '나이스 양식에 이미 내용이 있음'; return out; }
+    var same = list.filter(function (s) {
+      return s.cls === f.cls && s.no === f.no && (s.year === null || f.year === null || s.year === f.year);
+    });
+    if (!same.length) { out.why = '시트에 없는 학생'; return out; }
+    var hit = same.filter(function (s) { return !s.name || s.name === neisName_(f.name); });
+    if (!hit.length) { out.why = '반 · 번호는 같은데 이름이 다름 (시트: ' + same[0].name + ')'; return out; }
+    if (hit.length > 1) { out.why = '같은 반 · 번호 · 이름이 시트에 둘 이상'; return out; }
+    var s = hit[0];
+    out.text = s.text; out.bytes = s.text ? byteLen(s.text) : 0;
+    if (!s.text) { out.why = '[최종본]이 비어 있음'; return out; }
+    if (opt.limit && out.bytes > opt.limit) { out.why = '바이트 초과 ' + out.bytes + ' / ' + opt.limit; return out; }
+    if (/수정필요|\[수정\]/.test(s.check) && !opt.includeFlagged) { out.why = '[검증]에 [수정]이 남아 있음'; return out; }
+    out.ok = true;
+    return out;
+  });
+}
+
+/**
+ * 올리기가 막힐 때의 대안 — 양식 2행부터 학생 순서대로 [최종본] 한 열(빠진 학생 · 빈 줄은 '')
+ * 엑셀에서 특기사항 열의 첫 학생 칸에 붙여 넣으므로 칸 안의 줄바꿈 · 탭은 띄어쓰기로 바꾼다.
+ * @return {string[]}
+ */
+function neisColumn(plan) {
+  var by = {}, last = 1;
+  (plan || []).forEach(function (x) { by[x.r] = x.ok ? String(x.text).replace(/[\t\r\n]+/g, ' ').trim() : ''; last = Math.max(last, x.r); });
+  var out = [];
+  for (var r = 2; r <= last; r++) out.push(by.hasOwnProperty(r) ? by[r] : '');
+  return out;
+}
+
+function neisXmlText_(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+}
+
+/**
+ * 시트 XML 의 한 열에 글 넣기 — 그 칸만 inlineStr 로 바꾸고 서식(s)은 그대로 둔다
+ * @param {string} xml  @param {number} col  열 번호(0부터)  @param {Object<number,string>} fills {행 번호: 글}
+ * @return {string}
+ */
+function fillNeisSheetXml(xml, col, fills) {
+  var L = colLetterOf(col);
+  return String(xml).replace(/<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g, function (whole, attr, body) {
+    var rn = Number((attr.match(/\br="(\d+)"/) || [])[1]);
+    if (!fills.hasOwnProperty(rn)) return whole;
+    var ref = L + rn;
+    var cell = function (a) {
+      a = String(a || '').replace(/\s*\bt="[^"]*"/, '').replace(/\s*\br="[^"]*"/, '');
+      return '<c r="' + ref + '"' + a + ' t="inlineStr"><is><t xml:space="preserve">' + neisXmlText_(fills[rn]) + '</t></is></c>';
+    };
+    body = body || '';
+    var re = new RegExp('<c\\b(?=[^>]*\\br="' + ref + '")([^>]*?)(?:/>|>[\\s\\S]*?</c>)');
+    if (re.test(body)) body = body.replace(re, function (m, a) { return cell(a); });
+    else {
+      // 칸이 없으면 열 순서에 맞는 자리에 끼운다
+      var at = -1, cm, cre = /<c\b[^>]*\br="([A-Z]+)\d+"/g;
+      while ((cm = cre.exec(body))) if (colIndexOf(cm[1]) > col) { at = cm.index; break; }
+      body = at < 0 ? body + cell('') : body.slice(0, at) + cell('') + body.slice(at);
+    }
+    return '<row' + attr + '>' + body + '</row>';
+  });
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    NEIS_CONTENT_HEADS: NEIS_CONTENT_HEADS, colLetterOf: colLetterOf, readNeisForm: readNeisForm,
+    matchNeisRows: matchNeisRows, fillNeisSheetXml: fillNeisSheetXml, neisColumn: neisColumn
   };
 }
 
@@ -3301,6 +3501,7 @@ function onOpen() {
   m.addSeparator();
   m.addItem('⑥ 체크된 행 생성', 'generateChecked');
   m.addItem('⑦ 최종취합 시트 생성/갱신', 'buildCompile');
+  m.addItem('📤 나이스 업로드 파일 만들기 (나이스 양식에 최종본 채우기)', 'openNeisDialog');
   m.addSeparator();
   m.addSubMenu(ui.createMenu('①②③ 준비 — 설치 · AI 연결 · 학생 명단')
     .addItem('① 처음 설치 / 구조 복구', 'installAll')
@@ -4955,6 +5156,7 @@ function buildHelp() {
   P('Q. 예시 시트에 [바이트]·[검증] 칸이 없어요 → 부가 기능 > 예시 시트 구조 복구 (예시 내용은 보존됩니다).');
   P('Q. 시트를 실수로 지웠어요 → 메뉴 ① 처음 설치 / 구조 복구 (기존 데이터는 보존됩니다).');
   P('Q. 메뉴가 화면 아래로 잘려요 → 지금 판은 하위 메뉴로 묶여 있습니다. 예전 사본이면 메뉴 [🔄 새 버전 확인]에서 새 사본을 받아 주세요.');
+  P('Q. 나이스에 한 명씩 붙여 넣기 번거로워요 → 나이스 입력 화면에서 엑셀 양식을 내려받아 메뉴 [📤 나이스 업로드 파일 만들기]에서 고르세요(반 · 과목별 파일 여러 개를 한꺼번에). 학년 · 반 · 번호 · 성명이 모두 맞는 학생의 [최종본]만 채운 같은 파일을 돌려줍니다. 그 파일을 나이스에 올리고 화면에서 확인한 뒤 저장합니다. [AI 결과]와 [검증]에 [수정]이 남은 글은 넣지 않습니다. 나이스가 그 파일을 받지 않으면 [📋 특기사항 열 복사]로 원래 양식의 특기사항 첫 칸에 붙여 넣어 올리세요.');
   P('Q. 결과가 너무 짧거나 길어요 → [🗂 활동목록] 맨 뒤 [분량 맞추기]를 바꾸세요. 메모만큼(메모가 짧으면 짧게) · 보통(비우면 이것, 한도의 3분의 2 안팎은 씀 — 1500바이트면 1000) · 넉넉히(한도의 90% 안팎). 어느 쪽이든 메모에 없는 활동이나 수치는 만들지 않으니, 내용을 늘리려면 관찰 메모를 더 적는 것이 가장 좋습니다.');
   P('Q. 처음이라 어떻게 생겼는지 먼저 보고 싶어요 → 시작하기 창 위쪽이나 [도움말 · 부가 기능] > [🧪 체험 예시로 채워 보기]. 가상 학생 3명과 활동 하나가 들어가고, 다 보면 [체험 예시 지우기]로 체험이 만든 것만 지웁니다.');
   P('Q. 시작하기 시트의 버튼이 안 눌려요 → 휴대폰·태블릿 앱에서는 버튼이 동작하지 않습니다. 컴퓨터 브라우저에서 쓰거나 같은 이름의 메뉴를 누르세요. 버튼이 사라졌으면 [도움말 · 부가 기능] > [시작하기 시트 다시 만들기].');
@@ -8296,6 +8498,137 @@ function gemFor(key) {
 
 
 /* ==========================================================================
+   79_NeisUpload.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 📤 나이스 업로드 파일 만들기
+ *
+ * 나이스에서 내려받은 엑셀 양식을 창에서 고르면, 이 시트의 [최종본]을 학생별로 채운 같은 파일을 돌려준다.
+ * 선생님은 받은 파일을 나이스에 그대로 올린다. 파일은 Drive 에 저장하지 않고 창에서 바로 내려받는다(새 권한 없음).
+ * 읽기 · 맞추기 · 채우기는 13_NeisForm.gs 의 순수 함수가 한다.
+ */
+
+function openNeisDialog() {
+  var html = HtmlService.createHtmlOutputFromFile('UI_Neis').setWidth(820).setHeight(680);
+  ui_().showModalDialog(html, '📤 나이스 업로드 파일 만들기');
+}
+
+/** [최종본] 열이 있는 시트들 — 최종취합 시트를 앞에 */
+function neisSources() {
+  var recs = getRecordTypes_();
+  var out = [];
+  compileSheets_().forEach(function (s) {
+    var rk = recordKeyOfCompile_(s.getName()), rec = findByKey(recs, rk);
+    out.push({ sheet: s.getName(), recKey: rk, limit: (rec ? rec.chars : 500) * 3, label: s.getName() + ' (최종취합)' });
+  });
+  getActivities_().forEach(function (a) {
+    var s = sh_(a.inSheet);
+    if (!s || !colOf_(s, APP.HEAD_ROW, '최종본')) return;
+    var rec = findByKey(recs, a.recordKey);
+    out.push({ sheet: a.inSheet, recKey: a.recordKey, limit: activityBytes(a, rec || {}), label: a.inSheet + ' (활동 하나)' });
+  });
+  return out;
+}
+
+/** 창이 처음 열릴 때 */
+function neisContext() {
+  return { sources: neisSources() };
+}
+
+function neisParts_(b64) {
+  var parts = {};
+  var blob = Utilities.newBlob(Utilities.base64Decode(String(b64 || '')), 'application/zip', 'form.xlsx');
+  var files;
+  try { files = Utilities.unzip(blob); } catch (e) { throw new Error('엑셀(.xlsx) 파일이 아닙니다. 나이스에서 내려받은 파일을 그대로 골라 주세요.'); }
+  files.forEach(function (b) { parts[String(b.getName()).replace(/^\/+/, '')] = b; });
+  return parts;
+}
+
+function neisXmlOf_(parts) {
+  var x = {};
+  Object.keys(parts).forEach(function (k) { if (/\.(xml|rels)$/.test(k)) x[k] = parts[k].getDataAsString('UTF-8'); });
+  return x;
+}
+
+/** 시트의 학생 줄: A열(반 또는 학년-반) · 번호 · 이름 · [최종본] · [검증] */
+function neisSourceRows_(sheetName) {
+  var s = sh_(sheetName);
+  if (!s) throw new Error('시트를 찾을 수 없습니다: ' + sheetName);
+  var cF = colOf_(s, APP.HEAD_ROW, '최종본'), cV = colOf_(s, APP.HEAD_ROW, '검증');
+  if (!cF) throw new Error('[' + sheetName + '] 에 [최종본] 칸이 없습니다.');
+  var last = s.getLastRow();
+  if (last < APP.DATA_ROW) return [];
+  var n = last - APP.DATA_ROW + 1;
+  var abc = s.getRange(APP.DATA_ROW, 1, n, 3).getValues();
+  var fin = s.getRange(APP.DATA_ROW, cF, n, 1).getValues();
+  var chk = cV ? s.getRange(APP.DATA_ROW, cV, n, 1).getValues() : null;
+  var out = [];
+  for (var i = 0; i < n; i++) {
+    if (!String(abc[i][1]).trim() && !String(abc[i][2]).trim()) continue;
+    out.push({ cls: abc[i][0], no: abc[i][1], name: abc[i][2], text: String(fin[i][0] || ''), check: chk ? String(chk[i][0] || '') : '' });
+  }
+  return out;
+}
+
+/** 양식 종류에 맞는 시트를 고른다 (사용자가 고른 것이 먼저) */
+function neisPickSource_(kind, wanted) {
+  var list = neisSources();
+  var hit = list.filter(function (x) { return x.sheet === wanted; })[0];
+  if (!hit) hit = list.filter(function (x) { return x.recKey === kind && x.label.indexOf('최종취합') >= 0; })[0];
+  if (!hit) hit = list.filter(function (x) { return x.recKey === kind; })[0];
+  if (!hit) {
+    throw new Error(kind ? '이 양식(' + kind + ')에 넣을 [최종본]이 있는 시트가 없습니다. 메뉴 ⑦ [최종취합 시트 생성/갱신]을 먼저 누르세요.'
+                         : '[최종본]이 있는 시트를 골라 주세요.');
+  }
+  return hit;
+}
+
+/**
+ * 미리 보기 — 누가 들어가고 누가 빠지는지
+ * @param {{b64:string, source?:string, overwrite?:boolean, includeFlagged?:boolean}} p
+ */
+function neisPreview(p) {
+  p = p || {};
+  var form = readNeisForm(neisXmlOf_(neisParts_(p.b64)));
+  var src = neisPickSource_(form.kind, p.source);
+  var plan = matchNeisRows(form.rows, neisSourceRows_(src.sheet),
+                           { limit: src.limit, overwrite: !!p.overwrite, includeFlagged: !!p.includeFlagged });
+  return {
+    form: { kind: form.kind, subject: form.subject, year: form.year, term: form.term, contentHead: form.contentHead,
+            sheetName: form.sheetName, students: form.rows.length },
+    source: src, plan: plan.map(function (x) { return { label: x.label, ok: x.ok, why: x.why, bytes: x.bytes }; }),
+    fill: plan.filter(function (x) { return x.ok; }).length,
+    column: neisColumn(plan)
+  };
+}
+
+/**
+ * 채운 파일 만들기 — 원래 파일에서 특기사항 칸만 바꾼다
+ * @return {{file:string, b64:string, fill:number, skip:number}}
+ */
+function neisBuild(p) {
+  p = p || {};
+  var parts = neisParts_(p.b64);
+  var form = readNeisForm(neisXmlOf_(parts));
+  var src = neisPickSource_(form.kind, p.source);
+  var plan = matchNeisRows(form.rows, neisSourceRows_(src.sheet),
+                           { limit: src.limit, overwrite: !!p.overwrite, includeFlagged: !!p.includeFlagged });
+  var fills = {};
+  plan.forEach(function (x) { if (x.ok) fills[x.r] = x.text; });
+  if (!Object.keys(fills).length) throw new Error('넣을 학생이 없습니다. 미리 보기에서 빠진 까닭을 확인해 주세요.');
+  var sheetBlob = parts[form.sheetPath];
+  var xml = fillNeisSheetXml(sheetBlob.getDataAsString('UTF-8'), form.contentCol, fills);
+  parts[form.sheetPath] = Utilities.newBlob(xml, 'application/xml', form.sheetPath).setDataFromString(xml, 'UTF-8');
+  var name = String(p.fileName || '나이스 양식.xlsx').replace(/[\\\/:*?"<>|]/g, '_');
+  if (!/\.xlsx$/i.test(name)) name += '.xlsx';
+  var blobs = Object.keys(parts).map(function (k) { return parts[k].setName(k); });
+  var zip = Utilities.zip(blobs, name);
+  return { file: name, b64: Utilities.base64Encode(zip.getBytes()), fill: Object.keys(fills).length, skip: plan.length - Object.keys(fills).length };
+}
+
+
+/* ==========================================================================
    80_Compile.gs
    ========================================================================== */
 
@@ -8388,7 +8721,7 @@ function buildCompileFor_(recKey, acts, roster) {
   splitBanner_(s, 3, n,
     '📦 ' + (rec ? rec.name : recKey) + '\n' + (rec ? rec.chars : 500) + '자(' + limit + '바이트)',
     '① 메뉴 ⑦ [최종취합 시트 생성/갱신]으로 활동 결과를 모읍니다  →  ② 합본이 한도를 넘는 학생만 [압축] 체크  →  ' +
-    '③ 메뉴 ⑦ [최종 압축본 생성]  →  ④ [최종본] 칸에서 다듬어 나이스에 붙여넣기');
+    '③ 메뉴 ⑦ [최종 압축본 생성]  →  ④ [최종본] 칸에서 다듬기  →  ⑤ 메뉴 [📤 나이스 업로드 파일 만들기]에 나이스 양식을 넣어 채운 파일 받기');
   s.setRowHeight(2, 8);
   s.getRange(APP.HEAD_ROW, 1, 1, n).setValues([head]);
   styleHeader_(s, APP.HEAD_ROW, n, '#4e342e');

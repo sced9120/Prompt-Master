@@ -87,7 +87,7 @@ function buildCompileFor_(recKey, acts, roster) {
   splitBanner_(s, 3, n,
     '📦 ' + (rec ? rec.name : recKey) + '\n' + (rec ? rec.chars : 500) + '자(' + limit + '바이트)',
     '① 메뉴 ⑦ [최종취합 시트 생성/갱신]으로 활동 결과를 모읍니다  →  ② 합본이 한도를 넘는 학생만 [압축] 체크  →  ' +
-    '③ 메뉴 ⑦ [최종 압축본 생성]  →  ④ [최종본] 칸에서 다듬어 나이스에 붙여넣기');
+    '③ 메뉴 ⑦ [최종 압축본 생성]  →  ④ [최종본] 칸에서 다듬기  →  ⑤ 메뉴 [📤 나이스 업로드 파일 만들기]에 나이스 양식을 넣어 채운 파일 받기');
   s.setRowHeight(2, 8);
   s.getRange(APP.HEAD_ROW, 1, 1, n).setValues([head]);
   styleHeader_(s, APP.HEAD_ROW, n, '#4e342e');
