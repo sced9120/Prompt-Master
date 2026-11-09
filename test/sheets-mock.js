@@ -212,6 +212,10 @@ function makeGlobals() {
     getProperty: k => (m.has(k) ? m.get(k) : null), setProperty: (k, v) => { m.set(k, String(v)); },
     deleteProperty: k => { m.delete(k); }, deleteAllProperties: () => m.clear() }; };
   const docProps = props(), userProps = props();
+  try {   // 🔒 기존 시험은 이미 동의한 선생님으로 — test/consent.test.js 가 지우고 확인한다
+    const v = (require('fs').readFileSync(require('path').join(__dirname, '..', 'apps-script', '22_Consent.gs'), 'utf8').match(/CONSENT_VERSION = '([^']+)'/) || [])[1];
+    if (v) userProps.setProperty('CONSENT', JSON.stringify({ v, at: '2026-11-09T00:00:00Z' }));
+  } catch (e) {}
   const alerts = [];
   const ui = {
     alert: (...a) => { alerts.push(a.join(' | ')); return 'OK'; },

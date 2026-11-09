@@ -54,6 +54,7 @@ function onboardStatus() {
   try { st.imported = !!PropertiesService.getDocumentProperties().getProperty('IMPORTED_FROM'); } catch (e) {}
   try { st.manual = manualOn_(); } catch (e) {}
   try { st.demo = demoState_(); } catch (e) {}
+  try { st.consentOk = consentOk_(); } catch (e) { st.consentOk = true; }
   try { st.gem = gemOn_(); } catch (e) {}
   try {
     st.installed = !!(sh_(APP.SH.CONFIG) && sh_(APP.SH.RECORD) && sh_(APP.SH.ACTIVITY) && sh_(APP.SH.ROSTER));

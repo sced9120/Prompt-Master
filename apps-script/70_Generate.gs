@@ -159,6 +159,11 @@ function markPending_(sheet, rows, why) {
  */
 function runGeneration_(act, sheet, rows, opt) {
   opt = opt || {};
+  if (!consentOk_()) {
+    if (opt.quiet) { markPending_(sheet, rows, '🔒 개인정보 · 보안 안내에 동의한 뒤 만들 수 있습니다.'); return { consent: false }; }
+    openConsentDialog();
+    return { consent: false };
+  }
   var startedAt = opt.startedAt || Date.now();
   var lock = LockService.getDocumentLock();
   if (!lock.tryLock(opt.lockWaitMs || 5000)) {

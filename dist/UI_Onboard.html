@@ -81,6 +81,7 @@
 <h2>시작하기</h2>
 <div class="sub">순서대로 따라가면 첫 세특이 나오는 것까지 확인할 수 있습니다. 중간에 닫아도 다시 열면 이어집니다.</div>
 
+<div id="consent"></div>
 <div id="upd"></div>
 <div id="demo"></div>
 <div id="steps"></div>
@@ -109,7 +110,7 @@ function say(id, msg, cls) { var e = $(id); e.className = 'msg ' + (cls || ''); 
 
 function load(cb) {
   google.script.run
-    .withSuccessHandler(function (s) { ST = s; draw(); drawUpdate(); drawDemo(); if (s.aiNotice) $('aiNote').textContent = '⚠️ ' + s.aiNotice; if (cb) cb(s); })
+    .withSuccessHandler(function (s) { ST = s; draw(); drawConsent(); drawUpdate(); drawDemo(); if (s.aiNotice) $('aiNote').textContent = '⚠️ ' + s.aiNotice; if (cb) cb(s); })
     .withFailureHandler(function (e) { say('globalMsg', e.message, 'err'); })
     .onboardStatus();
 }
@@ -121,6 +122,15 @@ function drawUpdate() {
   $('upd').innerHTML = '<div class="upd"><span>🔄 새 버전 <b>' + esc(u.latest) + '</b> 이(가) 나왔습니다 (지금 ' + esc(u.current) + ').</span>' +
     '<button id="bUpd">무엇이 바뀌었나 · 옮기는 법</button></div>';
   $('bUpd').onclick = function () { google.script.run.openUpdateDialog('version'); };
+}
+
+/** 🔒 동의 전이면 맨 위에 — AI로 보내기 전에 한 번 */
+function drawConsent() {
+  var box = $('consent');
+  if (!ST || ST.consentOk !== false) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="demo" style="border-color:#d9a99d;background:#fbf3f1"><span><b>🔒 먼저 개인정보 · 보안 안내</b>를 읽고 동의해 주세요. 학생 자료가 어디에 있고 AI로 무엇이 가는지 여섯 가지를 확인합니다. 동의 전에는 AI로 아무것도 보내지 않습니다.</span>' +
+                  '<button id="bConsent">안내 읽고 동의하기</button></div>';
+  $('bConsent').onclick = function () { google.script.run.openConsentDialog(true); };
 }
 
 /** 체험 예시 줄 — 비어 있는 사본이면 채우기, 채웠으면 지우기(두 번 눌러야 지움) */

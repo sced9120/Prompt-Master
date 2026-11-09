@@ -551,6 +551,7 @@ function callAI_(system, user, model, provider, opts) {
   var p = provider || providerOf_(m);
   if (p === 'subscription') throw new Error(SUBSCRIPTION_MODEL + ' 은(는) 셀 수식으로 동작합니다. 메뉴 ⑥ 대신 체크박스를 사용하세요.');
   if (p === 'manual') throw new Error(MANUAL_MODEL + ' 은(는) 스크립트가 부르지 않습니다. 메뉴 ⑥ 을 누르면 복사·붙여넣기 창이 열립니다.');
+  requireConsent_();   // 🔒 학생 자료를 보내기 전에 — 22_Consent.gs
   if (!p) {
     throw new Error('"' + m + '" 이(가) 어느 회사 모델인지 알 수 없습니다. [⚙️ 설정] 아래 모델 목록의 [회사] 칸을 골라 주세요.');
   }

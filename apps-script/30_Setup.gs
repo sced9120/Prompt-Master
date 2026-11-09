@@ -18,6 +18,7 @@ function onOpen() {
   m.addSeparator();
   m.addSubMenu(ui.createMenu('①②③ 준비 — 설치 · AI 연결 · 학생 명단')
     .addItem('① 처음 설치 / 구조 복구', 'installAll')
+    .addItem('🔒 개인정보 · 보안 안내와 동의 (처음 한 번)', 'openConsentDialog')
     .addItem('② AI 연결 · 모델 설정', 'openApiDialog')
     .addItem('   모델 연결 테스트', 'testAllModels')
     .addItem('③ 학생 명단 불러오기 (엑셀·붙여넣기)', 'openRosterDialog')

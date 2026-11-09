@@ -132,6 +132,9 @@ function fillTokens(tpl, map) {
  *   o.styleSamples 예전에 쓴 세특 몇 편(쓰는 방식만 참고) · common.STYLE_CARD 내 문체 카드
  * @return {string}
  */
+/** 한 장면을 잇는 순서 — 학생부 사례 분석에서 흔한 좋은 문장의 뼈대. 메모에 없는 칸은 건너뛴다 */
+var SENTENCE_FRAME = '- 한 장면은 교과 개념 → 활동 과정 → 관찰 근거(자료 · 산출물 · 발언) → 피드백 뒤 고친 점 → 변화 순서로 잇고, 메모에 없는 칸은 건너뛴다.';
+
 var AMOUNTS = ['메모만큼', '보통', '넉넉히'];
 
 /** 활동의 [분량 맞추기] — 비었거나 모르는 값이면 '보통' */
@@ -211,7 +214,7 @@ function buildPrompt(o) {
   P.push(ctx.join('\n'));
 
   // ③ 서술 규칙 (+ 피할 표현 — AI 글에 흔한 번역투·상투어)
-  if (com.WRITING_RULES) P.push('# 서술 규칙\n' + com.WRITING_RULES);
+  if (com.WRITING_RULES) P.push('# 서술 규칙\n' + com.WRITING_RULES + '\n' + SENTENCE_FRAME);
   if (com.AVOID_RULES && String(com.AVOID_RULES).trim()) P.push('# 피할 표현\n' + String(com.AVOID_RULES).trim());
 
   // ④ 기재 금지사항 (+ 이 기록 항목에만 해당하는 기재 주의)

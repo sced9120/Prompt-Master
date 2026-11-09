@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root { --line:#dde3dd; --muted:#6b7280; --accent:#35583f; --warn:#8f2f20; --ok:#2c6340; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; padding:14px 18px; color:#16202a; font:13.5px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
+  .note { font-size:12.5px; color:var(--muted); line-height:1.55; }
+  .item { display:flex; gap:10px; align-items:flex-start; border:1px solid var(--line); border-radius:8px; padding:9px 11px; margin-top:8px; cursor:pointer; }
+  .item input { margin-top:4px; width:16px; height:16px; flex:none; }
+  .item b { display:block; font-size:13.5px; }
+  .item span { font-size:12.5px; color:#3b4652; }
+  .item.on { border-color:#9fb8a5; background:#f6faf6; }
+  button { font:inherit; font-size:13px; font-weight:600; cursor:pointer; padding:8px 14px; border:1px solid #c9d1c9; border-radius:6px; background:#fff; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px; }
+  .msg { font-size:12.5px; } .msg.ok { color:var(--ok); } .msg.err { color:var(--warn); }
+  .done { background:#e3ece4; color:#2c6340; border-radius:8px; padding:9px 12px; font-size:13px; margin-top:6px; }
+  .warn { background:#f8eae6; color:#6b2417; border-radius:8px; padding:8px 11px; font-size:12.5px; margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="note">학생 자료를 다루는 도구입니다. 데이터가 어디에 있고 어디로 가는지 읽고 항목마다 체크해 주세요.
+  동의는 <b>선생님 구글 계정</b>에 남아서, 이 파일을 쓰는 선생님마다 한 번씩 합니다. 동의하기 전에는 AI로 아무것도 보내지 않습니다.</div>
+<div id="state"></div>
+<div id="items"></div>
+<div class="actions">
+  <button class="primary" id="bAgree" disabled>동의하고 쓰기</button>
+  <button id="bBack" hidden>시작하기 창으로</button>
+  <button id="bWithdraw" hidden>동의 철회</button>
+  <span class="msg" id="msg"></span>
+  <button id="bClose" style="margin-left:auto">닫기</button>
+</div>
+<div class="note" style="margin-top:10px">더 자세한 내용은 사본 안 [📖 사용법] 시트의 개인정보 부분과 GitHub의 docs/PRIVACY.md 에 있습니다.</div>
+
+<script>
+var BACK = <?!= back ? 'true' : 'false' ?>;
+var $ = function (id) { return document.getElementById(id); };
+var ST = null;
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+function say(t, cls) { $('msg').className = 'msg ' + (cls || ''); $('msg').textContent = t || ''; }
+function boxes() { return Array.prototype.slice.call(document.querySelectorAll('#items input')); }
+
+function draw(s) {
+  ST = s;
+  var at = s.at ? new Date(s.at).toLocaleString('ko-KR') : '';
+  $('state').innerHTML = s.ok
+    ? '<div class="done">✓ ' + esc(at) + '에 동의했습니다 (안내 ' + esc(s.version) + '판).</div>'
+    : (s.old ? '<div class="warn">안내 글이 바뀌었습니다(' + esc(s.version) + '판). 다시 읽고 동의해 주세요.</div>' : '') +
+      (!s.masked ? '<div class="warn">⚙️ 설정의 [학생 이름 마스킹]이 꺼져 있습니다. TRUE 로 바꾼 뒤 쓰세요.</div>' : '');
+  $('items').innerHTML = s.items.map(function (it, i) {
+    return '<label class="item' + (s.ok ? ' on' : '') + '"><input type="checkbox" data-i="' + i + '"' + (s.ok ? ' checked disabled' : '') + '>' +
+           '<div><b>' + (i + 1) + '. ' + esc(it[0]) + '</b><span>' + esc(it[1]) + '</span></div></label>';
+  }).join('');
+  boxes().forEach(function (b) {
+    b.onchange = function () { b.closest('.item').classList.toggle('on', b.checked); $('bAgree').disabled = !boxes().every(function (x) { return x.checked; }); };
+  });
+  $('bAgree').hidden = s.ok; $('bAgree').disabled = true;
+  $('bWithdraw').hidden = !s.ok;
+  $('bBack').hidden = !(BACK && s.ok);
+}
+
+$('bAgree').onclick = function () {
+  var b = this; b.disabled = true; say('저장하는 중…');
+  google.script.run
+    .withSuccessHandler(function (s) { draw(s); say('✓ 동의했습니다. 이제 AI로 생성할 수 있습니다.', 'ok'); })
+    .withFailureHandler(function (e) { b.disabled = false; say(e.message, 'err'); })
+    .consentAgree({ checked: boxes().map(function (x) { return x.checked; }) });
+};
+var armed = false;
+$('bWithdraw').onclick = function () {
+  if (!armed) { armed = true; this.textContent = '한 번 더 누르면 철회'; return; }
+  google.script.run.withSuccessHandler(function (s) { armed = false; $('bWithdraw').textContent = '동의 철회'; draw(s); say('철회했습니다. 다시 동의할 때까지 AI로 보내지 않습니다.', 'ok'); })
+    .withFailureHandler(function (e) { say(e.message, 'err'); }).consentWithdraw();
+};
+$('bBack').onclick = function () { google.script.run.openOnboard(); };
+$('bClose').onclick = function () { google.script.host.close(); };
+google.script.run.withSuccessHandler(draw).withFailureHandler(function (e) { say(e.message, 'err'); }).consentState();
+</script>
+</body>
+</html>

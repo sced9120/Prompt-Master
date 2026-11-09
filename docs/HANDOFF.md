@@ -8,6 +8,8 @@
 
 - 📤 나이스 업로드 파일 만들기: 나이스에서 내려받은 엑셀 양식(여러 개)에 [최종본]을 채운 같은 파일을 돌려준다. `13_NeisForm.gs`(순수 — 양식 읽기 · 학생 맞추기 · 특기사항 칸만 바꿔 끼우기 · 대안 열) · `79_NeisUpload.gs` · `UI_Neis.html` · `test/neis.test.js`.
 - 사용자가 준 실제 양식 두 개(과목 세특 27명 · 동아리 18명)로 읽기 · 채우기를 확인함(이름은 출력하지 않음). 특기사항 칸 말고는 XML 이 한 글자도 안 바뀜. **나이스가 Apps Script 로 다시 묶은 파일을 받아 주는지는 사용자가 올려 봐야 안다.** 막히면 창의 [📋 특기사항 열 복사]로 원래 양식에 붙여 넣는다.
+- 🔒 `22_Consent.gs` · `UI_Consent.html`: 동의(UserProperties 'CONSENT' = {v: CONSENT_VERSION, at}) 전에는 `callAI_` 가 `requireConsent_()` 로 멈추고 `runGeneration_` 은 동의 창을 연다(설문지 자동 생성은 줄에 표시). 안내 글을 바꾸면 `CONSENT_VERSION` 을 올릴 것. 시험 모의 환경(`test/sheets-mock.js`)은 동의한 선생님으로 시작하고 `test/consent.test.js` 가 지우고 확인한다.
+- 문장 뼈대: `10_Engine.gs` `SENTENCE_FRAME` 을 [서술 규칙] 끝에 붙임(시트 글이 아니라 엔진). 과세특 예시 없는 프롬프트 상한 5,700바이트.
 - ⚖️ `13_Equity.gs`(순수) · 메뉴 ⑧ `menuEquityCheck`(`74_Check.gs`): 학생 간 같은 문장(열 글자 조각 40%) · 분량 격차 · 빈 칸. 표현 점검 규칙 6줄은 `AI_TELL_RULES` 에 더함(라벨 `표현 점검 · …`, 출처는 'AI 투(기본)' 그대로). 프롬프트는 늘리지 않음 — 지키는지는 시트가 본다.
 - 옛 번호 v3.8.8 로 로컬 · 시험 사본에 먼저 만들었던 것을 새 번호 v3.0.0(e8fbca5 · 010ba7c) 위로 옮겼다.
 

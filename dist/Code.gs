@@ -3,14 +3,14 @@
  *
  * 이 파일 하나에 모든 스크립트가 들어 있습니다.
  * Apps Script 편집기에서 Code.gs 의 내용을 전부 지우고 이 파일을 통째로 붙여넣으세요.
- * HTML 파일 17개는 각각 같은 이름으로 따로 만들어야 합니다:
- *   UI_ApiKey, UI_Bytes, UI_Check, UI_Export, UI_Form, UI_Manual, UI_Neis, UI_Observe, UI_OcrGuide, UI_Onboard, UI_Quick, UI_Roster, UI_Studio, UI_Style, UI_Subject, UI_Update, UI_Wizard
+ * HTML 파일 18개는 각각 같은 이름으로 따로 만들어야 합니다:
+ *   UI_ApiKey, UI_Bytes, UI_Check, UI_Consent, UI_Export, UI_Form, UI_Manual, UI_Neis, UI_Observe, UI_OcrGuide, UI_Onboard, UI_Quick, UI_Roster, UI_Studio, UI_Style, UI_Subject, UI_Update, UI_Wizard
  *
  * 원본은 모듈별로 나뉘어 있습니다: github.com/sced9120/Prompt-Master
  * 고칠 때는 apps-script/ 의 해당 파일을 고치고 node tools/build.js 를 다시 돌리세요.
  * 이 파일을 직접 고치면 다음 빌드 때 덮어써집니다.
  *
- * 빌드: 2026-11-09  ·  원본 39개 파일
+ * 빌드: 2026-11-09  ·  원본 40개 파일
  *****************************************************************************/
 
 /* ==========================================================================
@@ -675,6 +675,9 @@ function fillTokens(tpl, map) {
  *   o.styleSamples 예전에 쓴 세특 몇 편(쓰는 방식만 참고) · common.STYLE_CARD 내 문체 카드
  * @return {string}
  */
+/** 한 장면을 잇는 순서 — 학생부 사례 분석에서 흔한 좋은 문장의 뼈대. 메모에 없는 칸은 건너뛴다 */
+var SENTENCE_FRAME = '- 한 장면은 교과 개념 → 활동 과정 → 관찰 근거(자료 · 산출물 · 발언) → 피드백 뒤 고친 점 → 변화 순서로 잇고, 메모에 없는 칸은 건너뛴다.';
+
 var AMOUNTS = ['메모만큼', '보통', '넉넉히'];
 
 /** 활동의 [분량 맞추기] — 비었거나 모르는 값이면 '보통' */
@@ -754,7 +757,7 @@ function buildPrompt(o) {
   P.push(ctx.join('\n'));
 
   // ③ 서술 규칙 (+ 피할 표현 — AI 글에 흔한 번역투·상투어)
-  if (com.WRITING_RULES) P.push('# 서술 규칙\n' + com.WRITING_RULES);
+  if (com.WRITING_RULES) P.push('# 서술 규칙\n' + com.WRITING_RULES + '\n' + SENTENCE_FRAME);
   if (com.AVOID_RULES && String(com.AVOID_RULES).trim()) P.push('# 피할 표현\n' + String(com.AVOID_RULES).trim());
 
   // ④ 기재 금지사항 (+ 이 기록 항목에만 해당하는 기재 주의)
@@ -3591,6 +3594,91 @@ function maskName_() { return cfgBool_('학생 이름 마스킹', true); }
 
 
 /* ==========================================================================
+   22_Consent.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — 🔒 개인정보 · 보안 안내와 동의 (처음 한 번)
+ *
+ * 학생 자료를 AI 로 보내기 전에, 쓰는 선생님이 데이터가 어디에 있고 어디로 가는지 읽고 항목마다 확인하게 한다.
+ *   · 동의는 실행하는 사람의 구글 계정(UserProperties)에 남는다 — 사본을 공유받은 선생님도 각자 한 번 한다.
+ *   · 안내 글이 바뀌면 CONSENT_VERSION 을 올린다. 예전 판에 동의한 선생님은 다시 확인한다.
+ *   · 동의 전에는 AI 호출(callAI_)과 생성 · 키 없이(복사 · 붙여넣기)를 막고 이 창을 연다. 시트 정리 · 명단 · 검사는 그대로 쓴다.
+ * 무엇을 막고 무엇을 허용하는지는 docs/PRIVACY.md 와 같아야 한다.
+ */
+
+var CONSENT_VERSION = '2026.11';
+var CONSENT_PROP = 'CONSENT';
+
+/** 항목마다 체크해야 동의할 수 있다 — [제목, 풀어쓴 설명] */
+var CONSENT_ITEMS = [
+  ['학생 자료는 이 스프레드시트에 저장됩니다',
+   '명단 · 관찰 메모 · 결과는 선생님 구글 드라이브의 이 파일에만 있습니다. 만든이(개발자)의 서버로는 아무것도 보내지 않습니다. 시트를 공유하면 공유받은 사람도 학생 자료를 볼 수 있으니, 공유는 학교 지침대로 합니다.'],
+  ['AI로는 학생 자료 본문만 갑니다',
+   '생성할 때 반 · 번호 · 이름은 빼고(⚙️ 설정의 학생 이름 마스킹 = TRUE, 끄지 마세요) 관찰 메모 · 보고서 본문만 고른 AI 회사로 보냅니다. 본문 안에 직접 쓴 이름 · 학번은 가려지지 않습니다.'],
+  ['본문에 민감한 정보를 쓰지 않습니다',
+   '주민등록번호 · 연락처 · 주소, 가정 형편 · 가족 관계, 건강 · 진단, 상담 · 징계 · 학교폭력 이력은 메모 칸에도 쓰지 않습니다. 세특에 들어갈 수 없는 내용은 입력하지도 않는 것이 원칙입니다.'],
+  ['AI 회사의 데이터 정책을 확인했습니다',
+   'API 키를 쓰면 그 회사(Google · OpenAI · Anthropic)의 API 약관을 따릅니다. 무료 등급은 입력을 서비스 개선에 쓸 수 있다고 적힌 경우가 있으니, 학교 계정 Gemini(Education)나 학습에 쓰지 않는 유료 등급을 권합니다. 키는 선생님 구글 계정에만 저장되고 사본으로 넘어가지 않습니다.'],
+  ['AI 결과는 초안이고, 최종 판단은 제가 합니다',
+   '2026 학교생활기록부 기재요령은 AI가 만든 글을 그대로 입력하지 말라고 합니다. 결과는 읽고 사실을 확인해 [최종본]에 고쳐 쓴 뒤 나이스에 입력합니다.'],
+  ['학교 · 교육청의 정보보안 지침을 따릅니다',
+   '학교 개인정보 처리방침과 정보보안 지침에서 외부 AI · 클라우드 사용이 허용되는지 확인했고, 그 범위에서 씁니다.']
+];
+
+function consentRecord_() {
+  try { return JSON.parse(PropertiesService.getUserProperties().getProperty(CONSENT_PROP) || 'null'); } catch (e) { return null; }
+}
+
+/** 지금 판에 동의했는지 */
+function consentOk_() {
+  var r = consentRecord_();
+  return !!(r && r.v === CONSENT_VERSION);
+}
+
+/** 시작하기 창 · 동의 창에서 쓰는 상태 */
+function consentState() {
+  var r = consentRecord_();
+  return { ok: consentOk_(), version: CONSENT_VERSION, at: r && r.at || '', old: !!(r && r.v !== CONSENT_VERSION),
+           items: CONSENT_ITEMS, masked: maskName_() };
+}
+
+/**
+ * 동의 — 모든 항목을 체크해야 한다
+ * @param {{checked:boolean[]}} p
+ */
+function consentAgree(p) {
+  var c = (p && p.checked) || [];
+  if (c.length !== CONSENT_ITEMS.length || c.some(function (x) { return x !== true; })) {
+    throw new Error('항목을 모두 읽고 체크해 주세요.');
+  }
+  var at = new Date().toISOString();
+  PropertiesService.getUserProperties().setProperty(CONSENT_PROP, JSON.stringify({ v: CONSENT_VERSION, at: at }));
+  return consentState();
+}
+
+/** 동의 철회 — 다시 동의할 때까지 AI 를 부르지 않는다 */
+function consentWithdraw() {
+  PropertiesService.getUserProperties().deleteProperty(CONSENT_PROP);
+  return consentState();
+}
+
+var CONSENT_NEED_MSG = '학생 자료를 AI로 보내기 전에 [🔒 개인정보 · 보안 안내]를 읽고 동의해 주세요. 메뉴 [①②③ 준비] › [🔒 개인정보 · 보안 안내와 동의] 또는 시작하기 창 맨 위에서 엽니다.';
+
+/** AI 를 부르기 전 — 동의가 없으면 멈춘다 */
+function requireConsent_() {
+  if (!consentOk_()) throw new Error(CONSENT_NEED_MSG);
+}
+
+/** @param {boolean=} back  동의한 뒤 시작하기 창으로 돌아갈지 */
+function openConsentDialog(back) {
+  var t = HtmlService.createTemplateFromFile('UI_Consent');
+  t.back = back === true;
+  ui_().showModalDialog(t.evaluate().setWidth(700).setHeight(640), '🔒 개인정보 · 보안 안내와 동의');
+}
+
+
+/* ==========================================================================
    30_Setup.gs
    ========================================================================== */
 
@@ -3614,6 +3702,7 @@ function onOpen() {
   m.addSeparator();
   m.addSubMenu(ui.createMenu('①②③ 준비 — 설치 · AI 연결 · 학생 명단')
     .addItem('① 처음 설치 / 구조 복구', 'installAll')
+    .addItem('🔒 개인정보 · 보안 안내와 동의 (처음 한 번)', 'openConsentDialog')
     .addItem('② AI 연결 · 모델 설정', 'openApiDialog')
     .addItem('   모델 연결 테스트', 'testAllModels')
     .addItem('③ 학생 명단 불러오기 (엑셀·붙여넣기)', 'openRosterDialog')
@@ -4128,6 +4217,7 @@ function onboardStatus() {
   try { st.imported = !!PropertiesService.getDocumentProperties().getProperty('IMPORTED_FROM'); } catch (e) {}
   try { st.manual = manualOn_(); } catch (e) {}
   try { st.demo = demoState_(); } catch (e) {}
+  try { st.consentOk = consentOk_(); } catch (e) { st.consentOk = true; }
   try { st.gem = gemOn_(); } catch (e) {}
   try {
     st.installed = !!(sh_(APP.SH.CONFIG) && sh_(APP.SH.RECORD) && sh_(APP.SH.ACTIVITY) && sh_(APP.SH.ROSTER));
@@ -5266,6 +5356,7 @@ function buildHelp() {
   P('Q. 예시 시트에 [바이트]·[검증] 칸이 없어요 → 부가 기능 > 예시 시트 구조 복구 (예시 내용은 보존됩니다).');
   P('Q. 시트를 실수로 지웠어요 → 메뉴 ① 처음 설치 / 구조 복구 (기존 데이터는 보존됩니다).');
   P('Q. 메뉴가 화면 아래로 잘려요 → 지금 판은 하위 메뉴로 묶여 있습니다. 예전 사본이면 메뉴 [🔄 새 버전 확인]에서 새 사본을 받아 주세요.');
+  P('Q. 생성을 누르면 동의 창이 떠요 → 학생 자료를 AI로 보내기 전에 한 번, 데이터가 어디에 있고 무엇이 가는지 여섯 가지를 확인합니다. 모두 체크하고 [동의하고 쓰기]. 동의는 선생님 계정에 남아 다음부터는 묻지 않습니다(안내 글이 바뀌면 다시). 메뉴 [①②③ 준비] › [🔒 개인정보 · 보안 안내와 동의]에서 다시 보거나 철회합니다.');
   P('Q. 학생들 글이 서로 비슷하지 않은지 보고 싶어요 → 최종취합 시트(또는 활동 시트)를 열고 메뉴 ⑧ [⚖️ 학생 간 같은 문장 · 분량 격차 점검]. 문장이 40% 이상 겹치는 쌍, 분량이 중앙값의 절반 미만 · 1.6배 초과인 학생, 빈 [최종본]을 알려 줍니다. 시트는 바꾸지 않습니다.');
   P('Q. 나이스에 한 명씩 붙여 넣기 번거로워요 → 나이스 입력 화면에서 엑셀 양식을 내려받아 메뉴 [📤 나이스 업로드 파일 만들기]에서 고르세요(반 · 과목별 파일 여러 개를 한꺼번에). 학년 · 반 · 번호 · 성명이 모두 맞는 학생의 [최종본]만 채운 같은 파일을 돌려줍니다. 그 파일을 나이스에 올리고 화면에서 확인한 뒤 저장합니다. [AI 결과]와 [검증]에 [수정]이 남은 글은 넣지 않습니다. 나이스가 그 파일을 받지 않으면 [📋 특기사항 열 복사]로 원래 양식의 특기사항 첫 칸에 붙여 넣어 올리세요.');
   P('Q. 결과가 너무 짧거나 길어요 → [🗂 활동목록] 맨 뒤 [분량 맞추기]를 바꾸세요. 메모만큼(메모가 짧으면 짧게) · 보통(비우면 이것, 한도의 3분의 2 안팎은 씀 — 1500바이트면 1000) · 넉넉히(한도의 90% 안팎). 어느 쪽이든 메모에 없는 활동이나 수치는 만들지 않으니, 내용을 늘리려면 관찰 메모를 더 적는 것이 가장 좋습니다.');
@@ -7358,6 +7449,7 @@ function callAI_(system, user, model, provider, opts) {
   var p = provider || providerOf_(m);
   if (p === 'subscription') throw new Error(SUBSCRIPTION_MODEL + ' 은(는) 셀 수식으로 동작합니다. 메뉴 ⑥ 대신 체크박스를 사용하세요.');
   if (p === 'manual') throw new Error(MANUAL_MODEL + ' 은(는) 스크립트가 부르지 않습니다. 메뉴 ⑥ 을 누르면 복사·붙여넣기 창이 열립니다.');
+  requireConsent_();   // 🔒 학생 자료를 보내기 전에 — 22_Consent.gs
   if (!p) {
     throw new Error('"' + m + '" 이(가) 어느 회사 모델인지 알 수 없습니다. [⚙️ 설정] 아래 모델 목록의 [회사] 칸을 골라 주세요.');
   }
@@ -7771,6 +7863,11 @@ function markPending_(sheet, rows, why) {
  */
 function runGeneration_(act, sheet, rows, opt) {
   opt = opt || {};
+  if (!consentOk_()) {
+    if (opt.quiet) { markPending_(sheet, rows, '🔒 개인정보 · 보안 안내에 동의한 뒤 만들 수 있습니다.'); return { consent: false }; }
+    openConsentDialog();
+    return { consent: false };
+  }
   var startedAt = opt.startedAt || Date.now();
   var lock = LockService.getDocumentLock();
   if (!lock.tryLock(opt.lockWaitMs || 5000)) {
