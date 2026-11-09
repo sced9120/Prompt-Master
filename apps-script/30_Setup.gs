@@ -51,6 +51,7 @@ function onOpen() {
     .addItem('🔍 맞춤법 · 금지어 검사', 'openCheckSidebar')
     .addItem('   근거 확인 — AI 결과가 학생 자료에 있는 내용인지 (선택한 행)', 'groundCheckSelection')
     .addItem('   결과 전체 재검증', 'revalidateAll')
+    .addItem('⚖️ 학생 간 같은 문장 · 분량 격차 점검 (연 시트의 [최종본])', 'menuEquityCheck')
     .addItem('⑧ 프롬프트 미리보기', 'previewPrompt')
     .addItem('   AI 앱용 지침 내보내기 (Gemini Gem · Claude 스킬)', 'openExportDialog')
     .addSeparator()

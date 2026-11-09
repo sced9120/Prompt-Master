@@ -10,7 +10,7 @@
  * 고칠 때는 apps-script/ 의 해당 파일을 고치고 node tools/build.js 를 다시 돌리세요.
  * 이 파일을 직접 고치면 다음 빌드 때 덮어써집니다.
  *
- * 빌드: 2026-11-02  ·  원본 38개 파일
+ * 빌드: 2026-11-09  ·  원본 39개 파일
  *****************************************************************************/
 
 /* ==========================================================================
@@ -1211,6 +1211,109 @@ if (typeof module !== 'undefined' && module.exports) {
 
 
 /* ==========================================================================
+   13_Equity.gs
+   ========================================================================== */
+
+/**
+ * 세특 작성 도우미 v3 — ⚖️ 학생 간 같은 문장 · 분량 격차 점검 (순수 함수 — Node 시험 가능)
+ *
+ * 2026 기재요령 · 훈령은 서술형 항목의 내용이 학생 간에 같거나(전체 동일), 학생 사이가 뒤바뀌거나, 통째로 빠진 것을
+ * 입력 주체의 과실로 보아 정정 사유로 삼는다. 한 반 학생을 한꺼번에 AI 로 쓰면 비슷한 문장이 여러 학생에 퍼지거나
+ * 어떤 학생만 훨씬 짧아지기 쉬워, [최종본]을 모아 보고 다음 셋을 알린다(고치는 것은 선생님).
+ *   · 같은 문장: 두 학생의 [최종본]이 열 글자씩 끊은 조각의 40% 이상을 공유
+ *   · 분량 격차: 중앙값의 절반 미만이거나 1.6배 초과 (학생 4명 이상일 때)
+ *   · 빈 [최종본]: 입력이 빠진 학생
+ * 학생 자료는 어디로도 보내지 않고 이 시트 안에서만 비교한다.
+ */
+
+var EQUITY_GRAM = 10;
+var EQUITY_SIMILAR = 0.4;
+
+/** 공백 · 문장부호를 지운 글 */
+function equityNorm_(s) { return String(s === null || s === undefined ? '' : s).replace(/[\s.,·\-–—'"“”‘’()\[\]!?]/g, ''); }
+
+/** 열 글자씩 끊은 조각 집합 {조각: true} */
+function equityGrams_(text) {
+  var t = equityNorm_(text), out = {}, n = 0;
+  for (var i = 0; i + EQUITY_GRAM <= t.length; i++) { out[t.substr(i, EQUITY_GRAM)] = true; n++; }
+  return { set: out, size: Object.keys(out).length };
+}
+
+/** 두 글이 얼마나 겹치는지 0~1 (짧은 쪽 조각 가운데 다른 쪽에도 있는 비율) */
+function equitySimilarity(a, b) {
+  var A = equityGrams_(a), B = equityGrams_(b);
+  if (!A.size || !B.size) return 0;
+  var small = A.size <= B.size ? A : B, big = A.size <= B.size ? B : A, same = 0;
+  Object.keys(small.set).forEach(function (g) { if (big.set[g]) same++; });
+  return same / small.size;
+}
+
+function equityMedian_(nums) {
+  var v = nums.slice().sort(function (x, y) { return x - y; }), m = Math.floor(v.length / 2);
+  return v.length ? (v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2) : 0;
+}
+
+/**
+ * @param {Array<{label:string, text:string}>} items  학생마다 [최종본]
+ * @return {{n:number, filled:number, median:number, similar:Array<{a:string,b:string,ratio:number}>,
+ *           gaps:Array<{label:string, bytes:number, kind:string}>, empty:string[]}}
+ */
+function checkEquity(items) {
+  items = (items || []).map(function (x) { return { label: x.label, text: String(x.text || '').trim() }; });
+  var filled = items.filter(function (x) { return x.text; });
+  var out = { n: items.length, filled: filled.length, median: 0, similar: [], gaps: [], empty: [] };
+  out.empty = items.filter(function (x) { return !x.text; }).map(function (x) { return x.label; });
+  var grams = filled.map(function (x) { return equityGrams_(x.text); });
+  for (var i = 0; i < filled.length; i++) {
+    for (var j = i + 1; j < filled.length; j++) {
+      var A = grams[i], B = grams[j];
+      if (!A.size || !B.size) continue;
+      var small = A.size <= B.size ? A : B, big = A.size <= B.size ? B : A, same = 0, k, keys = Object.keys(small.set);
+      for (k = 0; k < keys.length; k++) if (big.set[keys[k]]) same++;
+      var r = same / small.size;
+      if (r >= EQUITY_SIMILAR) out.similar.push({ a: filled[i].label, b: filled[j].label, ratio: Math.round(r * 100) / 100 });
+    }
+  }
+  out.similar.sort(function (x, y) { return y.ratio - x.ratio; });
+  var bytes = filled.map(function (x) { return byteLen(x.text); });
+  out.median = equityMedian_(bytes);
+  if (filled.length >= 4 && out.median) {
+    filled.forEach(function (x, i) {
+      if (bytes[i] < out.median * 0.5) out.gaps.push({ label: x.label, bytes: bytes[i], kind: '짧음' });
+      else if (bytes[i] > out.median * 1.6) out.gaps.push({ label: x.label, bytes: bytes[i], kind: '긺' });
+    });
+  }
+  return out;
+}
+
+/** 점검 결과를 알림 글로 */
+function equityReportText(r, sheetName) {
+  var L = ['[' + sheetName + '] 학생 ' + r.n + '명 가운데 [최종본]이 있는 학생 ' + r.filled + '명'];
+  var ok = !r.similar.length && !r.gaps.length && !r.empty.length;
+  if (ok) L.push('', '✓ 같은 문장 · 분량 격차 · 빈 칸이 없습니다.');
+  if (r.similar.length) {
+    L.push('', '같은 문장이 많은 학생 ' + r.similar.length + '쌍 (겹침 %)');
+    r.similar.slice(0, 10).forEach(function (p) { L.push('  · ' + p.a + ' ↔ ' + p.b + ' — ' + Math.round(p.ratio * 100) + '%'); });
+    if (r.similar.length > 10) L.push('  … 외 ' + (r.similar.length - 10) + '쌍');
+  }
+  if (r.gaps.length) {
+    L.push('', '분량 차이가 큰 학생 (중앙값 ' + r.median + '바이트)');
+    r.gaps.slice(0, 10).forEach(function (g) { L.push('  · ' + g.label + ' — ' + g.bytes + '바이트 (' + g.kind + ')'); });
+    if (r.gaps.length > 10) L.push('  … 외 ' + (r.gaps.length - 10) + '명');
+  }
+  if (r.empty.length) {
+    L.push('', '[최종본]이 빈 학생 ' + r.empty.length + '명: ' + r.empty.slice(0, 8).join(', ') + (r.empty.length > 8 ? ' 외 ' + (r.empty.length - 8) + '명' : ''));
+  }
+  if (!ok) L.push('', '같은 문장은 학생마다 그 학생이 한 일로 고쳐 쓰고, 분량 차이는 관찰 메모를 더 적어 맞추세요. 판단은 선생님이 합니다.');
+  return L.join('\n');
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { equitySimilarity: equitySimilarity, checkEquity: checkEquity, equityReportText: equityReportText };
+}
+
+
+/* ==========================================================================
    13_NeisForm.gs
    ========================================================================== */
 
@@ -2208,6 +2311,12 @@ var AI_TELL_RULES = [
   { level: 'check', label: 'AI 투 · 상투어', re: '다양한 [가-힣]+(을|를) 통해', fix: '무엇을 했는지 이름을 대기', why: '"다양한 활동을 통해"처럼 막연한 표현' },
   { level: 'check', label: 'AI 투 · 되풀이', re: '모습을 보(?:임|이|여|였)(?=[\\s\\S]*모습을 보(?:임|이|여|였))', fix: '한 번만 쓰고 나머지는 장면으로', why: '"~하는 모습을 보임"이 두 번 이상' },
   { level: 'check', label: 'AI 투 · 되풀이', re: '돋보(?:임|이|였)(?=[\\s\\S]*돋보(?:임|이|였))', fix: '한 번만 쓰고 나머지는 장면으로', why: '"돋보임"이 두 번 이상' },
+  { level: 'check', label: '표현 점검 · 추상 평어', re: '성실(함|하게|한|히)|열심히|착실(함|하게|한|히)', fix: '무엇을 꾸준히 반복했는지 장면으로(매 차시 한 일)', why: '추상적 태도 평가 — 관찰한 과정이 보이지 않음' },
+  { level: 'check', label: '표현 점검 · 추상 평어', re: '적극(적으로|적인|적임|성)', fix: '어떤 질문이나 역할을 먼저 맡았는지', why: '성격 평가처럼 읽힘 — 한 행동으로' },
+  { level: 'check', label: '표현 점검 · 추상 평어', re: '(우수|훌륭)(함|한|하)|뛰어(남|난|나)(?!지)', fix: '관찰한 근거(자료 · 결과물)로', why: '근거 없는 평가어' },
+  { level: 'check', label: '표현 점검 · 최상급', re: '최고(의|로)|가장 (뛰어|훌륭|우수|돋보)|타의 추종|압도적|완벽(한|하게|함)', fix: '입증할 수 있는 사실로', why: '입증할 수 없는 최상급 표현' },
+  { level: 'check', label: '표현 점검 · 비교', re: '(다른|여타) (학생|친구)들?(보다|에 비해|과 달리)|또래(보다|에 비해)|(전교|학급|반|학년) ?\\d+등', fix: '그 학생이 한 일만으로', why: '다른 학생과의 비교 · 석차 표현은 쓰지 않음' },
+  { level: 'check', label: '표현 점검 · 낙인', re: '(이해력|집중력|기초|실력)(이|가) (떨어|부족|미흡|낮)|산만|게으|불성실', fix: '처음의 어려움 → 노력 → 변화 순서로, 개선 방향과 함께', why: '부정적 낙인 표현 — 성장 서사 안에서' },
   { level: 'check', label: 'AI 투 · 쉼표', re: '[가-힣](?:며|면서|지만|고), (?=[\\s\\S]*[가-힣](?:며|면서|지만|고), [\\s\\S]*[가-힣](?:며|면서|지만|고), )', fix: '연결어미 뒤 쉼표 빼기', why: '연결어미(-며 · -고 · -지만) 바로 뒤 쉼표가 세 번 이상 — AI 글의 강한 신호 (im-not-ai C-11)' }
 ];
 
@@ -3538,6 +3647,7 @@ function onOpen() {
     .addItem('🔍 맞춤법 · 금지어 검사', 'openCheckSidebar')
     .addItem('   근거 확인 — AI 결과가 학생 자료에 있는 내용인지 (선택한 행)', 'groundCheckSelection')
     .addItem('   결과 전체 재검증', 'revalidateAll')
+    .addItem('⚖️ 학생 간 같은 문장 · 분량 격차 점검 (연 시트의 [최종본])', 'menuEquityCheck')
     .addItem('⑧ 프롬프트 미리보기', 'previewPrompt')
     .addItem('   AI 앱용 지침 내보내기 (Gemini Gem · Claude 스킬)', 'openExportDialog')
     .addSeparator()
@@ -5156,6 +5266,7 @@ function buildHelp() {
   P('Q. 예시 시트에 [바이트]·[검증] 칸이 없어요 → 부가 기능 > 예시 시트 구조 복구 (예시 내용은 보존됩니다).');
   P('Q. 시트를 실수로 지웠어요 → 메뉴 ① 처음 설치 / 구조 복구 (기존 데이터는 보존됩니다).');
   P('Q. 메뉴가 화면 아래로 잘려요 → 지금 판은 하위 메뉴로 묶여 있습니다. 예전 사본이면 메뉴 [🔄 새 버전 확인]에서 새 사본을 받아 주세요.');
+  P('Q. 학생들 글이 서로 비슷하지 않은지 보고 싶어요 → 최종취합 시트(또는 활동 시트)를 열고 메뉴 ⑧ [⚖️ 학생 간 같은 문장 · 분량 격차 점검]. 문장이 40% 이상 겹치는 쌍, 분량이 중앙값의 절반 미만 · 1.6배 초과인 학생, 빈 [최종본]을 알려 줍니다. 시트는 바꾸지 않습니다.');
   P('Q. 나이스에 한 명씩 붙여 넣기 번거로워요 → 나이스 입력 화면에서 엑셀 양식을 내려받아 메뉴 [📤 나이스 업로드 파일 만들기]에서 고르세요(반 · 과목별 파일 여러 개를 한꺼번에). 학년 · 반 · 번호 · 성명이 모두 맞는 학생의 [최종본]만 채운 같은 파일을 돌려줍니다. 그 파일을 나이스에 올리고 화면에서 확인한 뒤 저장합니다. [AI 결과]와 [검증]에 [수정]이 남은 글은 넣지 않습니다. 나이스가 그 파일을 받지 않으면 [📋 특기사항 열 복사]로 원래 양식의 특기사항 첫 칸에 붙여 넣어 올리세요.');
   P('Q. 결과가 너무 짧거나 길어요 → [🗂 활동목록] 맨 뒤 [분량 맞추기]를 바꾸세요. 메모만큼(메모가 짧으면 짧게) · 보통(비우면 이것, 한도의 3분의 2 안팎은 씀 — 1500바이트면 1000) · 넉넉히(한도의 90% 안팎). 어느 쪽이든 메모에 없는 활동이나 수치는 만들지 않으니, 내용을 늘리려면 관찰 메모를 더 적는 것이 가장 좋습니다.');
   P('Q. 처음이라 어떻게 생겼는지 먼저 보고 싶어요 → 시작하기 창 위쪽이나 [도움말 · 부가 기능] > [🧪 체험 예시로 채워 보기]. 가상 학생 3명과 활동 하나가 들어가고, 다 보면 [체험 예시 지우기]로 체험이 만든 것만 지웁니다.');
@@ -8322,6 +8433,33 @@ function writeBackCell(p) {
   try { recheckOnEdit_({ range: c }); } catch (e) {}   // 스크립트가 쓴 값은 onEdit 이 안 돌아서 직접 다시 검사
   SpreadsheetApp.flush();
   return '✓ ' + p.sheet + ' ' + p.a1 + ' 에 넣었습니다.';
+}
+
+/* ------------------------------------------------ ⚖️ 학생 간 같은 문장 · 분량 격차 */
+/** 점검할 시트: 지금 연 시트에 [최종본]이 있으면 그것, 아니면 최종취합 시트(하나일 때) */
+function equitySheetName_() {
+  var cur = ss_().getActiveSheet();
+  if (cur && colOf_(cur, APP.HEAD_ROW, '최종본')) return cur.getName();
+  var list = compileSheets_();
+  return list.length === 1 ? list[0].getName() : '';
+}
+
+/** @return {{sheet:string, report:Object, text:string}} */
+function equityCheck(sheetName) {
+  var name = sheetName || equitySheetName_();
+  if (!name) throw new Error('점검할 시트를 연 뒤 실행하세요. ([최종본] 칸이 있는 최종취합 시트나 활동 시트)');
+  var rows = neisSourceRows_(name).map(function (r) {
+    return { label: (r.cls ? r.cls + '반 ' : '') + r.no + '번' + (maskName_() ? '' : ' ' + r.name), text: r.text };
+  });
+  var report = checkEquity(rows);
+  return { sheet: name, report: report, text: equityReportText(report, name) };
+}
+
+function menuEquityCheck() {
+  try {
+    var r = equityCheck();
+    ui_().alert('⚖️ 학생 간 같은 문장 · 분량 격차 점검', r.text, ui_().ButtonSet.OK);
+  } catch (e) { ui_().alert(APP.MENU, e.message, ui_().ButtonSet.OK); }
 }
 
 

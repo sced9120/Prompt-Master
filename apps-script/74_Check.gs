@@ -118,3 +118,30 @@ function writeBackCell(p) {
   SpreadsheetApp.flush();
   return '✓ ' + p.sheet + ' ' + p.a1 + ' 에 넣었습니다.';
 }
+
+/* ------------------------------------------------ ⚖️ 학생 간 같은 문장 · 분량 격차 */
+/** 점검할 시트: 지금 연 시트에 [최종본]이 있으면 그것, 아니면 최종취합 시트(하나일 때) */
+function equitySheetName_() {
+  var cur = ss_().getActiveSheet();
+  if (cur && colOf_(cur, APP.HEAD_ROW, '최종본')) return cur.getName();
+  var list = compileSheets_();
+  return list.length === 1 ? list[0].getName() : '';
+}
+
+/** @return {{sheet:string, report:Object, text:string}} */
+function equityCheck(sheetName) {
+  var name = sheetName || equitySheetName_();
+  if (!name) throw new Error('점검할 시트를 연 뒤 실행하세요. ([최종본] 칸이 있는 최종취합 시트나 활동 시트)');
+  var rows = neisSourceRows_(name).map(function (r) {
+    return { label: (r.cls ? r.cls + '반 ' : '') + r.no + '번' + (maskName_() ? '' : ' ' + r.name), text: r.text };
+  });
+  var report = checkEquity(rows);
+  return { sheet: name, report: report, text: equityReportText(report, name) };
+}
+
+function menuEquityCheck() {
+  try {
+    var r = equityCheck();
+    ui_().alert('⚖️ 학생 간 같은 문장 · 분량 격차 점검', r.text, ui_().ButtonSet.OK);
+  } catch (e) { ui_().alert(APP.MENU, e.message, ui_().ButtonSet.OK); }
+}
