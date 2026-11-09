@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root { --line:#dde3dd; --muted:#6b7280; --accent:#35583f; --accent-soft:#e3ece4;
+          --warn:#8f2f20; --warn-soft:#f8eae6; --ok:#2c6340; --bg:#f6f8f6; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; padding:12px 12px 16px; color:#16202a; background:#fff;
+         font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; }
+  h1 { font-size:15px; margin:0; color:#1b3a2a; }
+  .ver { font-size:11px; color:var(--muted); font-weight:400; margin-left:4px; }
+  .step { border:1px solid var(--line); border-radius:10px; padding:9px 10px 10px; margin-top:10px; }
+  .step.now { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .step h2 { font-size:13px; margin:0 0 2px; display:flex; align-items:center; gap:7px; }
+  .num { display:inline-flex; width:20px; height:20px; border-radius:50%; background:var(--accent-soft); color:var(--accent);
+         font-size:11.5px; font-weight:700; align-items:center; justify-content:center; flex:none; }
+  .step.done .num { background:var(--accent); color:#fff; }
+  .sub { font-size:11.5px; color:var(--muted); margin:0 0 6px 27px; }
+  .sub.bad { color:var(--warn); font-weight:600; }
+  button { font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; padding:8px 10px; border:1px solid #c9d1c9;
+           border-radius:8px; background:#fff; color:#16202a; width:100%; text-align:left; margin-top:5px; }
+  button:hover { background:var(--bg); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.primary:hover { background:#2b4733; }
+  button:disabled { opacity:.5; cursor:default; }
+  .row2 { display:flex; gap:5px; } .row2 button { flex:1; }
+  .act { display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:8px; padding:7px 9px;
+         margin-top:5px; cursor:pointer; background:#fff; }
+  .act:hover { background:var(--bg); }
+  .act.cur { border-color:var(--accent); background:var(--accent-soft); }
+  .act .nm { flex:1; min-width:0; font-weight:600; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .act .meta { font-size:11px; color:var(--muted); white-space:nowrap; }
+  .bar { height:4px; border-radius:2px; background:var(--line); margin-top:3px; overflow:hidden; }
+  .bar i { display:block; height:100%; background:var(--accent); }
+  .empty { font-size:12px; color:var(--muted); padding:4px 0 0 27px; }
+  .msg { font-size:12px; margin-top:8px; min-height:16px; }
+  .msg.err { color:var(--warn); } .msg.ok { color:var(--ok); }
+  .foot { margin-top:12px; border-top:1px solid var(--line); padding-top:8px; font-size:12px; }
+  .tog { display:flex; gap:8px; align-items:flex-start; margin-top:6px; cursor:pointer; }
+  .tog input { margin-top:2px; }
+  .hint { font-size:11px; color:var(--muted); }
+  .more summary { cursor:pointer; font-weight:600; font-size:12px; margin-top:8px; }
+</style>
+</head>
+<body>
+
+<h1>🧭 작업판 <span class="ver" id="ver"></span></h1>
+<div class="hint">위에서 아래로 차례대로 누르면 됩니다. 시트 탭은 보지 않아도 됩니다.</div>
+
+<div class="step" id="s1">
+  <h2><span class="num">1</span>준비</h2>
+  <div class="sub" id="s1sub"></div>
+  <button class="primary" data-run="onboard" id="bOnboard" hidden>🚀 처음 설치 · 시작하기</button>
+  <button data-run="consent" id="bConsent" hidden>🔒 개인정보 · 보안 안내와 동의</button>
+  <div class="row2">
+    <button data-run="api">🔑 AI 연결</button>
+    <button data-run="roster">👤 학생 명단</button>
+  </div>
+</div>
+
+<div class="step" id="s2">
+  <h2><span class="num">2</span>활동 고르기</h2>
+  <div class="sub">누르면 그 활동 시트가 열립니다. 노란 칸에 학생 자료를 적으세요.</div>
+  <div id="acts"></div>
+  <div class="row2">
+    <button data-run="wizard">➕ 새 활동</button>
+    <button data-run="quick">✍️ 바로 쓰기</button>
+  </div>
+</div>
+
+<div class="step" id="s3">
+  <h2><span class="num">3</span>AI로 쓰기</h2>
+  <div class="sub">활동 시트에서 [생성] 칸을 체크한 학생만 씁니다.</div>
+  <button class="primary" data-run="generate" data-need-act="1">✨ 체크한 학생 쓰기</button>
+  <button data-run="manual" data-need-act="1">📋 키 없이 — 복사 · 붙여넣기</button>
+</div>
+
+<div class="step" id="s4">
+  <h2><span class="num">4</span>점검</h2>
+  <div class="sub">[최종본]에 다듬어 넣은 뒤 확인합니다.</div>
+  <div class="row2">
+    <button data-run="check">🔍 맞춤법 · 금지어</button>
+    <button data-run="equity" data-need-act="1">⚖️ 학생 간 비교</button>
+  </div>
+</div>
+
+<div class="step" id="s5">
+  <h2><span class="num">5</span>마무리</h2>
+  <div class="sub" id="s5sub">활동별 [최종본]을 기록 항목 하나로 모으고 나이스 양식에 채웁니다.</div>
+  <button data-run="compile">📦 최종취합 만들기 · 갱신</button>
+  <button class="primary" data-run="neis">📤 나이스 업로드 파일 만들기</button>
+  <div id="comps"></div>
+</div>
+
+<div class="msg" id="msg"></div>
+
+<div class="foot">
+  <label class="tog"><input type="checkbox" id="simple">
+    <span><b>간단히 보기</b> — 설정 · 규칙 · 예시 시트를 숨깁니다<br><span class="hint" id="simpleHint"></span></span></label>
+  <label class="tog"><input type="checkbox" id="auto">
+    <span><b>파일을 열면 작업판 저절로 열기</b><br><span class="hint">내 계정에서만 · 처음 켤 때 권한 승인이 한 번 더 나올 수 있어요</span></span></label>
+  <details class="more">
+    <summary>더 보기</summary>
+    <button data-run="form">📝 구글 설문지 연결</button>
+    <button data-run="studio">🧪 세특 프롬프트 공방</button>
+    <button data-run="style">✒️ 내 문체 카드</button>
+    <button data-run="settings">⚙️ 설정 시트 열기</button>
+    <button data-run="help">📖 사용법</button>
+    <button data-run="update">🔄 새 버전 확인</button>
+    <div class="hint" style="margin-top:6px">나머지 기능은 상단 메뉴 [세특 도우미]에 그대로 있습니다. 🔍 검사를 누르면 이 자리에 검사 창이 열리니, 다시 오려면 메뉴의 [🧭 작업판]을 누르세요.</div>
+  </details>
+</div>
+
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  var state = null, busy = false;
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function say(t, cls) { $('msg').textContent = t || ''; $('msg').className = 'msg' + (cls ? ' ' + cls : ''); }
+  function setBusy(on) {
+    busy = on;
+    Array.prototype.forEach.call(document.querySelectorAll('button,input'), function (b) { b.disabled = on; });
+    if (!on && state) draw(state);
+  }
+  function fail(e) { setBusy(false); say((e && e.message) || String(e), 'err'); }
+
+  function draw(st) {
+    state = st;
+    $('ver').textContent = st.version;
+    // 1 준비
+    var need = [];
+    if (!st.installed) need.push('설치 전');
+    if (!st.consent) need.push('동의 전');
+    if (!st.ai) need.push('AI 키 없음 → 복사 · 붙여넣기로 씁니다');
+    if (!st.students) need.push('명단 없음');
+    $('bOnboard').hidden = st.installed;
+    $('bConsent').hidden = st.consent;
+    $('s1sub').textContent = (st.ai ? 'AI: ' + st.ai : 'AI: 키 없이') + ' · 학생 ' + st.students + '명' + (st.consent ? '' : ' · 🔒 동의 전');
+    $('s1sub').className = 'sub' + (!st.installed || !st.consent ? ' bad' : '');
+    $('s1').className = 'step' + (st.installed && st.consent && st.students ? ' done' : ' now');
+    // 2 활동
+    var cur = null;
+    var box = $('acts');
+    if (!st.activities.length) {
+      box.innerHTML = '<div class="empty">아직 활동이 없습니다. [➕ 새 활동]이나 [✍️ 바로 쓰기]로 만드세요.</div>';
+    } else {
+      box.innerHTML = st.activities.map(function (a, i) {
+        var pct = a.students ? Math.round(a.done / a.students * 100) : 0;
+        if (a.sheet === st.active) cur = a;
+        return '<div class="act' + (a.sheet === st.active ? ' cur' : '') + '" data-sheet="' + esc(a.sheet) + '" title="' + esc(a.sheet) + '">' +
+          '<div style="flex:1;min-width:0"><div class="nm">' + esc(a.name) + '</div>' +
+          '<div class="bar"><i style="width:' + pct + '%"></i></div></div>' +
+          '<div class="meta">' + (a.missing ? '시트 없음' : (a.rec ? esc(a.rec) + ' · ' : '') + a.done + '/' + a.students + '명') + '</div></div>';
+      }).join('');
+    }
+    $('s2').className = 'step' + (st.activities.length ? ' done' : (st.installed ? ' now' : ''));
+    // 3 · 4 — 활동 시트를 열고 있어야 하는 버튼
+    Array.prototype.forEach.call(document.querySelectorAll('[data-need-act]'), function (b) {
+      b.title = cur ? '[' + cur.name + '] 시트에서 실행' : '먼저 위 2단계에서 활동을 눌러 시트를 여세요';
+    });
+    $('s3').className = 'step' + (cur ? ' now' : '');
+    // 5 마무리
+    $('comps').innerHTML = st.compiles.map(function (n) {
+      return '<div class="act' + (n === st.active ? ' cur' : '') + '" data-sheet="' + esc(n) + '"><div class="nm">' + esc(n) + '</div><div class="meta">열기</div></div>';
+    }).join('');
+    // 아래 설정
+    $('simple').checked = st.simple;
+    $('simpleHint').textContent = st.simple ? '숨긴 시트 ' + st.hiddenNow + '개 · 메뉴로 열면 다시 보입니다'
+                                            : '지금은 모든 시트가 보입니다(뒤에서 쓰는 시트 ' + st.backstage + '개)';
+    $('auto').checked = st.autoOpen;
+  }
+
+  function refresh() {
+    google.script.run.withSuccessHandler(function (st) { draw(st); }).withFailureHandler(fail).homeState();
+  }
+
+  document.addEventListener('click', function (e) {
+    if (busy) return;
+    var b = e.target.closest('[data-run]');
+    if (b) {
+      if (b.hasAttribute('data-need-act') && state && !state.activities.some(function (a) { return a.sheet === state.active; })) {
+        say('먼저 2단계에서 활동을 눌러 그 시트를 연 뒤 다시 누르세요.', 'err'); return;
+      }
+      say('실행 중… (생성은 몇 분 걸릴 수 있어요)'); setBusy(true);
+      google.script.run.withSuccessHandler(function (st) { setBusy(false); say(''); draw(st); })
+        .withFailureHandler(fail).homeRun(b.getAttribute('data-run'));
+      return;
+    }
+    var a = e.target.closest('[data-sheet]');
+    if (a) {
+      say('시트를 여는 중…'); setBusy(true);
+      google.script.run.withSuccessHandler(function (st) { setBusy(false); say(''); draw(st); })
+        .withFailureHandler(fail).homeGoto(a.getAttribute('data-sheet'));
+    }
+  });
+  $('simple').addEventListener('change', function () {
+    var on = this.checked; setBusy(true);
+    google.script.run.withSuccessHandler(function (st) { setBusy(false); draw(st); }).withFailureHandler(fail).homeSetView(on);
+  });
+  $('auto').addEventListener('change', function () {
+    var on = this.checked; setBusy(true);
+    google.script.run.withSuccessHandler(function (st) { setBusy(false); say(on ? '다음부터 파일을 열면 작업판이 열립니다.' : '저절로 열기를 껐습니다.', 'ok'); draw(st); })
+      .withFailureHandler(fail).homeSetAutoOpen(on);
+  });
+  // 선생님이 시트 탭을 직접 바꿔도 지금 시트 표시가 따라오게(창이 보일 때만, 30초마다)
+  setInterval(function () { if (!busy && !document.hidden) refresh(); }, 30000);
+  refresh();
+</script>
+</body>
+</html>

@@ -186,7 +186,7 @@ function compileChecked(opt) {
   var recKey = recordKeyOfCompile_(s.getName());
   if (!recKey) {
     var list = compileSheets_();
-    if (list.length === 1) { s = list[0]; recKey = recordKeyOfCompile_(s.getName()); ss_().setActiveSheet(s); }
+    if (list.length === 1) { s = list[0]; recKey = recordKeyOfCompile_(s.getName()); goSheet_(s); }
     else { ui_().alert(APP.MENU, '압축할 최종취합 시트를 연 뒤 실행하세요.', ui_().ButtonSet.OK); return; }
   }
   var rec = findByKey(getRecordTypes_(), recKey);

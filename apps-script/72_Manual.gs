@@ -85,7 +85,7 @@ function manualApply(p) {
 function manualGoto(p) {
   var s = sh_(p.sheet);
   if (!s) return false;
-  ss_().setActiveSheet(s);
+  goSheet_(s);
   var c = colOf_(s, APP.HEAD_ROW, p.target) || 1;
   s.getRange(p.row, c).activate();
   return true;

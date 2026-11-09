@@ -7,6 +7,7 @@ function onOpen() {
   // 화면이 작은 노트북에서도 메뉴가 아래로 잘리지 않게, 자주 쓰는 것만 맨 위에 두고 나머지는 하위 메뉴로 묶는다.
   // 항목 이름의 ①~⑧ 번호는 안내문·오류 메시지가 가리키는 이름이라 그대로 둔다.
   var m = ui.createMenu(APP.MENU);
+  m.addItem('🧭 작업판 — 한 화면에서 (준비 → 쓰기 → 점검 → 나이스)', 'openHome');
   m.addItem('🚀 시작하기 (처음이면 여기)', 'openOnboard');
   m.addItem('✍️ 바로 쓰기 · 📄 보고서 시트 추가', 'openQuickSheetDialog');
   m.addItem('📝 구글 설문지 연결 (응답 → 시트, 파일 업로드 포함)', 'openFormDialog');
@@ -62,6 +63,9 @@ function onOpen() {
     .addItem('📏 기재요령 규칙 보기 · 고치기', 'openRulesSheet')
     .addItem('   기재요령 규칙 업데이트 확인', 'checkRulesUpdate'));
   m.addSubMenu(ui.createMenu('도움말 · 부가 기능')
+    .addItem('🧹 간단히 보기 (설정 · 규칙 · 예시 시트 숨기기)', 'viewSimple')
+    .addItem('   모든 시트 보기', 'viewAll')
+    .addSeparator()
     .addItem('🔄 새 버전 확인 · 이전 파일에서 가져오기', 'openUpdateDialog')
     .addSeparator()
     .addItem('📄 스캔 문서 → 엑셀 사용 설명서 (업무 대시보드)', 'openOcrGuide')
@@ -85,7 +89,7 @@ function onOpen() {
   try {
     if (needsOnboarding_()) {
       var st = sh_(APP.SH.START);
-      if (st) ss_().setActiveSheet(st);
+      if (st) goSheet_(st);
       ss_().toast('메뉴 [' + APP.MENU + '] > [🚀 시작하기] 를 눌러 시작하세요.', APP.MENU, 10);
     }
   } catch (e) {}
@@ -120,13 +124,13 @@ function showVersion() {
 /** 메뉴: [📖 사용법] 시트로 */
 function openHelpSheet() {
   var s = sh_(APP.SH.HELP) || (buildHelp(), sh_(APP.SH.HELP));
-  if (s) ss_().setActiveSheet(s);
+  if (s) goSheet_(s);
 }
 
 /** 메뉴: [🚀 시작하기] 시트를 버튼까지 새로 만든다 */
 function rebuildStart() {
   var s = buildStart();
-  ss_().setActiveSheet(s);
+  goSheet_(s);
   toast_('시작하기 시트를 새로 만들었습니다.');
 }
 
@@ -159,7 +163,8 @@ function installCore_() {
     ['✒️ 내 문체', buildStyleSheet], ['내 문체 카드 칸', ensureStyleCardRow_],
     ['🗂 활동목록', buildActivityList],
     ['👤 학생명단', buildRoster], ['✅ 검토', buildReview], ['📖 사용법', buildHelp],
-    ['시트 순서 정리', orderSheets_]
+    ['시트 순서 정리', orderSheets_],
+    ['간단히 보기', function () { applyView_(viewSimpleOn_()); }]
   ];
   var failed = [];
   try {

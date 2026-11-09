@@ -62,6 +62,11 @@ function makeSheet(ss, name) {
     __merges: merges, __vals: vals,
     get __frozen() { return { rows: frozenRows, cols: frozenCols }; },
     getName: () => name,
+    // 숨기기 — 실제처럼 보이는 시트가 하나도 없게는 못 숨긴다
+    hideSheet() { if (ss.getSheets().filter(x => !x.isSheetHidden()).length <= 1 && !sheet.__hidden) throw new Error("You can't remove all the visible sheets in a document."); sheet.__hidden = true; return proxy; },
+    showSheet() { sheet.__hidden = false; return proxy; },
+    isSheetHidden: () => !!sheet.__hidden,
+    __hidden: false,
     getParent: () => ss,
     getLastRow() { let m = 0; for (const k of vals.keys()) m = Math.max(m, +k.split(',')[0]); for (const k of forms.keys()) m = Math.max(m, +k.split(',')[0]); return m; },
     getLastColumn() { let m = 0; for (const k of vals.keys()) m = Math.max(m, +k.split(',')[1]); for (const k of forms.keys()) m = Math.max(m, +k.split(',')[1]); return m; },
@@ -262,8 +267,8 @@ function makeGlobals() {
       deleteTrigger(t) { const i = triggers.indexOf(t); if (i >= 0) triggers.splice(i, 1); },
       newTrigger: (fn) => {
         const st = {}, b = {};
-        ['forSpreadsheet', 'onEdit', 'onFormSubmit'].forEach(f => { b[f] = (...x) => { st[f] = x; return b; }; });
-        b.create = () => { const t = { fn, kind: st.onFormSubmit ? 'formSubmit' : 'edit', getHandlerFunction: () => fn }; triggers.push(t); return t; };
+        ['forSpreadsheet', 'onEdit', 'onFormSubmit', 'onOpen'].forEach(f => { b[f] = (...x) => { st[f] = x; return b; }; });
+        b.create = () => { const t = { fn, kind: st.onFormSubmit ? 'formSubmit' : st.onOpen ? 'open' : 'edit', getHandlerFunction: () => fn }; triggers.push(t); return t; };
         return b;
       },
       getOAuthToken: () => 'test-token',

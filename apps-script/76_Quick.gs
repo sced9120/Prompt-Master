@@ -61,7 +61,7 @@ function createQuickSheet(p) {
     mode: '바로쓰기', noExamples: true
   });
   var s = sh_(made.inSheet);
-  if (s) ss_().setActiveSheet(s);
+  if (s) goSheet_(s);
   try { if (compileSheets_().length) buildCompileCore_(); } catch (e) {}
   return { inSheet: made.inSheet, name: name };
 }

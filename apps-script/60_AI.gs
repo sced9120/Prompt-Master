@@ -260,7 +260,7 @@ function subProbeCreate() {
     .setFontWeight('bold').setBackground(APP.COLORS.input);
   var cell = s.getRange(r + 1, 1);
   cell.setFormula('=AI("한 단어로만 답하세요: 안녕")');
-  ss_().setActiveSheet(s);
+  goSheet_(s);
   cell.activate();
   return { a1: cell.getA1Notation() };
 }

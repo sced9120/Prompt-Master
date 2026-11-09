@@ -69,7 +69,7 @@ function studioCreateActivity(p) {
 function studioOpenSheet(name) {
   var s = sh_(String(name || ''));
   if (!s) throw new Error('시트를 찾을 수 없습니다: ' + name);
-  ss_().setActiveSheet(s);
+  goSheet_(s);
   return true;
 }
 

@@ -37,7 +37,7 @@ function createReportSheet(p) {
     mode: '보고서'
   });
   var s = sh_(made.inSheet);
-  if (s) ss_().setActiveSheet(s);
+  if (s) goSheet_(s);
   try { if (compileSheets_().length) buildCompileCore_(); } catch (e) {}
   return { inSheet: made.inSheet, exSheet: made.exSheet, name: name };
 }
@@ -385,4 +385,4 @@ function styleSaveCard(text) {
   throw new Error('공통규칙에 STYLE_CARD 줄을 만들지 못했습니다.');
 }
 
-function openStyleSheet() { var s = sh_(APP.SH.STYLE) || buildStyleSheet(); ss_().setActiveSheet(s); }
+function openStyleSheet() { var s = sh_(APP.SH.STYLE) || buildStyleSheet(); goSheet_(s); }

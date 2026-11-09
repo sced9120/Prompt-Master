@@ -47,7 +47,7 @@ function addExampleRows() {
   var n = Math.max(1, Math.min(10, Number(ans) || 3));
   var cols = parseColumns(act.columns);
   writeExampleRows_(s, cols, [], lastExampleRow_(s) + 1, n);
-  ss_().setActiveSheet(s);
+  goSheet_(s);
   toast_(n + '칸을 추가했습니다.', act.name);
 }
 
@@ -86,7 +86,7 @@ function validateExamples() {
   if (bad) {
     msg += '\n\n⚠ 예시에 남아 있는 위반 표현은 AI가 그대로 따라 씁니다. 먼저 고쳐 주세요.';
   }
-  ss_().setActiveSheet(s);
+  goSheet_(s);
   ui_().alert('예시 검증 — ' + act.name, msg, ui_().ButtonSet.OK);
 }
 
@@ -104,7 +104,7 @@ function repairExampleSheet() {
   s.setFrozenRows(0);
   exampleLayout_(s, act.name, cols);
   writeExampleRows_(s, cols, keep, APP.DATA_ROW, Math.max(EXAMPLE_ROWS_DEFAULT, keep.length));
-  ss_().setActiveSheet(s);
+  goSheet_(s);
   toast_('구조를 복구했습니다. 예시 ' + keep.length + '개 보존.', act.name);
 }
 
@@ -144,7 +144,7 @@ function generateMoreExamples() {
 
   var cols = parseColumns(act.columns);
   writeExampleRows_(s, cols, made, lastExampleRow_(s) + 1, made.length);
-  ss_().setActiveSheet(s);
+  goSheet_(s);
 
   // 만들어진 예시도 바로 검증해 둔다
   try { validateExamplesQuiet_(act); } catch (e) {}

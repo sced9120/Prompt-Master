@@ -172,7 +172,7 @@ function wizardPreview(def) {
 function wizardApply(p) {
   var r = updateActivity_(p.key, { name: p.name, columns: p.columns, desc: p.desc });
   var s = sh_(r.inSheet);
-  if (s) ss_().setActiveSheet(s);
+  if (s) goSheet_(s);
   return r;
 }
 
@@ -184,6 +184,6 @@ function wizardCreate(def) {
     chars: def.chars, columns: cols.join('|'), desc: def.desc, examples: def.examples || []
   });
   var s = sh_(r.inSheet);
-  if (s) ss_().setActiveSheet(s);
+  if (s) goSheet_(s);
   return r;
 }

@@ -110,7 +110,7 @@ function storedPack_() {
 /** 메뉴: [📏 기재요령] 시트 열기 */
 function openRulesSheet() {
   var s = sh_(APP.SH.RULES) || buildRulesSheet();
-  ss_().setActiveSheet(s);
+  goSheet_(s);
 }
 
 /* ------------------------------------------------------- 처음 설치 · 옛 사본 */

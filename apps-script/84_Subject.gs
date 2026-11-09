@@ -102,7 +102,7 @@ function subjectSave(sub, opts) {
     });
     inSheet = made.inSheet;
     msg += ' 활동 시트 [' + inSheet + ']도 만들었습니다.';
-    try { ss_().setActiveSheet(sh_(inSheet)); } catch (e) {}
+    try { goSheet_(sh_(inSheet)); } catch (e) {}
   }
   return { key: key, message: msg, inSheet: inSheet };
 }

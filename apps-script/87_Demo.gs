@@ -123,7 +123,7 @@ function demoFill() {
   PropertiesService.getDocumentProperties().setProperty(DEMO_PROP, JSON.stringify({
     key: DEMO_KEY, inSheet: made.inSheet, exSheet: made.exSheet, roster: rosterAdded ? 'added' : 'kept', at: new Date().toISOString()
   }));
-  ss_().setActiveSheet(s);
+  goSheet_(s);
   return { inSheet: made.inSheet, exSheet: made.exSheet, roster: rosterAdded ? 'added' : 'kept', students: DEMO_STUDENTS.length };
 }
 
@@ -161,7 +161,7 @@ function demoClear() {
   try { if (compileSheets_().length) buildCompileCore_(); } catch (e) {}
   dp.deleteProperty(DEMO_PROP);
   var start = sh_(APP.SH.START);
-  if (start) ss_().setActiveSheet(start);
+  if (start) goSheet_(start);
   return out;
 }
 
