@@ -47,7 +47,8 @@ def rgb(h):
 # (그림 키, 아이콘, 글, 바탕, 글자색, 테두리) — 시작하기 · 작업판만 초록 바탕에 흰 아이콘
 BTNS = [
     ('start',   'play',      '시작하기 (처음이면 여기)', GREEN, WHITE, None),
-    ('home',    'grid',      '작업판 열기 (한 화면에서)', GREEN, WHITE, None),
+    ('desk',    'document',  '작성실 열기 (큰 창)',       GREEN, WHITE, None),
+    ('home',    'grid',      '작업판 열기 (한 화면에서)', WHITE, INK,   LINE),
     ('quick',   'pen',       '바로 쓰기 · 보고서 시트',  WHITE, INK,   LINE),
     ('form',    'clipboard', '구글 설문지 연결',         WHITE, INK,   LINE),
     ('check',   'search',    '맞춤법 · 금지어 검사',     WHITE, INK,   LINE),

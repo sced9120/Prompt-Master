@@ -364,7 +364,8 @@ function onboardGoto(name) {
 /** [🚀 시작하기] 시트 위쪽 버튼 — 그림에 함수를 붙인다(휴대폰 앱에서는 동작하지 않아 메뉴 안내를 함께 둔다) */
 var START_BUTTONS = [
   { img: 'start', fn: 'openOnboard', alt: '시작하기 (처음이면 여기)', row: 0, col: 0 },
-  { img: 'home', fn: 'openHome', alt: '작업판 열기 (한 화면에서)', row: 0, col: 1 },
+  { img: 'desk', fn: 'openDesk', alt: '작성실 열기 (큰 창 · 담임 · 교과)', row: 0, col: 1 },
+  { img: 'home', fn: 'openHome', alt: '작업판 열기 (한 화면에서)', row: 5, col: 0 },
   { img: 'quick', fn: 'openQuickSheetDialog', alt: '바로 쓰기 · 보고서 시트 추가', row: 1, col: 0 },
   { img: 'form', fn: 'openFormDialog', alt: '구글 설문지 연결', row: 1, col: 1 },
   { img: 'check', fn: 'openCheckSidebar', alt: '맞춤법 · 금지어 검사', row: 2, col: 0 },
@@ -373,7 +374,7 @@ var START_BUTTONS = [
   { img: 'subject', fn: 'openSubjectDialog', alt: '새 교과 만들기', row: 3, col: 1 },
   { img: 'bytes', fn: 'openBytesDialog', alt: '활동별 바이트 한도', row: 4, col: 0 },
   { img: 'studio', fn: 'openStudio', alt: '세특 프롬프트 공방', row: 4, col: 1 },
-  { img: 'help', fn: 'openHelpSheet', alt: '사용법 시트', row: 5, col: 0 }
+  { img: 'help', fn: 'openHelpSheet', alt: '사용법 시트', row: 5, col: 1 }
 ];
 
 function buildStart() {
@@ -391,7 +392,8 @@ function buildStart() {
   L.push(['btn', '']);
   L.push(['btn', '']);
   L.push(['btn', '']);
-  P('🧭 설정이 끝나면 [작업판 열기]를 누르세요. 오른쪽에 준비 → 활동 → 쓰기 → 점검 → 나이스 순서의 버튼이 나와서 시트 탭을 찾아다니지 않아도 됩니다. 설정 · 규칙 · 예시 시트는 숨겨 두었습니다(메뉴 [도움말 · 부가 기능] > [모든 시트 보기]).');
+  P('🖥️ 설정이 끝나면 [작성실 열기]를 누르세요. 큰 창 하나에서 담임(자율 · 진로 · 행발)과 교과(세특 · 동아리)를 학생별로 씁니다.');
+  P('🧭 [작업판 열기]를 누르면 오른쪽에 준비 → 활동 → 쓰기 → 점검 → 나이스 순서의 버튼이 나와서 시트 탭을 찾아다니지 않아도 됩니다. 설정 · 규칙 · 예시 시트는 숨겨 두었습니다(메뉴 [도움말 · 부가 기능] > [모든 시트 보기]).');
   P('버튼이 안 눌리면 상단 메뉴 [' + APP.MENU + '] 에서 같은 이름을 누르세요. (휴대폰·태블릿 앱에서는 버튼이 동작하지 않습니다)');
   L.push(['!', '⚠️ 2026학년도 기재요령: ' + AI_NOTICE_2026]);
   P('');

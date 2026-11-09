@@ -163,7 +163,7 @@ function homeGoto(name) {
 
 /** 작업판 버튼 → 기존 메뉴 함수. 여기 없는 이름은 부르지 않는다. */
 var HOME_ACTIONS = {
-  onboard: 'openOnboard', consent: 'openConsentDialog', api: 'openApiDialog', roster: 'openRosterDialog',
+  desk: 'openDesk', onboard: 'openOnboard', consent: 'openConsentDialog', api: 'openApiDialog', roster: 'openRosterDialog',
   wizard: 'openWizard', quick: 'openQuickSheetDialog', form: 'openFormDialog', studio: 'openStudio',
   generate: 'generateChecked', manual: 'openManualForChecked', check: 'openCheckSidebar',
   equity: 'menuEquityCheck', compile: 'buildCompile', neis: 'openNeisDialog',

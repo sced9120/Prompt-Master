@@ -49,6 +49,7 @@
 
 <h1>🧭 작업판 <span class="ver" id="ver"></span></h1>
 <div class="hint">위에서 아래로 차례대로 누르면 됩니다. 시트 탭은 보지 않아도 됩니다.</div>
+<button class="primary" id="bDesk" style="margin-top:10px;padding:11px 12px;font-size:13.5px">🖥️ 작성실 열기 — 큰 창에서 학생별로 쓰기<br><span style="font-weight:400;font-size:11.5px;opacity:.9">담임(자율 · 진로 · 행발)과 교과(세특 · 동아리)를 한 창에서</span></button>
 
 <div class="step" id="s1">
   <h2><span class="num">1</span>준비</h2>
@@ -195,6 +196,13 @@
       google.script.run.withSuccessHandler(function (st) { setBusy(false); say(''); draw(st); })
         .withFailureHandler(fail).homeGoto(a.getAttribute('data-sheet'));
     }
+  });
+  $('bDesk').addEventListener('click', function () {
+    if (busy) return;
+    // 이 화면의 크기에 맞춰 연다(작성실 안 [↔ 화면에 맞게]와 같음)
+    var w = Math.max(900, (window.screen.availWidth || 1300) - 80), h = Math.max(540, (window.screen.availHeight || 800) - 190);
+    say('작성실을 여는 중…');
+    google.script.run.withSuccessHandler(function () { say(''); }).withFailureHandler(fail).deskOpenSized(w, h);
   });
   $('simple').addEventListener('change', function () {
     var on = this.checked; setBusy(true);

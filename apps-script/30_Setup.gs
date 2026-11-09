@@ -7,10 +7,10 @@ function onOpen() {
   // 화면이 작은 노트북에서도 메뉴가 아래로 잘리지 않게, 자주 쓰는 것만 맨 위에 두고 나머지는 하위 메뉴로 묶는다.
   // 항목 이름의 ①~⑧ 번호는 안내문·오류 메시지가 가리키는 이름이라 그대로 둔다.
   var m = ui.createMenu(APP.MENU);
+  m.addItem('🖥️ 작성실 — 큰 창에서 학생별로 쓰기 (담임 · 교과)', 'openDesk');
   m.addItem('🧭 작업판 — 한 화면에서 (준비 → 쓰기 → 점검 → 나이스)', 'openHome');
   m.addItem('🚀 시작하기 (처음이면 여기)', 'openOnboard');
   m.addItem('✍️ 바로 쓰기 · 📄 보고서 시트 추가', 'openQuickSheetDialog');
-  m.addItem('📝 구글 설문지 연결 (응답 → 시트, 파일 업로드 포함)', 'openFormDialog');
   m.addItem('🔍 맞춤법 · 금지어 검사', 'openCheckSidebar');
   m.addSeparator();
   m.addItem('⑥ 체크된 행 생성', 'generateChecked');
@@ -26,8 +26,9 @@ function onOpen() {
     .addItem('   학생 명단 동기화', 'syncRoster')
     .addSeparator()
     .addItem('📥 이전 파일에서 가져오기 (새 버전으로 옮길 때)', 'openImportDialog'));
-  m.addSubMenu(ui.createMenu('④⑤ 활동 · 예시 · 보고서')
+  m.addSubMenu(ui.createMenu('④⑤ 활동 · 예시 · 보고서 · 설문지')
     .addItem('④ 활동 만들기 · 입력 항목 바꾸기 ★', 'openWizard')
+    .addItem('📝 구글 설문지 연결 (응답 → 시트, 파일 업로드 포함)', 'openFormDialog')
     .addItem('📚 새 교과 만들기 (교과 역량 · 입력 항목 초안)', 'openSubjectDialog')
     .addItem('📏 활동별 바이트 한도 (한 칸을 여러 활동이 나눌 때)', 'openBytesDialog')
     .addItem('🧪 세특 프롬프트 공방 (설계하며 프롬프트 보기 · 복사)', 'openStudio')

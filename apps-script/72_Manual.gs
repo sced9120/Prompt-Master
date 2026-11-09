@@ -15,7 +15,8 @@
  *   kind: 'generate' | 'compile' | 'extract'(보고서 요점 — 줄바꿈을 살리고 검사하지 않음)
  *   chunk: 한 번에 묶을 학생 수(보고서 파일을 첨부해야 하면 1)
  */
-function openManualDialog_(p) {
+/** 키 없이 창이 쓰는 자료(요청문 묶음) — 🖥️ 작성실도 같은 것을 쓴다 */
+function manualPayload_(p) {
   var size = p.chunk || Math.min(10, Math.max(5, Number(cfg_('한 번에 묶을 학생 수', 5)) || 5));
   var tail = p.kind === 'extract' ? '' : styleTail_();
   var chunks = [];
@@ -35,6 +36,11 @@ function openManualDialog_(p) {
     system: p.system, gem: buildGemText(p.system), chunks: chunks, note: p.note || '', aiNotice: AI_NOTICE_2026,
     account: accountInfo_(), masked: maskName_()
   };
+  return data;
+}
+
+function openManualDialog_(p) {
+  var data = manualPayload_(p);
   var t = HtmlService.createTemplateFromFile('UI_Manual');
   t.data = JSON.stringify(data).replace(/</g, '\\u003c');
   ui_().showModalDialog(t.evaluate().setWidth(800).setHeight(690), '📋 키 없이 쓰기 — ' + p.title);

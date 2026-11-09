@@ -17,7 +17,7 @@ npm run kit       # build + dist → web/deploy-kit.html 재생성 (배포 키�
 ## 구조
 
 - `apps-script/NN_*.gs` — 모듈(번호순으로 번들). 00 Presets, 10 Engine(순수), 12 Models(순수), 14 RosterParse(순수), 15 Update(순수: 버전 비교·version.json·xlsx 읽기·표 합치기), 16 Rules(순수: 규칙판·맞춤법·고쳐쓰기·근거·키 없이·내보내기), 17 Design(순수: 예시로 칸 채우기), 97 OcrGem(순수: 학생 제출물 → 표 Gem 지침 `OCR_GEM_TEXT` — 학생 1명 = 1행, 반·번호·이름·양식 항목별 열), 18 Reports(순수: 보고서 요점·드라이브 링크·문체·설문지 머리글), 19 Subjects(순수: 새 교과 요청문·답 읽기·나누는 글),
-  20 Lib, 30 Setup(메뉴), 32 Onboard(시작하기 시트·버튼), 33 Home(🧭 작업판 사이드바 · 간단히 보기), 34 Update(🔄 새 버전 알림·📥 이전 파일에서 가져오기), 35 Help, 40 Roster, 45 Rules(📏 시트·원격 규칙판·SAETEUK_CHECK), 50 Activity, 52 Examples, 55 Wizard, 60 AI,
+  20 Lib, 30 Setup(메뉴), 32 Onboard(시작하기 시트·버튼), 33 Home(🧭 작업판 사이드바 · 간단히 보기), 38 Desk(🖥️ 작성실 큰 창), 34 Update(🔄 새 버전 알림·📥 이전 파일에서 가져오기), 35 Help, 40 Roster, 45 Rules(📏 시트·원격 규칙판·SAETEUK_CHECK), 50 Activity, 52 Examples, 55 Wizard, 60 AI,
   70 Generate(하네스 루프), 72 Manual(복사·붙여넣기), 74 Check(검사 사이드바), 76 Quick(바로 쓰기), 78 Export(Gem·스킬), 80 Compile, 82 Report(보고서 시트·드라이브 파일 읽기·폴더·예시 등록·내 문체), 84 Subject(📚 새 교과 창·저장), 86 Bytes(📏 활동별 바이트 한도 창), 88 Studio(🧪 공방을 시트 안에서·studioContext), 90 Forms(설문지 연결·제출 트리거), 95 Observe, 96 Guide(OCR 설명서), 98 Assets(버튼 PNG base64)
 - `apps-script/UI_*.html` — 다이얼로그 (Onboard, ApiKey, Roster, Wizard, Observe, Manual, Check(사이드바), Quick(바로 쓰기·보고서), Export, OcrGuide, Form, Style, Subject, Bytes, Studio — **UI_Studio 는 web/prompt-studio.html 에서 빌드가 만든다. 직접 고치지 말 것**)
 - `rules/latest.json` — 원격 규칙판. **빌드가 `16_Rules.gs` 의 RULES_2026 에서 만든다(직접 고치지 말 것)**. 해마다 고치는 법은 `rules/README.md`
@@ -62,6 +62,7 @@ npm run kit       # build + dist → web/deploy-kit.html 재생성 (배포 키�
   기본 문구는 `mergeKeyed` — 예전에서 고쳤고 새 파일은 기본값인 칸만. **기본 문구(PRESET_*)를 고치면 옛 문구를 `OLD_PRESET_TEXTS` 에 더할 것.** 활동은 같은 키·이름이면 건너뜀.
   시험이 호출 수를 세면 boot 에서 UPDATE_CHECKED_AT 을 지금으로(RULES_CHECKED_AT 처럼).
 - **작업판 · 간단히 보기**: `isBackstage_` 시트(설정 · 규칙 · 활동목록 · ▸예시 …)를 숨긴다(DocumentProperties VIEW_SIMPLE, 없으면 켬 — installCore_ 마지막 단계). **시트를 열 때는 늘 `goSheet_(s)`**(숨겼으면 보이게) — `ss_().setActiveSheet` 직접 호출은 orderSheets_ · 33_Home 만(시험이 강제). 작업판 버튼은 `HOME_ACTIONS` 에 있는 함수만, 상태(`homeState`)에 학생 이름 금지. 파일 열 때 저절로 열기 = 설치형 onOpen 트리거 `onOpenHome`.
+- **작성실**: 큰 창(showModalDialog, 크기는 UserProperties DESK_SIZE). 담임 = 기록종류 자율 · 진로 · 행발(`deskModeOf_`), 담임 학반 DocumentProperties HOMEROOM(활동 시트 A열 값). 창은 `deskLoad` 로 반 전체를 한 번에 받고, `deskSave` 는 입력 항목 · 최종본만 쓴다(줄은 `deskFindRow_` 로 반-번호 확인). 키 없이는 `manualPayload_` 를 창 안에서 쓰고 `manualApply` 로 넣는다.
 - 시작하기 버튼: `insertImage` + `assignScript` — 함수 이름 끝에 `_` 금지. 휴대폰 앱에선 동작 안 함(메뉴 안내 병기).
 
 ## 반드시 지킬 규칙
