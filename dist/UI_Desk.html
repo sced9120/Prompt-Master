@@ -31,6 +31,20 @@
   .seg button.on { background:var(--accent); color:#fff; }
   .clsbox { display:flex; align-items:center; gap:6px; font-size:12.5px; }
   .clsbox b { color:var(--accent); }
+  /* 길잡이 줄 (v3.2.0) */
+  .guide { display:flex; align-items:center; gap:4px; padding:5px 12px; border-bottom:1px solid var(--line); background:var(--bg); flex:none; flex-wrap:wrap; font-size:12.5px; }
+  .gstep { border:1px solid transparent; background:transparent; border-radius:14px; padding:2px 10px 2px 4px; font-weight:400; color:var(--muted); }
+  .gstep:hover { border-color:#c9d1c9; background:#fff; }
+  .gstep .gmark { display:inline-block; width:18px; height:18px; line-height:18px; border-radius:50%; background:#e6ebe6; color:var(--muted); text-align:center; font-size:11px; font-weight:700; margin-right:4px; }
+  .gstep .gsub { font-size:11.5px; }
+  .gstep.done { color:var(--ink); } .gstep.done .gmark { background:var(--accent-soft); color:var(--ok); }
+  .gstep.next { border-color:var(--accent); background:#fff; color:var(--accent); font-weight:700; } .gstep.next .gmark { background:var(--accent); color:#fff; }
+  .garrow { color:#b5beb5; }
+  .gsay { margin-left:10px; color:var(--accent); font-weight:700; }
+  .gdemo { margin-left:auto; border:0; background:transparent; color:var(--muted); font-weight:400; font-size:12px; text-decoration:underline; padding:0 4px; }
+  ol.first { text-align:left; display:inline-block; margin:10px auto 4px; padding-left:22px; line-height:1.9; max-width:620px; }
+  ol.first .okmark { color:var(--ok); font-weight:700; }
+  .firstnote { margin-top:10px; color:var(--muted); font-size:12.5px; }
   .spacer { flex:1; }
   .tabs { display:flex; gap:4px; padding:6px 12px 0; border-bottom:1px solid var(--line); flex:none; overflow-x:auto; overflow-y:hidden; }
   .tab { border:1px solid var(--line); border-bottom:0; border-radius:8px 8px 0 0; padding:6px 12px; background:var(--bg);
@@ -92,6 +106,41 @@
   .iss .why { color:var(--muted); font-size:11.5px; } .iss .fix { color:var(--ok); font-weight:600; }
   .rnote { font-size:11.5px; color:var(--muted); padding:8px 12px; border-top:1px solid var(--line); }
 
+  /* 표 보기 — 학생 = 줄, 입력 항목 · AI 결과 · 최종본 · 바이트 = 열 */
+  .cols.grid { grid-template-columns:minmax(0,1fr) 270px; }
+  .cols.grid .left { display:none; }
+  .mid.gridmode { padding:0; overflow:hidden; display:flex; flex-direction:column; }
+  .gbar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; padding:7px 10px; border-bottom:1px solid var(--line); flex:none; }
+  .gbar input[type=search] { width:150px; }
+  .ghint { color:var(--muted); font-size:11.5px; padding:4px 10px; border-bottom:1px solid var(--line); background:var(--bg); flex:none; }
+  .gwrap { flex:1; overflow:auto; min-height:0; }
+  table.grid { border-collapse:separate; border-spacing:0; font-size:12.5px; }
+  table.grid th, table.grid td { border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:0; vertical-align:top; background:#fff; }
+  table.grid th { position:sticky; top:0; z-index:2; background:#eef1ee; padding:5px 8px; text-align:left; font-size:12px; white-space:nowrap; }
+  table.grid th.c-in { background:#f6e9bd; } table.grid th.c-ai { background:#d5e6d9; } table.grid th.c-fin { background:#d3e2f4; }
+  table.grid .c-chk { width:30px; min-width:30px; text-align:center; position:sticky; left:0; }
+  table.grid .c-no { width:50px; min-width:50px; position:sticky; left:30px; color:var(--muted); }
+  table.grid .c-nm { width:84px; min-width:84px; position:sticky; left:80px; font-weight:600; }
+  table.grid td.c-chk, table.grid td.c-no, table.grid td.c-nm { z-index:1; padding:6px; background:#fafbfa; }
+  table.grid th.c-chk, table.grid th.c-no, table.grid th.c-nm { z-index:3; }
+  table.grid tr.on td.c-chk, table.grid tr.on td.c-no, table.grid tr.on td.c-nm { background:var(--accent-soft); }
+  table.grid td.c-in { width:200px; min-width:200px; } table.grid td.c-ai { width:270px; min-width:270px; }
+  table.grid td.c-fin { width:320px; min-width:320px; }
+  table.grid textarea { border:0; border-radius:0; resize:none; height:64px; font-size:12.5px; line-height:1.5; padding:5px 7px; display:block; }
+  table.grid td.c-in textarea { background:var(--input); } table.grid td.c-fin textarea { background:var(--final); }
+  table.grid textarea:focus { outline:2px solid var(--accent); outline-offset:-2px; }
+  table.grid tr.on textarea, table.grid tr.on .gai { height:150px; }
+  .gai { height:64px; overflow:auto; padding:5px 7px; background:var(--ai); white-space:pre-wrap; word-break:keep-all; line-height:1.5; }
+  .gai.none { color:var(--muted); }
+  table.grid td.c-by { padding:6px 8px; white-space:nowrap; text-align:right; color:var(--muted); min-width:92px; }
+  table.grid td.c-by.over { color:var(--warn); font-weight:700; }
+  table.grid td.c-gone { padding:6px 8px; color:var(--muted); }
+  .hbtn { border:0; background:transparent; padding:0 4px; margin-left:4px; color:var(--muted); font-weight:400; }
+  .crow { display:flex; gap:6px; align-items:center; margin-top:6px; }
+  .crow .cn { width:18px; color:var(--muted); text-align:right; }
+  .crow input { flex:1; font:inherit; padding:5px 8px; border:1px solid #c9d1c9; border-radius:7px; }
+  .crow .new { font-size:11px; color:var(--ok); font-weight:700; }
+
   /* 키 없이 · 반 고르기 덮개 */
   .cover { position:fixed; inset:0; background:rgba(20,30,24,.35); display:flex; align-items:center; justify-content:center; z-index:5; }
   .card { background:#fff; border-radius:12px; padding:16px 18px; width:min(760px,92vw); max-height:90vh; overflow:auto; box-shadow:0 10px 30px rgba(0,0,0,.2); }
@@ -104,6 +153,47 @@
            border-radius:8px; font-size:12.5px; z-index:9; max-width:80vw; }
   .busy { position:fixed; inset:0; background:rgba(255,255,255,.55); display:flex; align-items:center; justify-content:center; z-index:8;
           font-weight:700; color:var(--accent); }
+  /* 창 안 활동 · 설정 (v3.1.1) */
+  .tgrp { align-self:center; font-size:11.5px; font-weight:700; color:var(--muted); margin:0 2px 0 10px; white-space:nowrap; }
+  .tgrp:first-child { margin-left:0; }
+  .tadd, .tcfg { align-self:center; padding:3px 9px; font-size:12px; white-space:nowrap; margin-bottom:3px; }
+  .tadd { border-style:dashed; color:var(--accent); }
+  .tcfg { margin-left:auto; }
+  .card input[type=text], .card input[type=number], .card input[type=password] { font:inherit; padding:5px 8px; border:1px solid #c9d1c9; border-radius:7px; width:100%; }
+  .frow { display:flex; gap:10px; flex-wrap:wrap; }
+  .frow .fld { flex:1; min-width:150px; }
+  .fld { margin-top:9px; }
+  .fld > label { display:block; font-size:12px; font-weight:700; margin-bottom:3px; }
+  .card .hint { font-weight:400; color:var(--muted); font-size:11.5px; }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; align-items:center; }
+  .chips button { padding:3px 9px; font-size:12px; font-weight:400; }
+  .chip { background:var(--input); border:1px solid #e6d9a8; border-radius:12px; padding:2px 9px; font-size:12px; }
+  .sec { border-top:1px solid var(--line); margin-top:12px; padding-top:9px; }
+  .sec h4 { margin:0 0 4px; font-size:13px; }
+  .sec summary { cursor:pointer; font-size:12.5px; font-weight:600; }
+  .foot { display:flex; gap:6px; justify-content:flex-end; margin-top:10px; position:sticky; bottom:-16px; background:#fff; padding:8px 0 2px; }
+  .exbox { border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-top:6px; }
+  .exbox .fld { margin-top:5px; }
+  .krow { display:flex; gap:8px; align-items:center; margin-top:6px; }
+  .krow .kn { width:74px; font-weight:700; font-size:12.5px; } .krow .ks { width:64px; font-size:12px; }
+  .krow input { flex:1; }
+  .tog { display:flex; gap:8px; align-items:flex-start; padding:5px 0; cursor:pointer; }
+  .tog input { margin-top:3px; }
+  .tog small { display:block; color:var(--muted); font-size:11.5px; }
+  button.danger { color:var(--warn); border-color:#e5c3bd; }
+  /* 취합 · 나이스 (v3.1.2) */
+  table.sum td.c-ai { width:290px; min-width:290px; } table.sum td.c-fin { width:340px; min-width:340px; }
+  table.sum .gai, table.sum textarea { height:96px; }
+  table.sum tr.on .gai, table.sum tr.on textarea { height:200px; }
+  table.sum td.c-by { min-width:118px; line-height:1.7; }
+  .spart + .spart { margin-top:4px; }
+  .spart b { color:var(--accent); font-size:11.5px; margin-right:3px; }
+  .sst { display:inline-block; border-radius:10px; padding:0 8px; font-size:11.5px; font-weight:700; background:#eef1ee; color:var(--muted); }
+  .sst.over { background:#fbe6e2; color:var(--warn); } .sst.same { background:#e2efe5; color:var(--ok); }
+  .sst.ai { background:#e1ebf8; color:#2b5d9c; } .sst.edit { background:var(--input); color:#7a6212; }
+  .sbtn { display:block; margin:3px 0 0 auto; padding:1px 8px; font-size:11.5px; font-weight:400; }
+  .eqrow { display:flex; gap:10px; justify-content:space-between; padding:3px 0; border-bottom:1px dashed var(--line); font-size:12.5px; }
+  .eqrow span { color:var(--muted); text-align:right; }
 </style>
 </head>
 <body>
@@ -115,10 +205,17 @@
     <button id="mSubj" data-mode="subject">교과 모드</button>
   </div>
   <div class="clsbox" id="clsbox"></div>
+  <div class="seg" role="tablist" aria-label="보기">
+    <button id="vOne" title="학생 한 명을 크게 보고 씁니다">한 명씩</button>
+    <button id="vGrid" title="시트처럼 반 전체를 표로 봅니다 — 엑셀에서 복사해 붙여 넣기 · 열 고치기">표</button>
+    <button id="vSum" title="활동별 글을 기록 영역(과세특 · 동아리 · 자율 · 진로 · 행발)마다 하나로 모읍니다 — 한도 넘는 학생 압축 · 학생 간 점검 · 나이스 입력 파일">취합 · 나이스</button>
+  </div>
   <span class="spacer"></span>
   <span class="save" id="saveState"></span>
+  <button id="bSet" title="AI 연결(키 · 모델) · 쓰기 방식 · 학생 명단 — 시트로 가지 않고 이 창에서">⚙ 설정</button>
   <button class="ghost" id="bFit" title="이 창을 지금 화면 크기에 맞춰 다시 엽니다(저장한 뒤)">↔ 화면에 맞게</button>
 </header>
+<div class="guide" id="guide" hidden></div>
 <div class="tabs" id="tabs"></div>
 
 <div class="cols">
@@ -145,6 +242,7 @@
 var $ = function (id) { return document.getElementById(id); };
 var CTX = null, MODE = 'subject', CLS = '', ACT = '', STUDENTS = [], DATA = {}, CUR = '', DIRTY = false, SAVING = false;
 var vTimer = null;
+var VIEW = 'one', GD = {}, gTimer = null;   // 표 보기: GD = 고치고 아직 저장 안 한 학생 id
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 /* 나이스 바이트 — 한글 3, 그 밖 1, 줄바꿈 2 (10_Engine byteLen 과 같음) */
@@ -161,6 +259,8 @@ function setSave(t, cls) { $('saveState').textContent = t; $('saveState').classN
 function markDirty() { if (!DIRTY) { DIRTY = true; setSave('● 저장 안 됨', 'dirty'); } }
 /** 지금 학생 · 활동을 저장하고 next() — 바뀐 게 없으면 바로 next */
 function saveThen(next) {
+  if (VIEW === 'grid') { saveGrid(next); return; }
+  if (VIEW === 'sum') { saveSum(next); return; }
   if (!DIRTY || !CUR || !act()) { next && next(); return; }
   var r = rowOf(CUR); if (!r) { DIRTY = false; next && next(); return; }
   var inputs = [].map.call(document.querySelectorAll('.in textarea'), function (t) { return t.value; });
@@ -190,10 +290,8 @@ function drawHeader() {
       return '<option' + (c === CLS ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select>';
     $('selCls').onchange = function () { var v = this.value; saveThen(function () { CLS = v; store('cls', v); load(); }); };
   }
-  var list = acts();
-  $('tabs').innerHTML = list.map(function (a) {
-    return '<div class="tab' + (a.key === ACT ? ' on' : '') + '" data-k="' + esc(a.key) + '">' + esc(a.name) + '<span class="rec">' + esc(a.rec) + '</span></div>';
-  }).join('') || '<div class="tab on" style="color:var(--muted)">활동 없음</div>';
+  $('tabs').innerHTML = tabsHtml();
+  drawGuide(); refreshGuide();
 }
 
 function setMode(m) {
@@ -259,25 +357,42 @@ function drawList() {
 }
 
 /* ---------------------------------------------------------- 가운데 */
-function emptyMid(h) { $('mid').innerHTML = '<div class="empty-state">' + h + '</div>'; drawCheck(); }
+function emptyMid(h) { $('mid').className = 'mid'; $('mid').innerHTML = '<div class="empty-state">' + h + '</div>'; drawCheck(); }
 
 function drawMid() {
   if (!CTX) return;
   if (!CTX.activities.length || !acts().length) {
     if (MODE === 'homeroom') return emptyMid('<h3>담임 활동이 아직 없습니다</h3>자율 · 진로 · 행동특성 세 시트를 <b>바로 쓰기</b> 모양(학생마다 관찰 메모 한 칸)으로 한 번에 만들 수 있습니다.' +
       '<div class="row"><button class="primary" id="bMakeHr">자율 · 진로 · 행발 시트 만들기</button></div>');
-    return emptyMid('<h3>교과 활동이 아직 없습니다</h3>과목 세특 · 동아리 활동은 활동 만들기에서 입력 항목과 함께 만듭니다(이 창은 닫힙니다).' +
-      '<div class="row"><button class="primary" id="bWizard">④ 활동 만들기 열기</button><button id="bQuick">✍️ 바로 쓰기 시트 만들기</button></div>');
+    var g = GUIDE || {};
+    if (g.installed === false) return emptyMid('<h3>처음 오셨네요 — 시트부터 만들겠습니다</h3>이 파일에 필요한 시트(학생명단 · 활동목록 · 설정 …)를 한 번에 만듭니다. 한 번만 하면 됩니다.' +
+      '<div class="row"><button class="primary" data-guide="install">처음 설치</button></div>');
+    if (!CTX.activities.length) {
+      var noRoster = !g.students;
+      return emptyMid('<h3>이렇게 시작하세요</h3>' +
+        '<ol class="first"><li><b>학생 명단</b> — 엑셀에서 반 · 번호 · 이름을 복사해 붙여 넣습니다.' + (noRoster ? '' : ' <span class="okmark">✓ ' + g.students + '명</span>') + '</li>' +
+        '<li><b>활동</b> — 수행평가 · 탐구 · 동아리처럼 글을 쓸 거리를 하나 만듭니다. 관찰 메모 한 칸이면 충분합니다.</li>' +
+        '<li><b>쓰기</b> — 학생마다 본 것을 적고 [✨ AI로 쓰기]로 초안을 받아 다듬습니다. 키가 없어도 복사 · 붙여넣기로 됩니다.</li></ol>' +
+        '<div class="row"><button' + (noRoster ? ' class="primary"' : '') + ' id="bSetRoster">① 학생 명단 넣기</button>' +
+        '<button' + (noRoster ? '' : ' class="primary"') + ' id="bAddAct">② 활동 만들기</button>' +
+        (g.demo && g.demo.canFill ? '<button id="bDemo" title="가상 학생 3명과 활동 하나를 넣어 어떻게 생겼는지 먼저 봅니다. 나중에 한 번에 지울 수 있습니다.">🧪 체험 예시로 먼저 보기</button>' : '') + '</div>' +
+        '<div class="firstnote">담임 선생님은 위의 [담임 모드]에서 자율 · 진로 · 행발 시트를 한 번에 만들 수 있습니다.</div>');
+    }
+    return emptyMid('<h3>교과 활동이 아직 없습니다</h3>과목 세특 · 동아리 활동을 이 창에서 바로 만듭니다. 관찰 메모 한 칸으로 시작해도 되고, 입력 항목을 정해 둘 수도 있습니다.' +
+      '<div class="row"><button class="primary" id="bAddAct">＋ 활동 만들기</button><button id="bSetRoster">학생 명단 넣기</button></div>');
   }
   if (MODE === 'homeroom' && !CTX.homeroom) return emptyMid('<h3>담임 학반을 먼저 정하세요</h3><div class="row"><button class="primary" id="bHr2">담임 학반 정하기</button></div>');
-  if (!STUDENTS.length) return emptyMid('<h3>학생이 없습니다</h3>메뉴 ①②③ > [③ 학생 명단 불러오기] 뒤 [학생 명단 동기화]를 눌러 주세요.');
+  if (!STUDENTS.length) return emptyMid('<h3>학생이 없습니다</h3>엑셀에서 반 · 번호 · 이름을 복사해 이 창에서 바로 넣을 수 있습니다.<div class="row"><button class="primary" id="bSetRoster">학생 명단 넣기</button></div>');
+  if (VIEW === 'sum') return drawSum();
+  if (VIEW === 'grid' && act()) return drawGrid();
+  $('mid').className = 'mid';
   var a = act(), s = STUDENTS.filter(function (x) { return x.id === CUR; })[0];
   if (!a || !s) return emptyMid('왼쪽에서 학생을 고르세요.');
   var r = rowOf(s.id);
   var h = '<div class="who"><h2>' + esc(s.name || '(이름 없음)') + '</h2><span class="sub">' + esc(s.cls) + '반 ' + esc(s.no) + '번 · ' +
           esc(a.name) + ' (' + esc(a.rec) + ' · ' + a.limit + '바이트)</span></div>';
   if (!r) {
-    $('mid').innerHTML = h + '<div class="empty-state">이 학생 줄이 [' + esc(a.name) + '] 시트에 없습니다.<br>메뉴 ①②③ > [학생 명단 동기화]를 누른 뒤 다시 열어 주세요.</div>';
+    $('mid').innerHTML = h + '<div class="empty-state">이 학생 줄이 [' + esc(a.name) + '] 시트에 없습니다.<br>[⚙ 설정] > 학생 명단 > [시트에서 고친 명단 반영]를 누른 뒤 다시 열어 주세요.</div>';
     drawCheck(); return;
   }
   h += '<div class="in">' + a.columns.map(function (c, i) {
@@ -296,7 +411,7 @@ function drawMid() {
        '<button id="bSave">💾 저장</button>' +
        '<span class="spacer"></span>' +
        '<button id="bPrev" title="Alt+↑">◀ 이전</button><button id="bNext" title="Alt+↓">다음 ▶</button></div>';
-  if (!CTX.consent) h += '<div class="msg err" style="margin-top:4px">🔒 AI로 쓰기 전에 메뉴 ①②③ > [개인정보 · 보안 안내와 동의]를 한 번 해 주세요(검사 · 저장은 지금도 됩니다).</div>';
+  if (!CTX.consent) h += '<div class="msg err" style="margin-top:4px">🔒 AI로 쓰기 전에 위 길잡이의 [AI 연결](또는 [⚙ 설정])에서 개인정보 · 보안 안내에 한 번 동의해 주세요(검사 · 저장은 지금도 됩니다).</div>';
   else if (CTX.manualOnly) h += '<div class="msg" style="color:var(--muted);margin-top:4px">AI 키가 없어 [✨ AI로 쓰기]는 복사 · 붙여넣기로 진행합니다.</div>';
   h += '</div>';
   $('mid').innerHTML = h;
@@ -311,14 +426,16 @@ function drawMid() {
   $('bPrev').onclick = function () { step(-1); };
   $('bNext').onclick = function () { step(1); };
   $('bGen').onclick = function () { generate([s.id]); };
-  $('bGenAll').onclick = function () {
-    var ids = STUDENTS.map(function (x) { return x.id; }).filter(function (id) {
-      var rr = rowOf(id); return rr && !rr.final.trim() && !(rr.ai.trim() && rr.ai.indexOf('⚠') !== 0) && rr.inputs.some(function (v) { return String(v).trim(); });
-    });
-    if (!ids.length) { toast('자료가 있고 아직 안 쓴 학생이 없습니다.'); return; }
-    if (!confirm(ids.length + '명을 씁니다. 계속할까요?')) return;
-    generate(ids);
-  };
+  $('bGenAll').onclick = genAll;
+}
+/** 자료는 있고 AI 결과 · 최종본이 빈 학생을 한꺼번에 */
+function genAll() {
+  var ids = STUDENTS.map(function (x) { return x.id; }).filter(function (id) {
+    var rr = rowOf(id); return rr && !rr.final.trim() && !(rr.ai.trim() && rr.ai.indexOf('⚠') !== 0) && rr.inputs.some(function (v) { return String(v).trim(); });
+  });
+  if (!ids.length) { toast('자료가 있고 아직 안 쓴 학생이 없습니다.'); return; }
+  if (!confirm(ids.length + '명을 씁니다. 계속할까요?')) return;
+  generate(ids);
 }
 
 function meter() {
@@ -339,13 +456,252 @@ function step(d) {
 function pick(id) { if (id === CUR) return; saveThen(function () { CUR = id; DIRTY = false; setSave(''); drawList(); drawMid(); scrollCur(); }); }
 function scrollCur() { var el = document.querySelector('.st.on'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' }); }
 
+/* ---------------------------------------------------------- 표 보기 */
+function drawView() {
+  $('vOne').className = VIEW === 'one' ? 'on' : '';
+  $('vGrid').className = VIEW === 'grid' ? 'on' : '';
+  $('vSum').className = VIEW === 'sum' ? 'on' : '';
+  document.querySelector('.cols').className = 'cols' + (VIEW === 'one' ? '' : ' grid');
+}
+function setView(v) {
+  if (v === VIEW) return;
+  saveThen(function () { VIEW = v; store('view', v); DIRTY = false; setSave(''); if (v === 'sum') { SUM = null; SCUR = ''; } drawView(); drawHeader(); drawList(); drawMid(); if (v !== 'sum') scrollCur(); });
+}
+function aiText(r) { return r.ai.trim() && r.ai.indexOf('⚠') !== 0 && r.ai.indexOf('=') !== 0 ? r.ai : ''; }
+function gTr(id) { return [].filter.call(document.querySelectorAll('table.grid tbody tr[data-id]'), function (tr) { return tr.getAttribute('data-id') === id; })[0] || null; }
+function gVisible() { return [].filter.call(document.querySelectorAll('table.grid tbody tr[data-id]'), function (tr) { return !tr.hidden; }); }
+function gSelected() { return [].map.call(document.querySelectorAll('table.grid tbody tr:not([hidden]) .gsel:checked'), function (c) { return c.closest('tr').getAttribute('data-id'); }); }
+
+function drawGrid() {
+  var a = act(), m = $('mid');
+  var keep = $('gwrap') ? { x: $('gwrap').scrollLeft, y: $('gwrap').scrollTop } : null;
+  m.className = 'mid gridmode';
+  var h = '<div class="gbar"><input type="search" id="gq" placeholder="이름 · 번호로 찾기" value="' + esc($('q').value) + '">' +
+    '<button class="primary" id="gGen" title="체크한 학생(없으면 지금 줄의 학생)을 AI로 씁니다">✨ 고른 학생 AI로 쓰기</button>' +
+    '<button id="gGenAll" title="자료는 있고 AI 결과 · 최종본이 빈 학생을 한꺼번에">아직 안 쓴 학생 모두</button>' +
+    '<button id="gTake" title="체크한 학생(없으면 보이는 모든 학생)의 AI 결과를, 최종본이 빈 칸에만 옮깁니다">↓ AI 결과 → 최종본</button>' +
+    '<button id="gCols" title="입력 열 이름 바꾸기 · 더하기 · 지우기 · 순서">▦ 열 고치기</button>' +
+    '<button id="gSave">💾 저장</button><span class="spacer"></span><span id="gCount" style="font-size:12px;color:var(--muted)"></span></div>' +
+    '<div class="ghint">📋 엑셀 · 한셀에서 복사한 범위를 노란 칸에 붙여 넣으면(Ctrl+V) 그 칸부터 아래 · 오른쪽으로 채워집니다. 고친 내용은 잠시 뒤 저절로 저장됩니다. ' +
+    (a.rec ? '(' + esc(a.rec) + ' · ' + a.limit + '바이트)' : '') + (CTX.manualOnly && CTX.consent ? ' · AI 키가 없어 AI로 쓰기는 복사 · 붙여넣기로 진행합니다.' : '') +
+    (CTX.consent ? '' : ' · 🔒 AI로 쓰기 전에 [⚙ 설정] > AI 연결에서 개인정보 · 보안 안내에 동의해 주세요.') + '</div>';
+  h += '<div class="gwrap" id="gwrap"><table class="grid"><thead><tr><th class="c-chk"><input type="checkbox" id="gAll" title="보이는 학생 모두 고르기"></th>' +
+    '<th class="c-no">번호</th><th class="c-nm">이름</th>' +
+    a.columns.map(function (c, i) { return '<th class="c-in">' + esc(c) + '<button class="hbtn" data-col="' + i + '" title="이 열 이름 바꾸기 · 지우기">✎</button></th>'; }).join('') +
+    '<th class="c-add"><button id="gAdd" title="입력 열 더하기" style="padding:1px 7px">＋ 열</button></th>' +
+    '<th class="c-ai">AI 결과</th><th class="c-fin">최종본 (나이스에 들어갈 글)</th><th class="c-by">바이트</th></tr></thead><tbody>';
+  h += STUDENTS.map(function (s) {
+    var r = rowOf(s.id);
+    var head = '<tr data-id="' + esc(s.id) + '" data-q="' + esc(s.name + ' ' + s.no + ' ' + s.cls) + '"' + (s.id === CUR ? ' class="on"' : '') + '>' +
+      '<td class="c-chk">' + (r ? '<input type="checkbox" class="gsel">' : '') + '</td><td class="c-no">' + esc((CLS ? '' : s.cls + '-') + s.no) + '</td>' +
+      '<td class="c-nm">' + esc(s.name || '(이름 없음)') + '</td>';
+    if (!r) return head + '<td class="c-gone" colspan="' + (a.columns.length + 4) + '">이 학생 줄이 시트에 없습니다 — [⚙ 설정] > 학생 명단 > [시트에서 고친 명단 반영] 뒤 다시 열어 주세요.</td></tr>';
+    var ai = aiText(r);
+    return head + a.columns.map(function (c, i) { return '<td class="c-in"><textarea data-c="' + i + '" spellcheck="false">' + esc(r.inputs[i] || '') + '</textarea></td>'; }).join('') +
+      '<td class="c-add"></td><td class="c-ai"><div class="gai' + (ai ? '' : ' none') + '">' +
+      esc(ai || (r.ai.indexOf('⚠') === 0 ? r.ai : r.ai.indexOf('=') === 0 ? 'Gemini 구독 수식 — 시트에서 [생성 및 삽입]' : '')) + '</div></td>' +
+      '<td class="c-fin"><textarea data-c="fin">' + esc(r.final) + '</textarea></td><td class="c-by"></td></tr>';
+  }).join('');
+  m.innerHTML = h + '</tbody></table></div>';
+  STUDENTS.forEach(function (s) { var r = rowOf(s.id); if (r) gBytes(gTr(s.id), r); });
+  gFilter(); gCount(); drawCheck();
+  if (keep) { $('gwrap').scrollLeft = keep.x; $('gwrap').scrollTop = keep.y; }
+}
+function gBytes(tr, r) {
+  var a = act(); if (!tr || !a) return;
+  var td = tr.querySelector('.c-by'); if (!td) return;
+  var fin = r.final.trim(), ai = aiText(r), b = bytes(fin ? r.final : ai);
+  td.textContent = fin ? b + ' / ' + a.limit : ai ? 'AI ' + b : '';
+  td.className = 'c-by' + (b > a.limit ? ' over' : '');
+  td.title = fin ? '최종본 기준 · 한글 ' + Math.max(0, Math.floor((a.limit - b) / 3)) + '자 남음' : ai ? 'AI 결과 기준(최종본이 비어 있음)' : '';
+}
+function gCount() {
+  var el = $('gCount'), a = act(); if (!el || !a) return;
+  var n = STUDENTS.filter(function (s) { var r = rowOf(s.id); return r && r.final.trim(); }).length;
+  el.textContent = '최종본 ' + n + ' / ' + STUDENTS.length + '명';
+}
+function gFilter() {
+  var q = $('q').value.trim();
+  [].forEach.call(document.querySelectorAll('table.grid tbody tr[data-id]'), function (tr) { tr.hidden = !!q && tr.getAttribute('data-q').indexOf(q) < 0; });
+}
+/** 표의 한 칸을 바꿈 — 화면 자료(DATA)에 바로 적고, 잠시 뒤 모아서 저장 */
+function gSet(id, c, val, tr) {
+  var r = rowOf(id); if (!r) return;
+  if (c === 'fin') r.final = val; else r.inputs[+c] = val;
+  GD[id] = true; markDirty();
+  if (c === 'fin') { gBytes(tr || gTr(id), r); gCount(); if (id === CUR) queueCheck(); }
+  clearTimeout(gTimer); gTimer = setTimeout(function () { saveGrid(); }, 2500);
+}
+/** 고친 학생 줄을 한 번에 저장하고 next() */
+function saveGrid(next) {
+  clearTimeout(gTimer);
+  if (SAVING) { setTimeout(function () { saveGrid(next); }, 300); return; }
+  var ids = Object.keys(GD), key = ACT;
+  if (!ids.length || !act()) { GD = {}; DIRTY = false; next && next(); return; }
+  var rows = ids.map(function (id) { var r = rowOf(id, key); return r ? { id: id, row: r.row, inputs: r.inputs, final: r.final } : null; }).filter(Boolean);
+  GD = {}; SAVING = true; setSave('저장 중…');
+  google.script.run.withSuccessHandler(function (res) {
+    SAVING = false;
+    (res.rows || []).forEach(function (row) {
+      var cur = DATA[key] && DATA[key][row.id]; if (!cur) return;
+      if (GD[row.id]) { cur.row = row.row; cur.check = row.check; }   // 저장하는 사이 또 고친 줄 — 화면 글을 지킨다
+      else DATA[key][row.id] = row;
+    });
+    if (res.missing && res.missing.length) toast('⚠ 시트에서 찾지 못한 학생 ' + res.missing.length + '명은 저장하지 못했습니다. 명단 동기화 뒤 다시 열어 주세요.');
+    if (Object.keys(GD).length) { setSave('● 저장 안 됨', 'dirty'); if (next) saveGrid(next); else gTimer = setTimeout(function () { saveGrid(); }, 1500); return; }
+    DIRTY = false; setSave('저장됨 ✓ ' + rows.length + '명');
+    next && next();
+  }).withFailureHandler(function (e) {
+    SAVING = false; ids.forEach(function (id) { GD[id] = true; });
+    setSave('저장 실패', 'err'); toast('⚠ 저장하지 못했습니다: ' + ((e && e.message) || e));
+  }).deskSaveRows({ key: key, rows: rows });
+}
+/** AI 결과를 최종본이 빈 칸에만 옮김 */
+function gTake() {
+  var ids = gSelected();
+  if (!ids.length) ids = gVisible().map(function (tr) { return tr.getAttribute('data-id'); });
+  var n = 0;
+  ids.forEach(function (id) {
+    var r = rowOf(id); if (!r || r.final.trim() || !aiText(r)) return;
+    var tr = gTr(id); gSet(id, 'fin', r.ai, tr);
+    var ta = tr && tr.querySelector('textarea[data-c="fin"]'); if (ta) ta.value = r.ai;
+    n++;
+  });
+  toast(n ? n + '명의 AI 결과를 최종본으로 옮겼습니다. 읽고 다듬어 주세요.' : '옮길 것이 없습니다(AI 결과가 있고 최종본이 빈 학생).');
+}
+function gStep(d) {
+  var t = document.activeElement, trs = gVisible();
+  var tr = t && t.closest ? t.closest('tr[data-id]') : null;
+  var i = tr ? trs.indexOf(tr) + d : 0;
+  if (i < 0 || i >= trs.length) return;
+  var c = t && t.getAttribute && t.getAttribute('data-c');
+  var next = trs[i].querySelector('textarea[data-c="' + (c == null ? '0' : c) + '"]') || trs[i].querySelector('textarea');
+  if (next) next.focus();
+}
+
+/** 엑셀 · 한셀 · 시트에서 복사한 글 → 줄 · 칸. 칸 안 줄바꿈은 따옴표로 싸여 온다("" = 따옴표) */
+function parseTsv(t) {
+  t = String(t || '').replace(/\r\n?/g, '\n');
+  var rows = [], row = [], cell = '', q = false;
+  for (var i = 0; i < t.length; i++) {
+    var ch = t.charAt(i);
+    if (q) { if (ch === '"') { if (t.charAt(i + 1) === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"' && cell === '') q = true;
+    else if (ch === '\t') { row.push(cell); cell = ''; }
+    else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+function gInsert(t, text, tr) {
+  if (t.setRangeText) t.setRangeText(text, t.selectionStart, t.selectionEnd, 'end'); else t.value += text;
+  gSet(tr.getAttribute('data-id'), t.getAttribute('data-c'), t.value, tr);
+}
+/** 표 칸에 붙여넣기 — 여러 칸이면 그 칸부터 아래 · 오른쪽으로 채운다(빈 칸은 건너뛰어 있던 글을 지우지 않음) */
+function gPaste(e) {
+  var t = e.target;
+  if (VIEW !== 'grid' || !t || t.tagName !== 'TEXTAREA' || !t.closest('table.grid')) return;
+  var text = e.clipboardData ? e.clipboardData.getData('text') : '';
+  if (!text) return;
+  var rows = parseTsv(text), tr0 = t.closest('tr');
+  var width = Math.max.apply(null, rows.map(function (r) { return r.length; }).concat([0]));
+  if (rows.length <= 1 && width <= 1) {
+    if (rows[0] && rows[0][0] !== text.replace(/\r?\n$/, '')) { e.preventDefault(); gInsert(t, rows[0][0], tr0); }   // 따옴표로 싸인 한 칸
+    return;
+  }
+  e.preventDefault();
+  var a = act(), c0 = t.getAttribute('data-c'), trs = gVisible(), r0 = trs.indexOf(tr0);
+  var maxC = c0 === 'fin' ? 1 : a.columns.length - (+c0);
+  var plan = [], over = 0, people = 0;
+  rows.forEach(function (cells, i) {
+    var tr = trs[r0 + i]; if (!tr) return;
+    var id = tr.getAttribute('data-id'), r = rowOf(id); if (!r) return;
+    var any = false;
+    for (var j = 0; j < Math.min(cells.length, maxC); j++) {
+      if (cells[j] === '') continue;
+      var c = c0 === 'fin' ? 'fin' : String(+c0 + j);
+      var old = String((c === 'fin' ? r.final : r.inputs[+c]) || '');
+      if (old.trim() && old !== cells[j]) over++;
+      plan.push({ tr: tr, id: id, c: c, v: cells[j] }); any = true;
+    }
+    if (any) people++;
+  });
+  var cutR = Math.max(0, rows.length - (trs.length - r0)), cutC = Math.max(0, width - maxC);
+  if (width === 1 || over || cutR || cutC) {
+    var msg = '붙여 넣을 자료: ' + rows.length + '줄 × ' + width + '열\n이 칸부터 아래로 ' + people + '명에게 채웁니다.' +
+      (over ? '\n· 이미 글이 있는 칸 ' + over + '개는 덮어씁니다.' : '') +
+      (cutR ? '\n· 학생보다 많은 ' + cutR + '줄은 버립니다.' : '') +
+      (cutC ? '\n· 오른쪽으로 넘치는 ' + cutC + '열은 버립니다(열이 모자라면 [▦ 열 고치기]로 먼저 더하세요).' : '') +
+      (width === 1 ? '\n\n[취소]를 누르면 이 칸 하나에 그대로 넣습니다.' : '');
+    if (!confirm(msg)) { if (width === 1) gInsert(t, text, tr0); return; }
+  }
+  plan.forEach(function (p) {
+    gSet(p.id, p.c, p.v, p.tr);
+    var ta = p.tr.querySelector('textarea[data-c="' + p.c + '"]'); if (ta) ta.value = p.v;
+  });
+  toast(people + '명 · ' + plan.length + '칸을 채웠습니다. 잠시 뒤 저장됩니다.');
+}
+
+/** 열 고치기 — 이름 바꾸기 · 더하기 · 지우기 · 순서 (한 번에 적용) */
+function colsCover(addNew, focusIdx) {
+  var a = act(); if (!a) return;
+  var items = a.columns.map(function (c) { return { name: c, from: c }; });
+  if (addNew) {
+    if (items.length >= 12) { toast('입력 열은 12개까지입니다.'); return; }
+    items.push({ name: '', from: '' }); focusIdx = items.length - 1;
+  }
+  function sync() { [].forEach.call($('card').querySelectorAll('.crow input'), function (el) { items[+el.getAttribute('data-i')].name = el.value; }); }
+  function draw() {
+    openCover('<h3>▦ 열 고치기 — ' + esc(a.name) + '</h3>' +
+      '<div style="color:var(--muted);font-size:12.5px">학생마다 채우는 입력 열입니다. 이름을 바꿔도 학생 자료는 그대로 따라오고, 지운 열의 자료는 사라집니다(12개까지). AI는 이 열 이름과 내용을 함께 읽습니다.</div>' +
+      items.map(function (it, i) {
+        return '<div class="crow"><span class="cn">' + (i + 1) + '</span><input type="text" data-i="' + i + '" value="' + esc(it.name) + '" placeholder="열 이름 (예: 발표 태도)" maxlength="30">' +
+          (it.from ? '' : '<span class="new">새 열</span>') +
+          '<button data-up="' + i + '"' + (i ? '' : ' disabled') + ' title="앞으로">↑</button>' +
+          '<button data-dn="' + i + '"' + (i < items.length - 1 ? '' : ' disabled') + ' title="뒤로">↓</button>' +
+          '<button data-del="' + i + '"' + (items.length > 1 ? '' : ' disabled') + '>지우기</button></div>';
+      }).join('') +
+      '<div style="margin-top:8px"><button id="cAdd"' + (items.length >= 12 ? ' disabled' : '') + '>＋ 열 추가</button></div><div class="msg err" id="cMsg"></div>' +
+      '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px"><button id="cClose">닫기</button><button class="primary" id="cApply">적용</button></div>');
+    var f = $('card').querySelector('.crow input[data-i="' + focusIdx + '"]'); if (f) { f.focus(); f.select(); }
+    $('cClose').onclick = closeCover;
+    $('cAdd').onclick = function () { sync(); items.push({ name: '', from: '' }); focusIdx = items.length - 1; draw(); };
+    [].forEach.call($('card').querySelectorAll('[data-up],[data-dn],[data-del]'), function (b) {
+      b.onclick = function () {
+        sync();
+        if (b.hasAttribute('data-del')) items.splice(+b.getAttribute('data-del'), 1);
+        else { var i = b.hasAttribute('data-up') ? +b.getAttribute('data-up') - 1 : +b.getAttribute('data-dn'); var x = items[i]; items[i] = items[i + 1]; items[i + 1] = x; }
+        focusIdx = -1; draw();
+      };
+    });
+    $('cApply').onclick = function () { sync(); apply(false); };
+  }
+  function apply(force) {
+    var cols = items.map(function (it) { return { name: it.name.trim(), from: it.from }; }).filter(function (it) { return it.name; });
+    if (!cols.length) { $('cMsg').textContent = '열 이름을 하나 이상 적어 주세요.'; return; }
+    saveThen(function () {
+      run('deskSetColumns', { key: ACT, columns: cols, force: force }, function (res) {
+        if (res.needConfirm) {
+          if (confirm('[' + res.removed.join(', ') + '] 열에 학생 ' + res.lost + '명의 자료가 있습니다.\n지우면 시트의 [버전 기록]으로만 되돌릴 수 있습니다. 지울까요?')) apply(true);
+          return;
+        }
+        CTX = res.context; closeCover();
+        toast('열을 바꿨습니다.' + (res.added.length ? ' 더함: ' + res.added.join(', ') : '') + (res.renamed.length ? ' 이름: ' + res.renamed.join(', ') : '') + (res.removed.length ? ' 지움: ' + res.removed.join(', ') : ''));
+        load();
+      }, '열을 바꾸는 중…');
+    });
+  }
+  draw();
+}
+
 /* ---------------------------------------------------------- AI 로 쓰기 */
 function generate(ids) {
-  if (!CTX.consent) { toast('🔒 먼저 메뉴에서 개인정보 · 보안 안내에 동의해 주세요.'); return; }
+  if (!CTX.consent) { toast('🔒 먼저 [⚙ 설정] > AI 연결에서 개인정보 · 보안 안내에 동의해 주세요.'); setCover('ai'); return; }
   saveThen(function () {
     var rows = ids.map(function (id) { return (rowOf(id) || {}).row; });
     run('deskGenerate', { key: ACT, ids: ids, rows: rows }, function (res) {
-      if (res.consent === false) { toast('🔒 먼저 메뉴에서 개인정보 · 보안 안내에 동의해 주세요.'); return; }
+      if (res.consent === false) { toast('🔒 먼저 [⚙ 설정] > AI 연결에서 개인정보 · 보안 안내에 동의해 주세요.'); setCover('ai'); return; }
       if (res.manual) { manualCover(res.manual, res.empty); return; }
       (res.rows || []).forEach(function (row) { DATA[ACT][row.id] = row; });
       drawList(); drawMid();
@@ -360,7 +716,7 @@ function generate(ids) {
 }
 
 /* 키 없이 — 요청문 복사 → 답 붙여넣기 (이 창 안에서) */
-function manualCover(M, empty) {
+function manualCover(M, empty, o) {
   var idx = 0;
   function full(c) { return M.system + '\n\n' + c.user; }
   function draw() {
@@ -386,12 +742,15 @@ function manualCover(M, empty) {
       var ans = $('mAns').value.trim(); if (!ans) { $('mMsg').textContent = '답을 붙여 넣으세요.'; $('mMsg').className = 'msg err'; return; }
       this.disabled = true;
       google.script.run.withSuccessHandler(function (r) {
+        var after = function () {
+          var t = r.written + '명을 ' + (o ? o.into : '[AI 결과]') + '에 넣었습니다.' + (r.missing.length ? ' 빠진 학생: ' + r.missing.join(', ') : '');
+          if (idx + 1 < M.chunks.length) { idx++; draw(); toast(t + ' 다음 묶음으로 넘어갑니다.'); }
+          else { closeCover(); toast(t + ' ' + (o ? o.end : '읽고 다듬어 최종본에 옮기세요.')); }
+        };
+        if (o) { o.reload(c, after); return; }
         run('deskRows', { key: ACT, rows: c.rows }, function (rows) {
           rows.forEach(function (row) { DATA[ACT][row.id] = row; });
-          drawList(); drawMid();
-          var t = r.written + '명을 [AI 결과]에 넣었습니다.' + (r.missing.length ? ' 빠진 학생: ' + r.missing.join(', ') : '');
-          if (idx + 1 < M.chunks.length) { idx++; draw(); toast(t + ' 다음 묶음으로 넘어갑니다.'); }
-          else { closeCover(); toast(t + ' 읽고 다듬어 최종본에 옮기세요.'); }
+          drawList(); drawMid(); after();
         });
       }).withFailureHandler(function (e) { $('mApply').disabled = false; $('mMsg').textContent = (e && e.message) || e; $('mMsg').className = 'msg err'; })
         .manualApply({ sheet: M.sheet, target: M.target, check: M.check, limit: M.limit, rows: c.rows, ids: c.ids, labels: c.labels, answer: ans });
@@ -401,16 +760,25 @@ function manualCover(M, empty) {
 }
 
 function openCover(h) { $('card').innerHTML = h; $('cover').hidden = false; }
-function closeCover() { $('cover').hidden = true; $('card').innerHTML = ''; }
+function closeCover() { $('cover').hidden = true; $('card').innerHTML = ''; $('card').style.width = ''; }
 
 /* ---------------------------------------------------------- 오른쪽 검증 */
 function queueCheck() { clearTimeout(vTimer); vTimer = setTimeout(drawCheck, 900); }
 function drawCheck() {
-  var r = CUR && rowOf(CUR);
-  if (!r || !act()) { $('vsrc').textContent = ''; $('vbody').innerHTML = '<div class="iss" style="color:var(--muted)">왼쪽에서 학생을 고르세요.</div>'; return; }
-  var fin = $('fin') ? $('fin').value : r.final;
-  var text = fin.trim() ? fin : (r.ai.indexOf('⚠') === 0 || r.ai.indexOf('=') === 0 ? '' : r.ai);
-  $('vsrc').textContent = fin.trim() ? '최종본 기준' : text ? 'AI 결과 기준' : '';
+  var text, arg;
+  if (VIEW === 'sum') {
+    var sr = SCUR && sArea() && sRow(SCUR);
+    if (!sr) { $('vsrc').textContent = ''; $('vbody').innerHTML = '<div class="iss" style="color:var(--muted)">표에서 학생의 최종본 칸을 누르면 검사합니다.</div>'; return; }
+    text = sr.final; $('vsrc').textContent = text.trim() ? '취합 최종본 기준' : '';
+    arg = { rec: SAREA, text: text };
+  } else {
+    var r = CUR && rowOf(CUR);
+    if (!r || !act()) { $('vsrc').textContent = ''; $('vbody').innerHTML = '<div class="iss" style="color:var(--muted)">왼쪽에서 학생을 고르세요.</div>'; return; }
+    var fin = $('fin') ? $('fin').value : r.final;
+    text = fin.trim() ? fin : (r.ai.indexOf('⚠') === 0 || r.ai.indexOf('=') === 0 ? '' : r.ai);
+    $('vsrc').textContent = fin.trim() ? '최종본 기준' : text ? 'AI 결과 기준' : '';
+    arg = { key: ACT, text: text };
+  }
   if (!text.trim()) { $('vbody').innerHTML = '<div class="iss" style="color:var(--muted)">검사할 글이 아직 없습니다.</div>'; return; }
   var mine = ++drawCheck.n;
   google.script.run.withSuccessHandler(function (v) {
@@ -424,15 +792,669 @@ function drawCheck() {
              (x.why ? '<div class="why">' + esc(x.why) + '</div>' : '') + '</div>';
     }).join('');
     $('vbody').innerHTML = h;
-  }).withFailureHandler(function () {}).deskInspect({ key: ACT, text: text });
+  }).withFailureHandler(function () {}).deskInspect(arg);
 }
 drawCheck.n = 0;
+
+/* ---------------------------------------------------------- 창 안에서 활동 · 프롬프트 · 설정 (v3.1.1) */
+var SETUP = null;
+var HR_GROUPS = ['자율', '진로', '행발'];   // 담임 모드 탭 묶음 순서 — 한 영역 아래 활동을 여러 개 둘 수 있다
+function withSetup(fn, fresh) {
+  if (SETUP && !fresh) { fn(); return; }
+  run('deskSetup', undefined, function (s) { SETUP = fixSetup(s); fn(); }, '여는 중…');
+}
+var PLABEL = { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude', exaone: 'EXAONE' };
+function fixSetup(s) { s.providers = s.providers.map(function (p) { return typeof p === 'string' ? { key: p, label: PLABEL[p] || p } : p; }); return s; }
+function wide() { $('card').style.width = 'min(920px,94vw)'; }
+function opt(v, label, sel) { return '<option value="' + esc(v) + '"' + (sel ? ' selected' : '') + '>' + esc(label) + '</option>'; }
+function hint(t) { return '<div style="color:var(--muted);font-size:12.5px">' + t + '</div>'; }
+
+function tabsHtml() {
+  if (VIEW === 'sum') return sumTabsHtml();
+  var list = acts(), h = '';
+  var tab = function (a, rec) {
+    return '<div class="tab' + (a.key === ACT ? ' on' : '') + '" data-k="' + esc(a.key) + '">' + esc(a.name) + (rec ? '<span class="rec">' + esc(a.rec) + '</span>' : '') + '</div>';
+  };
+  if (MODE === 'homeroom') {
+    var groups = HR_GROUPS.slice();
+    list.forEach(function (a) { if (groups.indexOf(a.rec) < 0) groups.push(a.rec); });
+    groups.forEach(function (g) {
+      h += '<span class="tgrp">' + esc(g) + '</span>' + list.filter(function (a) { return a.rec === g; }).map(function (a) { return tab(a, false); }).join('') +
+           '<button class="tadd" data-add="' + esc(g) + '" title="' + esc(g) + ' 아래에 활동을 하나 더 만듭니다(예: 학급 자치, 학교 행사)">＋</button>';
+    });
+  } else {
+    h = list.map(function (a) { return tab(a, true); }).join('') + '<button class="tadd" data-add="" title="과목 세특 · 동아리 활동을 이 창에서 만듭니다">＋ 활동</button>';
+  }
+  if (act()) h += '<button class="tcfg" id="bActCfg" title="이름 · 개요 · 바이트 한도 · 분량 · 예시 · 프롬프트 · 지우기">⚙ 활동 설정</button>';
+  return h;
+}
+
+/* ＋ 활동 */
+function addCover(recKey) {
+  saveThen(function () { withSetup(function () {
+    var recs = SETUP.records.filter(function (r) { return r.mode === MODE; });
+    if (!recs.length) recs = SETUP.records;
+    var st = { rec: recs.some(function (r) { return r.key === recKey; }) ? recKey : recs[0].key,
+               kind: MODE === 'homeroom' ? 'quick' : 'cols', name: '', cols: '', desc: '', bytes: '', sub: SETUP.defaultSubject };
+    function keep() {
+      st.name = $('aName').value; st.desc = $('aDesc').value; st.bytes = $('aBytes').value;
+      if ($('aCols')) st.cols = $('aCols').value;
+      if ($('aSub')) st.sub = $('aSub').value;
+    }
+    function draw() {
+      var rec = recs.filter(function (r) { return r.key === st.rec; })[0];
+      var sets = SETUP.columnSets.filter(function (c) { return !c['for'] || c['for'].indexOf(st.rec) >= 0; });
+      openCover('<h3>＋ 활동 추가</h3>' +
+        hint(MODE === 'homeroom' ? '한 영역 아래에 활동을 여러 개 둘 수 있습니다(예: 자율 아래 학급 자치 · 학교 행사). 활동마다 따로 쓰고, 나이스에는 영역별로 합쳐 넣습니다.'
+                                 : '활동 하나가 시트 하나입니다. 만든 뒤에도 이름 · 열 · 개요를 이 창에서 고칠 수 있습니다.') +
+        '<div class="frow"><div class="fld"><label>기록 영역</label><select id="aRec" style="width:100%">' +
+          recs.map(function (r) { return opt(r.key, r.name + ' (' + r.cap + '바이트)', r.key === st.rec); }).join('') + '</select></div>' +
+        '<div class="fld" style="flex:2"><label>활동 이름</label><input type="text" id="aName" maxlength="40" value="' + esc(st.name) + '" placeholder="예: ' +
+          (st.rec === '자율' ? '학급 자치' : st.rec === '진로' ? '진로 체험' : st.rec === '행발' ? '행동특성' : '함수 탐구 보고서') + '"></div></div>' +
+        (st.rec === '과세특' ? '<div class="fld"><label>교과 <span class="hint">역할 표현과 역량 관점이 달라집니다</span></label><select id="aSub">' +
+          SETUP.subjects.map(function (s) { return opt(s.key, s.name || s.key, s.key === st.sub); }).join('') + '</select></div>' : '') +
+        '<div class="fld"><label>학생마다 적을 칸</label>' +
+          '<label style="font-weight:400;display:block"><input type="radio" name="aKind" value="quick"' + (st.kind === 'quick' ? ' checked' : '') + '> 관찰 메모 한 칸 <span class="hint">— 본 것을 자유롭게 적고 AI가 다듬음</span></label>' +
+          '<label style="font-weight:400;display:block"><input type="radio" name="aKind" value="cols"' + (st.kind === 'cols' ? ' checked' : '') + '> 입력 항목을 정해서 <span class="hint">— 주제 · 과정 · 배운 점처럼 칸을 나눔, 모범 예시도 둘 수 있음</span></label></div>' +
+        (st.kind === 'cols' ? '<div class="fld"><label>입력 항목 <span class="hint">쉼표나 줄바꿈으로 나눠 적습니다(12개까지)</span></label>' +
+          '<textarea id="aCols" rows="2" placeholder="탐구 주제, 탐구 과정, 알게 된 점">' + esc(st.cols) + '</textarea>' +
+          '<div class="chips">' + sets.map(function (c) { return '<button data-set="' + SETUP.columnSets.indexOf(c) + '">' + esc(c.label) + '</button>'; }).join('') + '</div></div>' : '') +
+        '<div class="fld"><label>활동 개요 <span class="hint">AI가 읽는 설명 — 무슨 활동인지, 무엇을 보고 쓸지(비워도 됩니다)</span></label><textarea id="aDesc" rows="2">' + esc(st.desc) + '</textarea></div>' +
+        '<div class="fld" style="max-width:260px"><label>바이트 한도 <span class="hint">비우면 한 칸 전체(' + rec.cap + ')</span></label>' +
+          '<input type="number" id="aBytes" min="60" max="' + rec.cap + '" step="30" value="' + esc(st.bytes) + '" placeholder="' + rec.cap + '"></div>' +
+        '<div class="msg err" id="aMsg"></div><div class="foot"><button id="aClose">닫기</button><button class="primary" id="aGo">만들기</button></div>');
+      $('aClose').onclick = closeCover;
+      $('aRec').onchange = function () { keep(); st.rec = this.value; draw(); };
+      [].forEach.call($('card').querySelectorAll('[name=aKind]'), function (r) { r.onchange = function () { keep(); st.kind = r.value; draw(); }; });
+      [].forEach.call($('card').querySelectorAll('[data-set]'), function (b) {
+        b.onclick = function () { $('aCols').value = SETUP.columnSets[+b.getAttribute('data-set')].cols.join(', '); };
+      });
+      $('aGo').onclick = function () {
+        keep();
+        if (!st.name.trim()) { $('aMsg').textContent = '활동 이름을 적어 주세요.'; $('aName').focus(); return; }
+        var cols = st.cols.split(/[,\n|]+/).map(function (c) { return c.trim(); }).filter(String);
+        if (st.kind === 'cols' && !cols.length) { $('aMsg').textContent = '입력 항목을 하나 이상 적어 주세요(아래 단추로 채울 수도 있습니다).'; return; }
+        run('deskAddActivity', { name: st.name.trim(), recordKey: st.rec, subjectKey: st.rec === '과세특' ? st.sub : '', kind: st.kind, columns: cols,
+                                 desc: st.desc, bytes: Number(st.bytes) || 0 }, function (res) {
+          CTX = res.context; ACT = res.key; store('act.' + MODE, ACT); closeCover();
+          toast('[' + st.name.trim() + '] 활동을 만들었습니다.'); load();
+        }, '활동을 만드는 중…');
+      };
+      $('aName').focus();
+    }
+    draw();
+  }); });
+}
+
+/* ⚙ 활동 설정 */
+function actCover() {
+  var a = act(); if (!a) return;
+  saveThen(function () { withSetup(function () { run('deskActivityInfo', a.key, drawAct, '활동 설정을 여는 중…'); }); });
+}
+function drawAct(info) {
+  var ex = info.examples.map(function (e) { return { values: e.values.slice(), result: e.result }; });
+  var exDirty = false;
+  function keepEx() {
+    [].forEach.call($('card').querySelectorAll('[data-ex]'), function (t) {
+      var p = t.getAttribute('data-ex').split(':'), e = ex[+p[0]]; if (!e) return;
+      if (p[1] === 'r') { if (e.result !== t.value) exDirty = true; e.result = t.value; }
+      else { if (e.values[+p[1]] !== t.value) exDirty = true; e.values[+p[1]] = t.value; }
+    });
+  }
+  function drawEx() {
+    $('exWrap').innerHTML = ex.map(function (e, i) {
+      return '<div class="exbox"><div style="display:flex;align-items:center;gap:8px"><b>예시 ' + (i + 1) + '</b><span class="spacer"></span><button data-exdel="' + i + '">지우기</button></div>' +
+        info.columns.map(function (c, k) {
+          return '<div class="fld"><label style="font-weight:400">' + esc(c) + '</label><textarea rows="1" data-ex="' + i + ':' + k + '" style="background:var(--input)">' + esc(e.values[k] || '') + '</textarea></div>';
+        }).join('') +
+        '<div class="fld"><label style="font-weight:400">결과 <span class="hint">선생님이 쓴 세특 문장</span></label><textarea rows="3" data-ex="' + i + ':r" style="background:var(--final)">' + esc(e.result) + '</textarea></div></div>';
+    }).join('') || hint('아직 예시가 없습니다. 없어도 생성은 됩니다.');
+    $('exAdd').disabled = ex.length >= info.exampleMax;
+    [].forEach.call($('exWrap').querySelectorAll('[data-exdel]'), function (b) {
+      b.onclick = function () { keepEx(); ex.splice(+b.getAttribute('data-exdel'), 1); exDirty = true; drawEx(); };
+    });
+  }
+  openCover('<h3>⚙ 활동 설정 — ' + esc(info.name) + '</h3>' +
+    hint(esc(info.recordName) + ' · ' + (info.quick ? '관찰 메모 한 칸(바로 쓰기)' : info.mode === '보고서' ? '보고서 시트' : '입력 항목 ' + info.columns.length + '개') + ' · 고친 내용은 다음 생성부터 적용됩니다.') +
+    '<div class="frow"><div class="fld" style="flex:2"><label>활동 이름</label><input type="text" id="sName" maxlength="40" value="' + esc(info.name) + '"></div>' +
+      '<div class="fld"><label>바이트 한도 <span class="hint">한 칸 ' + info.cap + '</span></label><input type="number" id="sBytes" min="60" max="' + info.cap + '" step="30" value="' + info.bytes + '"></div>' +
+      '<div class="fld"><label>분량 맞추기</label><select id="sAmt" style="width:100%" title="메모만큼: 메모 양만큼만 · 보통: 한도의 3분의 2 안팎 · 넉넉히: 한도의 90% 안팎">' +
+        SETUP.amounts.map(function (x) { return opt(x, x, x === info.amount); }).join('') + '</select></div></div>' +
+    (info.recordKey === '과세특' ? '<div class="fld"><label>교과</label><select id="sSub">' +
+      SETUP.subjects.map(function (s) { return opt(s.key, s.name || s.key, s.key === info.subjectKey); }).join('') + '</select></div>' : '') +
+    '<div class="fld"><label>활동 개요 <span class="hint">AI가 읽는 설명 — 무슨 활동인지, 무엇을 보고 쓸지</span></label><textarea id="sDesc" rows="3">' + esc(info.desc) + '</textarea></div>' +
+    '<div class="sec"><h4>입력 항목</h4><div class="chips">' + info.columns.map(function (c) { return '<span class="chip">' + esc(c) + '</span>'; }).join('') +
+      (info.mode === '보고서' ? '' : '<button id="sCols" title="이 창의 고친 내용을 먼저 저장하세요">▦ 열 고치기</button>') + '</div></div>' +
+    (info.hasExamples ? '<div class="sec"><h4>모범 예시 <span class="hint" style="font-weight:400;color:var(--muted);font-size:11.5px">' + info.exampleMax + '개까지 프롬프트에 들어갑니다 — 채울수록 말투와 구조가 안정됩니다</span></h4>' +
+      '<div id="exWrap"></div><div style="margin-top:6px"><button id="exAdd">＋ 예시</button></div></div>' : '') +
+    '<div class="sec"><h4>프롬프트</h4><details><summary>지금 AI에게 가는 규칙 보기 — 약 ' + info.tokens + '토큰 · ' + info.promptBytes + '바이트</summary>' +
+      '<textarea class="mono" readonly rows="14" style="margin-top:6px">' + esc(info.prompt) + '</textarea></details>' +
+      hint('이 글은 기록 영역 · 교과 · 공통 프롬프트 · 이 활동의 개요와 예시로 저절로 조립됩니다. 이 활동만의 내용은 위 [활동 개요]에, 모든 활동에 들어갈 내용은 공통 프롬프트에 적습니다.') +
+      '<div style="margin-top:6px"><button id="sCommon">📐 공통 프롬프트 고치기</button></div></div>' +
+    '<div class="sec"><details><summary style="color:var(--warn)">이 활동 지우기</summary>' +
+      hint('시트와 학생 자료 · 생성 결과가 함께 사라집니다(시트의 [버전 기록]으로만 되돌릴 수 있음). 지우려면 활동 이름 <b>' + esc(info.name) + '</b> 을 그대로 적어 주세요.') +
+      '<div class="krow"><input type="text" id="sDel" placeholder="' + esc(info.name) + '"><button class="danger" id="sDelGo">지우기</button></div></details></div>' +
+    '<div class="msg err" id="sMsg"></div><div class="foot"><button id="sClose">닫기</button><button class="primary" id="sSave">저장</button></div>');
+  wide();
+  if (info.hasExamples) {
+    drawEx();
+    $('exAdd').onclick = function () { keepEx(); ex.push({ values: info.columns.map(function () { return ''; }), result: '' }); drawEx(); };
+  }
+  $('sClose').onclick = function () { closeCover(); drawHeader(); drawMid(); };
+  if ($('sCols')) $('sCols').onclick = function () { closeCover(); colsCover(false, 0); };
+  $('sCommon').onclick = function () { commonCover(function () { run('deskActivityInfo', info.key, drawAct, '여는 중…'); }); };
+  $('sSave').onclick = function () {
+    var p = { key: info.key }, n = 0;
+    var put = function (k, v, old) { if (v !== old) { p[k] = v; n++; } };
+    put('name', $('sName').value.trim(), info.name);
+    put('desc', $('sDesc').value.trim(), String(info.desc || '').trim());
+    put('bytes', Math.floor(Number($('sBytes').value) || 0), info.bytes);
+    put('amount', $('sAmt').value, info.amount);
+    if ($('sSub')) put('subjectKey', $('sSub').value, info.subjectKey);
+    if (info.hasExamples) { keepEx(); if (exDirty) { p.examples = ex; n++; } }
+    if (!p.name && p.name !== undefined) { $('sMsg').textContent = '활동 이름을 적어 주세요.'; return; }
+    if (!n) { toast('바뀐 것이 없습니다.'); return; }
+    run('deskSaveActivity', p, function (res) {
+      CTX = res.context; drawHeader(); drawMid(); drawAct(res.info); toast('저장했습니다. 다음 생성부터 적용됩니다.');
+    }, '저장 중…');
+  };
+  $('sDelGo').onclick = function () {
+    run('deskDeleteActivity', { key: info.key, confirm: $('sDel').value }, function (res) {
+      CTX = res.context; closeCover();
+      var l = acts(); ACT = l[0] ? l[0].key : ''; store('act.' + MODE, ACT);
+      toast('[' + info.name + '] 활동을 지웠습니다.'); load();
+    }, '지우는 중…');
+  };
+}
+
+/* 📐 공통 프롬프트 — 모든 활동에 함께 들어가는 글 */
+function commonCover(back) {
+  run('deskCommon', undefined, function (rows) {
+    openCover('<h3>📐 공통 프롬프트</h3>' +
+      hint('모든 활동에 함께 들어가는 글입니다. 고치면 다음 생성부터 모든 활동에 적용됩니다. 기록 영역별 · 교과별 글은 시트(기록종류 · 교과영역)에서 고칩니다. 금지어 · 어미 검사는 프롬프트가 아니라 [검증]이 봅니다.') +
+      rows.map(function (r, i) {
+        return '<div class="fld"><label>' + esc(r.title || r.key) + ' <span class="hint">' + esc(r.key) + '</span></label>' +
+               '<textarea data-ck="' + i + '" rows="' + Math.min(12, Math.max(2, Math.ceil(r.text.length / 55))) + '">' + esc(r.text) + '</textarea></div>';
+      }).join('') +
+      '<div class="msg ok" id="kMsg"></div><div class="foot"><button id="kClose">' + (back ? '← 돌아가기' : '닫기') + '</button><button class="primary" id="kSave">저장</button></div>');
+    wide();
+    $('kClose').onclick = function () { if (back) back(); else closeCover(); };
+    $('kSave').onclick = function () {
+      var list = [];
+      [].forEach.call($('card').querySelectorAll('[data-ck]'), function (t) {
+        var r = rows[+t.getAttribute('data-ck')];
+        if (t.value !== r.text) list.push({ key: r.key, text: t.value });
+      });
+      if (!list.length) { toast('바뀐 것이 없습니다.'); return; }
+      run('deskSaveCommon', list, function (res) { rows = res.rows; $('kMsg').textContent = res.saved + '칸을 저장했습니다. 다음 생성부터 적용됩니다.'; }, '저장 중…');
+    };
+  }, '여는 중…');
+}
+
+/* ⚙ 설정 — AI 연결 · 쓰기 방식 · 학생 명단 */
+function setCover(tab) { saveThen(function () { withSetup(function () { drawSet(tab || 'ai'); }, true); }); }
+function drawSet(tab) {
+  var s = SETUP.settings, h = '';
+  var took = function (res, msg) { CTX = res.context; SETUP = fixSetup(res.setup); drawSet(tab); toast(msg || '저장했습니다.'); };
+  var saveSet = function (p, msg) { run('deskSaveSettings', p, function (res) { took(res, msg); }, '저장 중…'); };
+  if (tab === 'ai') {
+    h += '<div class="sec" style="border-top:0;margin-top:6px"><h4>🔒 개인정보 · 보안 안내</h4>';
+    if (s.consent.ok) h += hint('동의함' + (s.consent.at ? ' (' + esc(String(s.consent.at).slice(0, 10)) + ')' : '') + ' — 학생 자료를 AI로 보낼 수 있습니다.') + '<div style="margin-top:5px"><button id="cWd">동의 철회</button></div>';
+    else h += hint('AI로 학생 자료를 보내기 전에 한 번 읽고 모두 체크해 주세요.') + s.consent.items.map(function (it, i) {
+      return '<label class="tog"><input type="checkbox" data-ci="' + i + '"><span><b>' + esc(it[0]) + '</b><small>' + esc(it[1]) + '</small></span></label>'; }).join('') +
+      '<div style="margin-top:6px"><button class="primary" id="cAg">동의</button></div>';
+    h += '</div><div class="sec"><h4>API 키</h4>' + hint('키는 이 구글 계정에만 보관되고 시트에는 적히지 않습니다. 키가 없어도 [키 없이(복사 · 붙여넣기)]로 쓸 수 있습니다.') +
+      SETUP.providers.map(function (p) {
+        return '<div class="krow"><span class="kn">' + esc(p.label) + '</span><span class="ks" style="color:' + (s.has[p.key] ? 'var(--ok)' : 'var(--muted)') + '">' + (s.has[p.key] ? '저장됨 ✓' : '없음') + '</span>' +
+               '<input type="password" data-key="' + esc(p.key) + '" autocomplete="off" placeholder="' + (s.has[p.key] ? '바꾸려면 새 키 붙여넣기' : '키 붙여넣기') + '">' +
+               (s.has[p.key] ? '<button class="danger" data-kdel="' + esc(p.key) + '">지우기</button>' : '') + '</div>';
+      }).join('') + '<div style="margin-top:8px"><button class="primary" id="kGo">키 저장</button></div></div>';
+    var sel = function (id, cur, none) {
+      return '<select id="' + id + '" style="width:100%">' + (none ? opt('', '쓰지 않음', !cur) : '') + s.models.map(function (m) { return opt(m, m, m === cur); }).join('') +
+             (cur && s.models.indexOf(cur) < 0 ? opt(cur, cur + ' (키 없음)', true) : '') + '</select>';
+    };
+    h += '<div class="sec"><h4>모델</h4>' + hint('키를 넣은 회사의 모델만 보입니다. 모델 표(이름 더하기 · 빼기)는 시트의 [AI 설정]에서 고칩니다.') +
+      '<div class="frow"><div class="fld"><label>활동용 <span class="hint">학생별 글</span></label>' + sel('mAct', s.model) + '</div>' +
+      '<div class="fld"><label>합본용 <span class="hint">영역별 합치기 · 줄이기</span></label>' + sel('mCmp', s.compile) + '</div>' +
+      '<div class="fld"><label>예비 <span class="hint">실패하면 한 번 더</span></label>' + sel('mBak', s.backup, true) + '</div></div>' +
+      '<div style="margin-top:8px;display:flex;gap:8px;align-items:center"><button id="mTest">활동용 모델 연결 시험</button><span class="msg" id="mMsg" style="margin:0"></span></div></div>';
+  }
+  if (tab === 'write') {
+    var tog = function (k, title, sub) {
+      return '<label class="tog"><input type="checkbox" data-b="' + k + '"' + (s[k] ? ' checked' : '') + '><span><b>' + title + '</b><small>' + sub + '</small></span></label>';
+    };
+    h += '<div style="margin-top:8px">' +
+      tog('mask', '학생 이름 가리기', 'AI에는 이름 대신 번호표(S1, S2…)만 보냅니다. 끄지 않는 것을 권합니다.') +
+      tog('autoRepair', '자동 고쳐쓰기', '검사에서 [수정]이 나온 학생만 걸린 점을 짚어 한 번 더 쓰게 합니다.') +
+      tog('ground', '근거 자동 확인', '결과가 학생 자료에 있는 내용인지 한 번 더 확인합니다(학생마다 호출 한 번 늘어남).') +
+      tog('thinkingLow', '생각 줄이기', '모델의 추론 단계를 줄여 더 빠르고 싸게 씁니다.') +
+      tog('style', '내 문체 적용', '[내 문체] 시트의 예전 세특 ' + s.styleSamples + '편' + (s.styleCard ? ' · 문체 카드 있음' : ' · 문체 카드 없음') + ' — 모든 생성에 함께 보냅니다.') + '</div>' +
+      '<div class="frow"><div class="fld"><label>한 번에 묶을 학생 수 <span class="hint">1~10, 1이면 한 명씩(가장 꼼꼼)</span></label><input type="number" id="nBatch" min="1" max="10" value="' + s.batch + '"></div>' +
+      '<div class="fld"><label>교사 경력(년) <span class="hint">역할 문장에 들어갑니다</span></label><input type="number" id="nYears" min="0" max="45" value="' + s.years + '"></div></div>' +
+      '<div class="sec"><h4>프롬프트</h4>' + hint('활동마다 다른 내용은 탭 줄 오른쪽 [⚙ 활동 설정]의 개요 · 예시에서, 모든 활동에 들어가는 글은 여기서 고칩니다.') +
+      '<div style="margin-top:6px"><button id="gCommon">📐 공통 프롬프트 고치기</button></div></div>';
+  }
+  if (tab === 'roster') {
+    h += '<div class="sec" style="border-top:0;margin-top:6px"><h4>지금 명단 — ' + s.rosterCount + '명 (' + (s.rosterMode === 'grade' ? '학년 · 반 · 번호' : '반 · 번호') + ')</h4>' +
+      hint('엑셀 · 한셀에서 <b>반 · 번호 · 이름</b> 열을 복사해 붙여 넣으세요(머리글 줄이 있어도 됩니다). <b>지금 명단을 통째로 바꾸고</b> 모든 활동 시트에 반영합니다. 이미 쓴 글은 반 · 번호가 같은 학생에게 그대로 남습니다.') +
+      '<div class="fld"><textarea id="rText" rows="8" placeholder="1&#9;1&#9;김하늘&#10;1&#9;2&#9;이바다&#10;…"></textarea></div>' +
+      '<div class="msg err" id="rMsg"></div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="primary" id="rGo">확인하고 바꾸기</button>' +
+      '<button id="rSync" title="[학생명단] 시트를 직접 고쳤을 때 — 모든 활동 시트에 학생 줄을 맞춥니다">시트에서 고친 명단 반영</button></div></div>';
+  }
+  openCover('<h3>⚙ 설정</h3><div class="seg" id="setTabs">' + [['ai', 'AI 연결'], ['write', '쓰기 방식'], ['roster', '학생 명단']].map(function (t) {
+      return '<button data-t="' + t[0] + '"' + (t[0] === tab ? ' class="on"' : '') + '>' + t[1] + '</button>'; }).join('') + '</div>' + h +
+    '<div class="foot"><button id="setClose">닫기</button></div>');
+  wide();
+  $('setClose').onclick = function () { closeCover(); drawHeader(); drawMid(); };
+  $('setTabs').onclick = function (e) { var t = e.target.getAttribute('data-t'); if (t && t !== tab) drawSet(t); };
+
+  if (tab === 'ai') {
+    if ($('cWd')) $('cWd').onclick = function () {
+      if (confirm('동의를 철회하면 다시 동의할 때까지 AI를 부르지 않습니다. 철회할까요?')) run('consentWithdraw', undefined, function () { saveSet({}, '동의를 철회했습니다.'); }, '저장 중…');
+    };
+    if ($('cAg')) $('cAg').onclick = function () {
+      var c = [].map.call($('card').querySelectorAll('[data-ci]'), function (x) { return x.checked; });
+      run('consentAgree', { checked: c }, function () { saveSet({}, '동의했습니다.'); }, '저장 중…');
+    };
+    var sendKeys = function (obj, msg) { run('saveKeys', obj, function (r) { saveSet({}, msg || r.message); }, '키를 저장하는 중…'); };
+    $('kGo').onclick = function () {
+      var obj = {}, n = 0;
+      [].forEach.call($('card').querySelectorAll('[data-key]'), function (el) { var v = el.value.trim(); obj[el.getAttribute('data-key')] = v || '__KEEP__'; if (v) n++; });
+      if (!n) { toast('새로 넣은 키가 없습니다.'); return; }
+      sendKeys(obj);
+    };
+    [].forEach.call($('card').querySelectorAll('[data-kdel]'), function (b) {
+      b.onclick = function () {
+        var k = b.getAttribute('data-kdel'), obj = {};
+        if (!confirm('이 키를 지울까요? 이 회사 모델은 목록에서 빠집니다.')) return;
+        obj[k] = '__DELETE__'; sendKeys(obj, '키를 지웠습니다.');
+      };
+    });
+    $('mAct').onchange = function () { saveSet({ model: this.value }); };
+    $('mCmp').onchange = function () { saveSet({ compile: this.value }); };
+    $('mBak').onchange = function () { saveSet({ backup: this.value }); };
+    $('mTest').onclick = function () {
+      $('mMsg').className = 'msg'; $('mMsg').textContent = '시험 중…';
+      run('testModel', { model: s.model }, function (r) {
+        $('mMsg').className = 'msg ' + (r.ok ? 'ok' : r.ok === false ? 'err' : '');
+        $('mMsg').textContent = (r.ok ? '✓ 연결됨' + (r.sec ? ' (' + r.sec + '초)' : '') + ' ' : '') + (r.ok ? '' : r.message || '');
+      });
+    };
+  }
+  if (tab === 'write') {
+    [].forEach.call($('card').querySelectorAll('[data-b]'), function (el) {
+      el.onchange = function () {
+        var k = el.getAttribute('data-b'), p = {};
+        if (k === 'mask' && !el.checked && !confirm('학생 이름을 AI 회사로 그대로 보내게 됩니다. 개인정보 보호를 위해 켜 두는 것을 권합니다. 그래도 끌까요?')) { el.checked = true; return; }
+        p[k] = el.checked; saveSet(p);
+      };
+    });
+    $('nBatch').onchange = function () { saveSet({ batch: Number(this.value) || 1 }); };
+    $('nYears').onchange = function () { saveSet({ years: Number(this.value) || 0 }); };
+    $('gCommon').onclick = function () { commonCover(function () { drawSet('write'); }); };
+  }
+  if (tab === 'roster') {
+    var after = function (res, msg) {
+      CTX = res.context; SETUP = null; closeCover(); toast(msg);
+      var m = MODE; MODE = ''; setMode(m);
+    };
+    $('rGo').onclick = function () {
+      var text = $('rText').value;
+      if (!text.trim()) { $('rMsg').textContent = '명단을 붙여 넣어 주세요.'; return; }
+      run('rosterPreview', { text: text, mode: 'auto' }, function (pv) {
+        if (!pv.count) { $('rMsg').textContent = '명단을 알아보지 못했습니다. 반, 번호, 이름 순서로 한 줄에 한 명씩 넣어 주세요.'; return; }
+        var warn = (pv.warnings || []).join('\n');
+        if (!confirm(pv.count + '명을 읽었습니다(' + (pv.mode === 'grade' ? '학년 · 반 · 번호' : '반 · 번호') + ').' + (pv.skippedCount ? ' 알아보지 못한 줄 ' + pv.skippedCount + '개는 뺍니다.' : '') +
+                     (warn ? '\n\n' + warn : '') + '\n\n지금 명단 ' + s.rosterCount + '명을 이 명단으로 바꿀까요?')) return;
+        run('deskRosterSave', { text: text, mode: pv.mode }, function (res) { after(res, res.count + '명 명단을 저장하고 활동 시트에 반영했습니다.'); }, '명단을 저장하는 중…');
+      }, '명단을 읽는 중…');
+    };
+    $('rSync').onclick = function () { run('deskSyncRoster', undefined, function (res) { after(res, '활동 시트 ' + res.sheets + '개에 명단을 반영했습니다.'); }, '반영하는 중…'); };
+  }
+}
+
+/* ---------------------------------------------------------- 취합 · 나이스 (v3.1.2) */
+var SUM = null, SAREA = '', SD = {}, SCUR = '', sTimer = null;
+function sAreas() { return (SUM ? SUM.areas : []).filter(function (a) { return a.mode === MODE; }); }
+function sArea() {
+  var list = sAreas();
+  var a = list.filter(function (x) { return x.rec === SAREA; })[0] || list[0] || null;
+  if (a) SAREA = a.rec;
+  return a;
+}
+function sRows(a) { return a.rows.filter(function (r) { return !CLS || r.cls === CLS; }); }
+function sRow(id) { var a = sArea(); return a ? a.rows.filter(function (r) { return r.id === id; })[0] || null : null; }
+function sTr(id) { return [].filter.call(document.querySelectorAll('table.sum tbody tr[data-id]'), function (tr) { return tr.getAttribute('data-id') === id; })[0] || null; }
+function sSelected() { return [].map.call(document.querySelectorAll('table.sum tbody tr:not([hidden]) .ssel:checked'), function (c) { return c.closest('tr').getAttribute('data-id'); }); }
+function sGood(t) { t = String(t || '').trim(); return t && t.indexOf('⚠') !== 0 && t.indexOf('=') !== 0 ? t : ''; }
+function sumTabsHtml() {
+  var list = sAreas(), cur = sArea();
+  if (!list.length) return '<div style="padding:8px 4px;color:var(--muted);font-size:12.5px">취합할 영역 없음</div>';
+  return list.map(function (a) {
+    return '<div class="tab' + (cur && a.rec === cur.rec ? ' on' : '') + '" data-area="' + esc(a.rec) + '">📦 ' + esc(a.name) + '<span class="rec">' + a.limit + 'B</span></div>';
+  }).join('');
+}
+function loadSum(refresh, done) {
+  run('deskCompile', { refresh: !!refresh }, function (res) {
+    SUM = res; SD = {}; drawHeader(); drawMid(); done && done();
+  }, refresh ? '활동 결과를 모으는 중… (몇 초 걸립니다)' : '취합을 불러오는 중…');
+}
+function sState(r, a) {
+  var fin = r.final.trim(), m = r.merged.trim();
+  if (!fin) return m ? (bytes(m) > a.limit ? ['over', '한도 넘음 — 압축'] : ['none', '비어 있음']) : ['none', '활동 글 없음'];
+  if (bytes(r.final) > a.limit) return ['over', '한도 넘음'];
+  if (fin === m) return ['same', '합본 그대로'];
+  if (fin === sGood(r.ai)) return ['ai', '압축본'];
+  return ['edit', '다듬음'];
+}
+function sCell(tr, r, a) {
+  var td = tr && tr.querySelector('.c-by'); if (!td) return;
+  var st = sState(r, a), fin = r.final.trim(), m = r.merged.trim(), ai = sGood(r.ai), b = bytes(r.final);
+  td.className = 'c-by' + (st[0] === 'over' ? ' over' : '');
+  td.innerHTML = '<span class="sst ' + st[0] + '">' + st[1] + '</span><div>' + (fin ? b + ' / ' + a.limit : m ? '합본 ' + bytes(m) : '') + '</div>' +
+    (m && fin !== m && bytes(m) <= a.limit ? '<button class="sbtn" data-s="merge" title="활동 글을 이어 붙인 합본을 최종본에 넣습니다">↺ 합본</button>' : '') +
+    (ai && fin !== ai ? '<button class="sbtn" data-s="ai" title="AI가 줄인 글을 최종본에 넣습니다">압축본</button>' : '');
+}
+function sCount() {
+  var el = $('sCount'), a = sArea(); if (!el || !a) return;
+  var rows = sRows(a), fin = 0, over = 0;
+  rows.forEach(function (r) { var st = sState(r, a)[0]; if (r.final.trim() && st !== 'over') fin++; if (st === 'over') over++; });
+  el.innerHTML = '최종본 ' + fin + ' / ' + rows.length + '명' + (over ? ' · <b style="color:var(--warn)">한도 넘음 ' + over + '명</b>' : '');
+}
+function sFilter() {
+  var q = $('q').value.trim();
+  [].forEach.call(document.querySelectorAll('table.sum tbody tr[data-id]'), function (tr) { tr.hidden = !!q && tr.getAttribute('data-q').indexOf(q) < 0; });
+}
+function drawSum() {
+  var m = $('mid');
+  if (!SUM) { m.className = 'mid'; m.innerHTML = ''; loadSum(true); return; }
+  var a = sArea();
+  if (!a) return emptyMid('<h3>모을 활동 결과가 아직 없습니다</h3>[한 명씩] · [표]에서 활동 글을 쓴 뒤 다시 모아 주세요.<div class="row"><button class="primary" id="sRefresh">🔄 다시 모으기</button></div>');
+  var rows = sRows(a);
+  if (!rows.some(function (r) { return r.id === SCUR; })) SCUR = '';
+  var keep = $('swrap') ? { x: $('swrap').scrollLeft, y: $('swrap').scrollTop } : null;
+  m.className = 'mid gridmode';
+  var h = '<div class="gbar"><input type="search" id="sq" placeholder="이름 · 번호로 찾기" value="' + esc($('q').value) + '">' +
+    '<button id="sRefresh" title="활동 시트의 최종본(없으면 AI 결과)을 다시 읽어 이어 붙입니다. 여기서 다듬은 최종본은 그대로 둡니다">🔄 다시 모으기</button>' +
+    '<button class="primary" id="sPress" title="체크한 학생(없으면 한도를 넘는 학생 모두)의 합본을 AI가 한도 안으로 줄입니다">🗜 한도 넘는 학생 압축</button>' +
+    '<button id="sEq" title="학생끼리 같은 문장 · 분량 차이 · 빈 학생을 찾습니다(AI로 보내지 않음)">⚖️ 학생 간 점검</button>' +
+    '<button id="sNeis" title="나이스에서 내려받은 엑셀 양식에 최종본을 채워 돌려받습니다">📤 나이스 입력 파일</button>' +
+    '<button id="sCopy" title="보이는 학생의 최종본을 번호 순서대로 한 줄씩 복사합니다(엑셀에 붙여 넣기)">📋 최종본 열 복사</button>' +
+    '<button id="sSave">💾 저장</button><span class="spacer"></span><span id="sCount" style="font-size:12px;color:var(--muted)"></span></div>' +
+    '<div class="ghint">📦 <b>' + esc(a.name) + '</b> — 활동 ' + a.acts.length + '개(' + a.acts.map(esc).join(' · ') + ')의 글을 학생마다 이어 붙였습니다. 합본이 ' + a.limit +
+    '바이트 안이면 그대로 최종본이 되고, 넘는 학생만 압축합니다. 나이스에는 이 <b>최종본</b>이 들어갑니다.' +
+    (SUM.manualOnly ? ' · 합본용 AI 키가 없어 압축은 복사 · 붙여넣기로 진행합니다.' : '') + '</div>';
+  h += '<div class="gwrap" id="swrap"><table class="grid sum"><thead><tr><th class="c-chk"><input type="checkbox" id="sAll" title="보이는 학생 모두 고르기"></th>' +
+    '<th class="c-no">번호</th><th class="c-nm">이름</th><th class="c-ai">활동별 글 → 합본</th><th class="c-fin">최종본 (나이스에 들어갈 글)</th><th class="c-by">상태</th></tr></thead><tbody>';
+  h += rows.map(function (r) {
+    var parts = a.acts.map(function (n, i) { return r.parts[i] ? '<div class="spart"><b>' + esc(n) + '</b> ' + esc(r.parts[i]) + '</div>' : ''; }).join('');
+    return '<tr data-id="' + esc(r.id) + '" data-q="' + esc(r.name + ' ' + r.no + ' ' + r.cls) + '"' + (r.id === SCUR ? ' class="on"' : '') + '>' +
+      '<td class="c-chk"><input type="checkbox" class="ssel"></td><td class="c-no">' + esc((CLS ? '' : r.cls + '-') + r.no) + '</td><td class="c-nm">' + esc(r.name || '(이름 없음)') + '</td>' +
+      '<td class="c-ai"><div class="gai' + (parts ? '' : ' none') + '">' + (parts || '활동 글이 아직 없습니다') + '</div></td>' +
+      '<td class="c-fin"><textarea data-c="fin">' + esc(r.final) + '</textarea></td><td class="c-by"></td></tr>';
+  }).join('');
+  m.innerHTML = h + '</tbody></table></div>';
+  rows.forEach(function (r) { sCell(sTr(r.id), r, a); });
+  sFilter(); sCount(); drawCheck();
+  if (keep) { $('swrap').scrollLeft = keep.x; $('swrap').scrollTop = keep.y; }
+}
+function sSet(id, val, tr, quiet) {
+  var a = sArea(), r = sRow(id); if (!a || !r) return;
+  r.final = val; SD[id] = true; markDirty();
+  sCell(tr || sTr(id), r, a); sCount();
+  if (id === SCUR && !quiet) queueCheck();
+  clearTimeout(sTimer); sTimer = setTimeout(function () { saveSum(); }, 2500);
+}
+function sPut(id, val) {
+  var tr = sTr(id), ta = tr && tr.querySelector('textarea'); if (ta) ta.value = val;
+  sSet(id, val, tr); if (id === SCUR) drawCheck();
+}
+/** 고친 최종본을 한 번에 저장하고 next() */
+function saveSum(next) {
+  clearTimeout(sTimer);
+  if (SAVING) { setTimeout(function () { saveSum(next); }, 300); return; }
+  var a = sArea(), ids = Object.keys(SD);
+  if (!a || !ids.length) { SD = {}; DIRTY = false; next && next(); return; }
+  var rec = a.rec, rows = ids.map(function (id) { var r = sRow(id); return r ? { id: id, row: r.row, final: r.final } : null; }).filter(Boolean);
+  SD = {}; SAVING = true; setSave('저장 중…');
+  google.script.run.withSuccessHandler(function (res) {
+    SAVING = false;
+    (res.rows || []).forEach(function (row) { var cur = a.rows.filter(function (x) { return x.id === row.id; })[0]; if (cur) { cur.row = row.row; cur.check = row.check; } });
+    if (res.missing && res.missing.length) toast('⚠ 취합에서 찾지 못한 학생 ' + res.missing.length + '명은 저장하지 못했습니다. [🔄 다시 모으기]를 눌러 주세요.');
+    if (Object.keys(SD).length) { setSave('● 저장 안 됨', 'dirty'); if (next) saveSum(next); else sTimer = setTimeout(function () { saveSum(); }, 1500); return; }
+    DIRTY = false; setSave('저장됨 ✓ ' + rows.length + '명');
+    next && next();
+  }).withFailureHandler(function (e) {
+    SAVING = false; ids.forEach(function (id) { SD[id] = true; });
+    setSave('저장 실패', 'err'); toast('⚠ 저장하지 못했습니다: ' + ((e && e.message) || e));
+  }).deskCompileSave({ rec: rec, rows: rows });
+}
+function sMerge(rows) {
+  var a = sArea(); if (!a) return;
+  rows.forEach(function (row) { var i = -1; a.rows.forEach(function (x, k) { if (x.id === row.id) i = k; }); if (i >= 0) a.rows[i] = row; });
+  drawMid();
+}
+function sPress() {
+  var a = sArea(); if (!a) return;
+  if (!CTX.consent) { toast('🔒 먼저 [⚙ 설정] > AI 연결에서 개인정보 · 보안 안내에 동의해 주세요.'); return; }
+  var ids = sSelected(), picked = ids.length > 0;
+  if (!picked) ids = sRows(a).filter(function (r) { return sState(r, a)[0] === 'over'; }).map(function (r) { return r.id; });
+  if (!ids.length) { toast('한도를 넘는 학생이 없습니다. 줄이고 싶은 학생이 있으면 체크칸으로 고르세요.'); return; }
+  if (ids.length > 1 && !confirm(ids.length + '명의 합본을 ' + a.limit + '바이트 안으로 줄입니다. 계속할까요?')) return;
+  saveThen(function () {
+    var rows = ids.map(function (id) { var r = sRow(id); return { id: id, row: r.row }; });
+    run('deskCompress', { rec: a.rec, rows: rows }, function (res) {
+      if (res.consent === false) { toast('🔒 먼저 [⚙ 설정] > AI 연결에서 개인정보 · 보안 안내에 동의해 주세요.'); return; }
+      if (res.manual) {
+        manualCover(res.manual, res.empty, { into: '[AI 압축결과]', end: '한도를 넘던 학생은 최종본에 넣었습니다. 읽고 다듬어 주세요.',
+          reload: function (c, cb) { run('deskCompileRows', { rec: a.rec, rows: c.rows, adopt: true }, function (back) { sMerge(back); cb(); }); } });
+        return;
+      }
+      sMerge(res.rows || []);
+      var d = res.done || {}, t = '압축 ' + (d.ok || 0) + '명';
+      if (d.err) t += ' · 실패 ' + d.err + '명';
+      if (d.left) t += ' · 시간 제한으로 ' + d.left + '명 남음(다시 누르세요)';
+      if (res.empty) t += ' · 활동 글이 없는 학생 ' + res.empty + '명은 건너뜀';
+      toast((res.rows || []).length ? t + ' — 읽고 다듬어 주세요.' : '줄일 글이 없습니다.');
+    }, ids.length > 1 ? ids.length + '명 압축 중… (몇 분 걸릴 수 있어요)' : 'AI가 줄이는 중…');
+  });
+}
+/* ⚖️ 학생 간 점검 */
+function sEquity() {
+  var a = sArea(); if (!a) return;
+  saveThen(function () {
+    run('deskEquity', { rec: a.rec, cls: CLS }, function (r) {
+      var h = '<h3>⚖️ 학생 간 점검 — ' + esc(a.name) + (CLS ? ' · ' + esc(CLS) + '반' : '') + '</h3>' +
+        hint('최종본 ' + r.filled + ' / ' + r.n + '명' + (r.median ? ' · 가운데 분량 ' + Math.round(r.median) + '바이트' : '') + ' · 이 창 안에서만 비교합니다(AI로 보내지 않음).');
+      h += '<div class="sec"><h4>같은 문장 ' + r.similar.length + '쌍</h4>' + (r.similar.length ? r.similar.slice(0, 40).map(function (x) {
+        return '<div class="eqrow"><b>' + esc(x.a) + '</b> ↔ <b>' + esc(x.b) + '</b><span>' + Math.round(x.ratio * 100) + '% 겹침</span></div>'; }).join('') +
+        (r.similar.length > 40 ? hint('… 외 ' + (r.similar.length - 40) + '쌍') : '') : hint('겹치는 학생이 없습니다.')) + '</div>';
+      h += '<div class="sec"><h4>분량 차이 ' + r.gaps.length + '명</h4>' + (r.gaps.length ? r.gaps.map(function (x) {
+        return '<div class="eqrow"><b>' + esc(x.label) + '</b><span>' + x.bytes + '바이트 · ' + esc(x.kind) + '</span></div>'; }).join('') : hint(r.filled < 4 ? '최종본이 4명 이상일 때 비교합니다.' : '크게 짧거나 긴 학생이 없습니다.')) + '</div>';
+      h += '<div class="sec"><h4>최종본이 빈 학생 ' + r.empty.length + '명</h4>' + (r.empty.length ? '<div class="chips">' + r.empty.map(function (x) { return '<span class="chip">' + esc(x) + '</span>'; }).join('') + '</div>' : hint('모두 채워졌습니다.')) + '</div>';
+      h += '<div class="foot"><button id="bX">닫기</button></div>';
+      openCover(h); $('bX').onclick = closeCover;
+    }, '학생 사이를 비교하는 중…');
+  });
+}
+/* 📤 나이스 입력 파일 — 나이스 엑셀 양식에 최종본을 채워 돌려받는다 */
+function sNeis() {
+  var a = sArea(); if (!a) return;
+  saveThen(function () {
+    var FILES = [];
+    openCover('<h3>📤 나이스 입력 파일 — ' + esc(a.name) + '</h3>' +
+      hint('나이스에서 내려받은 엑셀 양식(.xlsx)을 고르면, 학생마다 <b>최종본</b>을 채운 같은 파일을 돌려드립니다. 받은 파일을 나이스에 그대로 올리면 됩니다. 파일은 어디에도 저장하지 않습니다.') +
+      '<div class="fld"><input type="file" id="nFile" accept=".xlsx" multiple></div>' +
+      '<div class="fld"><label>채울 글</label><select id="nSrc">' + opt(a.sheet, '지금 보는 영역 — ' + a.name, true) + opt('', '자동 — 양식 종류에 맞는 영역', false) + '</select></div>' +
+      '<label class="tog"><input type="checkbox" id="nFlag"><span>[수정]이 남은 학생도 넣기<small>끄면 검증에 [수정]이 남은 학생은 빠집니다.</small></span></label>' +
+      '<label class="tog"><input type="checkbox" id="nOver"><span>양식에 이미 있는 내용 덮어쓰기</span></label>' +
+      '<div id="nList"></div><div class="msg" id="nMsg"></div><div class="foot"><button id="bX">닫기</button></div>');
+    wide();
+    $('bX').onclick = closeCover;
+    function arg(f) { return { b64: f.b64, source: $('nSrc').value, includeFlagged: $('nFlag').checked, overwrite: $('nOver').checked, fileName: f.name }; }
+    function draw(i) {
+      var f = FILES[i], el = $('nf' + i); if (!el) return;
+      if (f.err) { el.innerHTML = '<b>' + esc(f.name) + '</b><div class="msg err">' + esc(f.err) + '</div>'; return; }
+      if (!f.pv) { el.innerHTML = '<b>' + esc(f.name) + '</b> <span class="hint">읽는 중…</span>'; return; }
+      var r = f.pv, fm = r.form, no = r.plan.length - r.fill;
+      var info = [fm.year && fm.year + '학년도', fm.term && fm.term + '학기', fm.subject, fm.kind ? '(' + fm.kind + ')' : ''].filter(Boolean).join(' ');
+      el.innerHTML = '<b>' + esc(f.name) + '</b> <span class="hint">' + esc(info) + ' ← ' + esc(r.source.sheet) + '</span>' +
+        '<div style="margin-top:4px">학생 ' + r.plan.length + '명 중 <b>넣을 학생 ' + r.fill + '명</b>' + (no ? ' · <b style="color:var(--warn)">빠지는 학생 ' + no + '명</b>' : '') + '</div>' +
+        (no ? '<details open><summary>빠지는 학생과 까닭</summary>' + r.plan.filter(function (x) { return !x.ok; }).map(function (x) {
+          return '<div class="eqrow"><b>' + esc(x.label) + '</b><span>' + esc(x.why) + '</span></div>'; }).join('') + '</details>' : '') +
+        '<div style="display:flex;gap:6px;align-items:center;margin-top:6px"><button class="primary" data-get="' + i + '"' + (r.fill ? '' : ' disabled') + '>⬇ 채운 파일 받기</button><span class="msg" id="nm' + i + '" style="margin:0"></span></div>';
+    }
+    function preview() {
+      $('nList').innerHTML = FILES.map(function (f, i) { return '<div class="exbox" id="nf' + i + '"></div>'; }).join('');
+      FILES.forEach(function (f, i) {
+        if (!f.b64) { draw(i); return; }
+        f.pv = null; f.err = ''; draw(i);
+        google.script.run.withSuccessHandler(function (r) { f.pv = r; draw(i); })
+          .withFailureHandler(function (e) { f.err = (e && e.message) || String(e); draw(i); }).neisPreview(arg(f));
+      });
+    }
+    $('nFile').onchange = function () {
+      var list = [].slice.call(this.files || []); if (!list.length) return;
+      FILES = []; var left = list.length;
+      list.forEach(function (file, i) {
+        var rd = new FileReader();
+        rd.onload = function () { FILES[i] = { name: file.name, b64: String(rd.result).split(',')[1] || '' }; if (--left === 0) preview(); };
+        rd.onerror = function () { FILES[i] = { name: file.name, b64: '', err: '파일을 읽지 못했습니다.' }; if (--left === 0) preview(); };
+        rd.readAsDataURL(file);
+      });
+    };
+    $('nSrc').onchange = $('nFlag').onchange = $('nOver').onchange = function () { if (FILES.length) preview(); };
+    $('nList').onclick = function (e) {
+      var b = e.target.closest('button[data-get]'); if (!b) return;
+      var i = +b.getAttribute('data-get'), f = FILES[i], msg = $('nm' + i);
+      b.disabled = true; msg.className = 'msg'; msg.textContent = '만드는 중…';
+      google.script.run.withSuccessHandler(function (r) {
+        var bin = atob(r.b64), arr = new Uint8Array(bin.length);
+        for (var k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
+        var link = document.createElement('a');
+        link.href = URL.createObjectURL(new Blob([arr], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+        link.download = r.file; document.body.appendChild(link); link.click();
+        setTimeout(function () { URL.revokeObjectURL(link.href); link.remove(); }, 1500);
+        b.disabled = false; msg.className = 'msg ok'; msg.textContent = '✓ ' + r.fill + '명을 채운 파일을 받았습니다' + (r.skip ? ' (' + r.skip + '명은 빠짐)' : '') + '.';
+      }).withFailureHandler(function (e) { b.disabled = false; msg.className = 'msg err'; msg.textContent = (e && e.message) || String(e); }).neisBuild(arg(f));
+    };
+  });
+}
+function sCopy() {
+  var a = sArea(); if (!a) return;
+  var rows = sRows(a).filter(function (r) { var tr = sTr(r.id); return tr && !tr.hidden; });
+  var ta = document.createElement('textarea');
+  ta.value = rows.map(function (r) { return r.final.replace(/\s*\r?\n\s*/g, ' ').trim(); }).join('\n');
+  ta.style.position = 'fixed'; ta.style.left = '-9999px'; document.body.appendChild(ta); ta.select();
+  var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  toast(ok ? '✓ ' + rows.length + '명의 최종본을 번호 순서대로 복사했습니다. 엑셀에서 첫 학생 칸에 붙여 넣으세요.' : '복사가 막혔습니다.');
+}
+/** 취합 보기 안의 누름 · 입력 — true 면 여기서 처리함 */
+function sClick(e) {
+  var id = e.target.id, t = e.target;
+  if (id === 'sRefresh') { saveThen(function () { loadSum(true, function () { toast('활동 결과를 다시 모았습니다.'); }); }); return true; }
+  if (VIEW !== 'sum') return false;
+  if (id === 'sPress') sPress();
+  if (id === 'sEq') sEquity();
+  if (id === 'sNeis') sNeis();
+  if (id === 'sCopy') sCopy();
+  if (id === 'sSave') saveThen(function () { toast('저장했습니다.'); });
+  if (id === 'sAll') [].forEach.call(document.querySelectorAll('table.sum tbody tr:not([hidden]) .ssel'), function (c) { c.checked = t.checked; });
+  if (t.classList && t.classList.contains('sbtn')) {
+    var tr = t.closest('tr[data-id]'), r = tr && sRow(tr.getAttribute('data-id'));
+    if (r) sPut(r.id, t.getAttribute('data-s') === 'ai' ? sGood(r.ai) : r.merged.trim());
+  }
+  return true;
+}
+
+/* ---------------------------------------------------------- 길잡이 (v3.2.0) */
+/* 창 맨 위 한 줄 — 어디까지 했는지와 다음 할 일. 누르면 그 일을 이 창 안에서 바로 한다. */
+var GUIDE = null, gdTimer = null;
+function guideSteps() {
+  var g = GUIDE || {};
+  var S = [];
+  if (!g.installed) {
+    S.push({ k: 'install', label: '처음 설치', sub: '시트 만들기', done: false, tip: '이 파일에 필요한 시트를 만듭니다(한 번만).' });
+    return S;
+  }
+  S.push({ k: 'roster', label: '명단', sub: g.students ? g.students + '명' : '없음', done: g.students > 0, tip: '엑셀에서 반 · 번호 · 이름을 복사해 넣습니다.' });
+  S.push({ k: 'act', label: '활동', sub: g.acts ? g.acts + '개' : '없음', done: g.acts > 0, tip: '수행평가 · 탐구 · 동아리 같은 활동을 만듭니다.' });
+  S.push({ k: 'ai', label: 'AI 연결', sub: !g.consent ? '동의 필요' : g.api ? '연결됨' : '키 없이', done: !!g.consent,
+           tip: !g.consent ? '학생 자료를 AI로 보내기 전에 개인정보 · 보안 안내에 한 번 동의합니다.' : g.api ? 'AI 키가 연결되어 있습니다.' : '키가 없어도 복사 · 붙여넣기로 쓸 수 있습니다. 키를 넣으면 한 번에 받습니다.' });
+  S.push({ k: 'write', label: '쓰기', sub: g.slots ? g.written + ' / ' + g.slots : '—', done: g.slots > 0 && g.written >= g.slots,
+           tip: '학생마다 관찰한 것을 적고 AI 초안을 받아 최종본으로 다듬습니다. 숫자는 최종본이 있는 칸 / 전체 칸.' });
+  S.push({ k: 'sum', label: '취합', sub: g.compiled ? '모음 ' + g.compiled : '아직', done: g.compiled > 0,
+           tip: '활동별 글을 과세특 · 동아리 · 자율 · 진로 · 행발마다 하나로 모으고, 한도를 넘는 학생만 줄입니다.' });
+  S.push({ k: 'neis', label: '나이스', sub: '입력 파일', done: false, last: true, tip: '나이스에서 내려받은 양식에 최종본을 채운 파일을 받습니다.' });
+  return S;
+}
+/** 다음 할 일 — 아직 하지 않은 첫 단계 (쓰기를 시작했으면 취합은 재촉하지 않는다) */
+function guideNext(S) {
+  var g = GUIDE || {};
+  for (var i = 0; i < S.length; i++) {
+    var s = S[i];
+    if (s.done || s.last) continue;
+    if (s.k === 'sum' && !(g.slots > 0 && g.written > 0)) continue;
+    return s.k;
+  }
+  return '';
+}
+var GUIDE_SAY = {
+  install: '먼저 [처음 설치]를 눌러 시트를 만드세요.', roster: '다음: 학생 명단을 넣으세요.', act: '다음: 활동을 하나 만드세요.',
+  ai: '다음: AI로 쓰기 전에 개인정보 · 보안 안내에 동의하세요.', write: '다음: 학생별로 관찰한 것을 적고 초안을 받아 다듬으세요.',
+  sum: '다음: [취합]에서 영역마다 하나로 모으고 나이스 파일을 받으세요.', '': '모두 썼습니다. [취합] → [나이스]로 마무리하세요.'
+};
+function drawGuide() {
+  var el = $('guide'); if (!el) return;
+  if (!GUIDE) { el.hidden = true; return; }
+  var S = guideSteps(), next = guideNext(S);
+  el.hidden = false;
+  el.innerHTML = S.map(function (s, i) {
+    return (i ? '<span class="garrow">›</span>' : '') +
+      '<button class="gstep' + (s.done ? ' done' : '') + (s.k === next ? ' next' : '') + '" data-guide="' + s.k + '" title="' + esc(s.tip) + '">' +
+      '<span class="gmark">' + (s.done ? '✓' : s.k === next ? '▶' : (i + 1)) + '</span>' + esc(s.label) + ' <span class="gsub">' + esc(s.sub) + '</span></button>';
+  }).join('') + '<span class="gsay">' + esc(GUIDE_SAY[next] || '') + '</span>' +
+    (GUIDE.demo && GUIDE.demo.filled ? '<button class="gdemo" id="bDemoClear" title="체험 활동과 가상 학생 3명만 지웁니다. 다른 자료는 건드리지 않습니다.">🧪 체험 예시 지우기</button>' : '');
+}
+/** 숫자를 다시 읽는다 — 화면이 바뀔 때마다 부르지만 서버에는 잠깐 모아서 한 번만 */
+function refreshGuide(now) {
+  clearTimeout(gdTimer);
+  gdTimer = setTimeout(function () {
+    google.script.run.withSuccessHandler(function (g) { GUIDE = g; drawGuide(); }).withFailureHandler(function () {}).deskGuide();
+  }, now ? 0 : 1500);
+}
+function guideGo(k) {
+  if (k === 'install') {
+    run('onboardInstall', undefined, function () {
+      run('deskContext', undefined, function (ctx) { CTX = ctx; GUIDE = ctx.guide; drawGuide(); MODE = ''; setMode('subject'); toast('시트를 만들었습니다. 이제 학생 명단을 넣으세요.'); });
+    }, '시트를 만드는 중…');
+    return;
+  }
+  if (k === 'roster') { setCover('roster'); return; }
+  if (k === 'ai') { setCover('ai'); return; }
+  if (k === 'act') { if (MODE === 'homeroom' && !CTX.hasHomeroomActs) { drawMid(); toast('아래 [자율 · 진로 · 행발 시트 만들기]를 누르세요.'); } else addCover(''); return; }
+  if (k === 'write') { if (VIEW === 'sum') setView('one'); else toast(STUDENTS.length ? '왼쪽에서 학생을 고르고 관찰한 것을 적으세요.' : '먼저 명단과 활동을 준비하세요.'); return; }
+  if (k === 'sum') { if (VIEW !== 'sum') setView('sum'); return; }
+  if (k === 'neis') {
+    if (VIEW === 'sum' && typeof SUM !== 'undefined' && SUM) { sNeis(); return; }
+    setView('sum'); toast('모은 뒤 위쪽 [📤 나이스 입력 파일]을 누르세요.');
+  }
+}
 
 /* ---------------------------------------------------------- 이벤트 */
 $('mHome').onclick = function () { setMode('homeroom'); };
 $('mSubj').onclick = function () { setMode('subject'); };
 $('q').oninput = drawList;
 $('tabs').onclick = function (e) {
+  if (e.target.id === 'bActCfg') { actCover(); return; }
+  var ar = e.target.closest && e.target.closest('.tab[data-area]');
+  if (ar) {
+    var rk = ar.getAttribute('data-area'); if (rk === SAREA) return;
+    saveThen(function () { SAREA = rk; SCUR = ''; DIRTY = false; setSave(''); drawHeader(); drawMid(); });
+    return;
+  }
+  if (e.target.hasAttribute && e.target.hasAttribute('data-add')) { addCover(e.target.getAttribute('data-add')); return; }
   var t = e.target.closest('.tab[data-k]'); if (!t) return;
   var k = t.getAttribute('data-k'); if (k === ACT) return;
   saveThen(function () { ACT = k; store('act.' + MODE, k); DIRTY = false; setSave(''); drawHeader(); drawList(); drawMid(); });
@@ -440,13 +1462,63 @@ $('tabs').onclick = function (e) {
 $('list').onclick = function (e) { var el = e.target.closest('.st'); if (el) pick(el.getAttribute('data-id')); };
 $('mid').addEventListener('click', function (e) {
   var id = e.target.id;
+  sClick(e);
   if (id === 'bMakeHr') run('deskMakeHomeroomSheets', undefined, function (ctx) {
     CTX = ctx; toast(ctx.made.length ? ctx.made.join(' · ') + ' 시트를 만들었습니다.' : '이미 있습니다.'); MODE = ''; setMode('homeroom');
   }, '시트를 만드는 중…');
   if (id === 'bHr2') pickHomeroom();
-  if (id === 'bWizard') google.script.run.homeRun('wizard');
-  if (id === 'bQuick') google.script.run.homeRun('quick');
+  if (id === 'bAddAct') addCover('');
+  var gd = e.target.closest && e.target.closest('[data-guide]');
+  if (gd) { guideGo(gd.getAttribute('data-guide')); return; }
+  if (id === 'bSetRoster') setCover('roster');
+  if (id === 'bDemo') run('deskDemo', undefined, function (ctx) {
+    CTX = ctx; GUIDE = ctx.guide; store('act.subject', ctx.demoKey); MODE = ''; setMode('subject');
+    toast('체험 예시를 넣었습니다. 강하늘 학생의 AI 결과와 오른쪽 검증부터 보세요. 다 보면 위쪽 [🧪 체험 예시 지우기].');
+  }, '체험 예시를 넣는 중…');
+  if (id === 'bDemoClear') { if (confirm('체험 활동과 가상 학생 3명을 지울까요? 다른 자료는 건드리지 않습니다.')) saveThen(function () {
+    run('deskDemoClear', undefined, function (ctx) { CTX = ctx; GUIDE = ctx.guide; MODE = ''; setMode('subject'); toast('체험 예시를 지웠습니다. 이제 실제 명단을 넣으세요.'); }, '지우는 중…'); }); }
+  if (id === 'gGen') {
+    var ids = gSelected();
+    if (!ids.length && CUR && rowOf(CUR)) ids = [CUR];
+    if (!ids.length) { toast('맨 왼쪽 체크칸으로 학생을 고르세요.'); return; }
+    if (ids.length > 1 && !confirm(ids.length + '명을 씁니다. 계속할까요?')) return;
+    generate(ids);
+  }
+  if (id === 'gGenAll') genAll();
+  if (id === 'gTake') gTake();
+  if (id === 'gSave') saveThen(function () { toast('저장했습니다.'); });
+  if (id === 'gCols') colsCover(false);
+  if (id === 'gAdd') colsCover(true);
+  if (id === 'gAll') [].forEach.call(document.querySelectorAll('table.grid tbody tr:not([hidden]) .gsel'), function (c) { c.checked = e.target.checked; });
+  if (e.target.classList && e.target.classList.contains('hbtn')) colsCover(false, +e.target.getAttribute('data-col'));
 });
+$('mid').addEventListener('input', function (e) {
+  var t = e.target;
+  if (t.id === 'gq') { $('q').value = t.value; gFilter(); return; }
+  if (t.id === 'sq') { $('q').value = t.value; sFilter(); return; }
+  if (VIEW === 'sum') { var st = t.tagName === 'TEXTAREA' && t.closest('table.sum tr[data-id]'); if (st) { if (st.getAttribute('data-id') !== SCUR) { var so = document.querySelector('table.sum tr.on'); if (so) so.classList.remove('on'); st.classList.add('on'); SCUR = st.getAttribute('data-id'); } sSet(SCUR, t.value, st); } return; }
+  if (VIEW !== 'grid' || t.tagName !== 'TEXTAREA') return;
+  var tr = t.closest('tr[data-id]');
+  if (tr) gSet(tr.getAttribute('data-id'), t.getAttribute('data-c'), t.value, tr);
+});
+$('mid').addEventListener('focusin', function (e) {
+  if (VIEW === 'sum' && e.target.closest) {
+    var st = e.target.closest('table.sum tr[data-id]');
+    if (!st || st.getAttribute('data-id') === SCUR) return;
+    var so = document.querySelector('table.sum tr.on'); if (so) so.classList.remove('on');
+    st.classList.add('on'); SCUR = st.getAttribute('data-id'); drawCheck(); return;
+  }
+  if (VIEW !== 'grid' || !e.target.closest) return;
+  var tr = e.target.closest('tr[data-id]');
+  if (!tr || tr.getAttribute('data-id') === CUR) return;
+  var old = document.querySelector('table.grid tr.on'); if (old) old.classList.remove('on');
+  tr.classList.add('on'); CUR = tr.getAttribute('data-id'); drawCheck();
+});
+$('mid').addEventListener('paste', gPaste);
+$('vOne').onclick = function () { setView('one'); };
+$('vGrid').onclick = function () { setView('grid'); };
+$('vSum').onclick = function () { setView('sum'); };
+$('bSet').onclick = function () { setCover('ai'); };
 $('bFit').onclick = function () {
   saveThen(function () {
     var w = Math.max(900, (window.screen.availWidth || 1300) - 80), h = Math.max(540, (window.screen.availHeight || 800) - 190);
@@ -456,14 +1528,16 @@ $('bFit').onclick = function () {
 };
 document.addEventListener('keydown', function (e) {
   if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveThen(function () { toast('저장했습니다.'); }); }
-  if (e.altKey && e.key === 'ArrowDown') { e.preventDefault(); step(1); }
-  if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); step(-1); }
+  if (VIEW === 'sum') return;
+  if (e.altKey && e.key === 'ArrowDown') { e.preventDefault(); VIEW === 'grid' ? gStep(1) : step(1); }
+  if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); VIEW === 'grid' ? gStep(-1) : step(-1); }
 });
 /* 창을 닫기 전에 저장 안 된 글이 있으면 묻는다 */
 window.addEventListener('beforeunload', function (e) { if (DIRTY) { e.preventDefault(); e.returnValue = ''; } });
 
 run('deskContext', undefined, function (ctx) {
-  CTX = ctx;
+  CTX = ctx; GUIDE = ctx.guide || null;
+  VIEW = store('view') === 'grid' ? 'grid' : 'one'; drawView();
   var m = store('mode');
   if (m !== 'homeroom' && m !== 'subject') m = ctx.homeroom && ctx.hasHomeroomActs && !ctx.activities.some(function (a) { return a.mode === 'subject'; }) ? 'homeroom' : 'subject';
   MODE = ''; setMode(m);

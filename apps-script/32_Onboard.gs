@@ -59,7 +59,7 @@ function onboardStatus() {
   try {
     st.installed = !!(sh_(APP.SH.CONFIG) && sh_(APP.SH.RECORD) && sh_(APP.SH.ACTIVITY) && sh_(APP.SH.ROSTER));
   } catch (e) {}
-  ['gemini', 'openai', 'anthropic'].forEach(function (p) {
+  PROVIDERS.forEach(function (p) {
     if (getKey_(p)) { st.hasKey = true; st.keyNames.push(p); }
   });
   try { st.subscription = subOn_(); } catch (e) { st.subscription = false; }

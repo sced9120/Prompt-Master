@@ -2,13 +2,22 @@
 
 > 이 문서에 나오는 판 번호(v3.1 ~ v3.8.7)는 2026-10-30 에 v3.0.0 으로 다시 매기기 전의 **옛 번호**입니다. 지금 판은 `CHANGELOG.md` 맨 위를 보세요.
 
-현재 버전 **v3.0.3** (새 번호, 2026-11-10, Claude Code). 테스트 18개 파일 모두 통과(mock). **GitHub main · 원본 시트에 올림(2026-11-10)** — v3.0.1 · v3.0.2 · v3.0.3 을 한꺼번에.
+현재 버전 **v3.2.0** (새 번호, 2026-11-13, Claude Code). 테스트 18개 파일 모두 통과(mock). **GitHub main · 시험 사본 두 개 · 원본 시트에 올림(2026-11-13)** — v3.1.0 · v3.1.1 · v3.1.2 · v3.2.0 을 한꺼번에.
+
+- **2026-11-13 올림 (사용자가 미리 정해 둔 자동 작업)**: `npm test` → `npm run build` → `npm run kit` 뒤, 원본을 clasp pull 로 받아 백업(올리기 전 원본은 v3.0.3 — 저장소 cae3463 의 dist 와 22개 파일이 한 글자도 같음, 사용자 PC 에 날짜 붙은 백업 폴더로도 둠).
+  시험 사본 두 개에 먼저 push → pull 로 22개 파일이 빌드와 같은지 확인 → 원본 push → pull 로 22개 파일 확인. appsscript.json(권한)은 바뀌지 않음.
+  version.json(v3.2.0)이 main 에 올라가 v3.0.3 사본들에 새 버전 알림이 나간다. 원본에서 사람이 할 일: [① 처음 설치 / 구조 복구] 한 번, [시작하기 시트 다시 만들기] 한 번(새 메뉴 · 버튼). 실제 시트에서 작성실 표 보기 · 취합 · 길잡이 줄은 아직 손으로 눌러 보지 않음.
+  같은 날 오르빗 v3.7.0(세특 작성실 · 폰 연결 v2)도 배포됨.
 
 ## v3.0.2 · v3.0.3 작업 상태 (2026-11-09 ~ 10)
 
 - 결정: 설치 앱 대신 **시트 + 앱스스크립트** 유지(보급 · 보안 · 함께 쓰기). 시트가 많아 보이는 문제는 화면으로 푼다.
 - v3.0.2 🧭 작업판 · 간단히 보기: `33_Home.gs` · `UI_Home.html` · `test/home.test.js`. 뒤 시트는 숨기고(VIEW_SIMPLE), 시트를 열 때는 늘 `goSheet_`.
 - v3.0.3 🖥️ 작성실(큰 창): `38_Desk.gs` · `UI_Desk.html` · `test/desk.test.js`. [담임 | 교과] 모드(담임 = 자율 · 진로 · 행발 + 담임 학반 HOMEROOM), 학생별 3단 화면, 넘길 때 저장, 키 없이는 창 안 복사 · 붙여넣기(`manualPayload_`). 바탕화면의 「생기부 작성 도우미 v1.21」 화면 흐름만 참고(코드 · 디자인은 가져오지 않음).
+- **v3.1.0 (2026-11-10, 올리지 않음 — 사용자가 "올려 줘" 할 때)**: 작성실 표 보기(`deskSaveRows` · `deskSetColumns`, UI_Desk 의 `drawGrid` · `gPaste` · `colsCover`), LG EXAONE 제공자(`exaone`, OpenAI 호환 `https://api.exaone.ai/v1/chat/completions`, 글만). 실제 키 · 실제 시트 미확인. 다음: v3.1.1 작성실 안에서 활동 추가 · 프롬프트 · 설정, v3.1.2 취합 · 나이스 파일 · 학생 간 점검, 그 뒤 오르빗(업무대시보드) 안 세특 모듈(오르빗 저장소가 이 PC 에 없음 — 받아야 시작).
+- **v3.1.1 (2026-11-11, 올리지 않음)**: 작성실 안에서 활동 추가 · 활동 설정 · 설정 · 공통 프롬프트(38_Desk `deskSetup` · `deskAddActivity` · `deskActivityInfo` · `deskSaveActivity` · `deskDeleteActivity` · `deskCommon` · `deskSaveCommon` · `deskSaveSettings` · `deskRosterSave` · `deskSyncRoster`, UI_Desk `tabsHtml` · `addCover` · `actCover` · `commonCover` · `setCover`). 창은 다른 창을 못 여니 모두 창 안 덮개(`openCover`). 담임 탭은 `HR_GROUPS` 로 묶음. 실제 시트 미확인. 다음: v3.1.2 영역별 취합 · 나이스 입력 파일 · 학생 간 점검을 작성실에서, 그 뒤 오르빗 세특 모듈.
+- **v3.1.2 (2026-11-11, 올리지 않음)**: 작성실 [취합 · 나이스] 보기(38_Desk `deskCompile` · `deskCompileSave` · `deskCompileRows` · `deskCompress` · `deskEquity`, `deskInspect` 는 `rec` 를 받으면 영역 한도로; UI_Desk `VIEW === 'sum'` · `drawSum` · `saveSum` · `sPress` · `sEquity` · `sNeis`(79 의 `neisPreview` · `neisBuild` 를 그대로 부름) · `manualCover(M, empty, o)`). 취합 시트는 `buildCompileCore_` 가 다시 만들고 최종본은 id 로 지킴. 압축본은 최종본이 비었거나 합본 그대로이거나 한도를 넘을 때만 넣음(`deskAdopt_`). 실제 시트 미확인. 다음: 오르빗 세특 모듈(오르빗 저장소가 이 PC 에 있어야 함, EXAONE 도 같이).
+- **v3.2.0 (2026-11-12, 올리지 않음)**: 사용자 친화 묶음. 메뉴 맨 위 4개(30_Setup `onOpen` — 항목 이름의 ①~⑧은 안내문이 가리켜 그대로 둠, 자리만 옮김). 작성실 길잡이 줄(38_Desk `deskGuide` = 숫자만, `deskContext().guide`; UI_Desk `drawGuide` · `guideGo` · `refreshGuide` — drawHeader 에서 1.5초 모아 한 번). 처음 화면(`drawMid` 의 '이렇게 시작하세요', `deskDemo` · `deskDemoClear` = 87_Demo 를 창에서). 알림 문구 25곳. 서술 흐름(10_Engine `sentenceFrame(recKey)` — 엔진 줄이라 시트 글 이어받기 필요 없음, 아로리 공개 학생부 발췌 근거; `SENTENCE_FRAME` 은 과세특 흐름으로 남김). 실제 시트 미확인. 오르빗 쪽: `C:\Users\user\Desktop\오르빗` 의 `feat/seteuk-desk` 브랜치에 세특 작성실 1~4단계(커밋 안 함).
 - 원본 시트에서 [① 처음 설치 / 구조 복구]를 한 번 눌러야 간단히 보기가 적용되고, [시작하기 시트 다시 만들기]를 눌러야 버튼 12개(작성실 · 작업판)가 붙는다.
 - 실제 환경 미확인: 숨긴 시트에 setActiveSheet, 설치형 onOpen 사이드바, 작성실 창 크기, 큰 반(300명) 불러오기 속도. 다음 후보: 작성실 대시보드(학생 × 영역) · 나이스 입력 도우미 · 메모 탭.
 

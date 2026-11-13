@@ -90,7 +90,7 @@
 
 <script>
 var $ = function (id) { return document.getElementById(id); };
-var LABEL = { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude' };
+var LABEL = { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude', exaone: 'EXAONE' };
 var ST = null, CTX = null, ACT = null, OPEN;   // undefined = 아직 안 정함, null = 사용자가 접음
 
 var STEPS = [
@@ -282,6 +282,7 @@ function renderAi(b, done) {
       '<option value="gemini">Gemini — 무료 등급이 있어 가장 부담이 적습니다 (권장)</option>' +
       '<option value="openai">OpenAI (ChatGPT) — ChatGPT 구독과 별개로 API 선불 충전 필요</option>' +
       '<option value="anthropic">Anthropic (Claude)</option>' +
+      '<option value="exaone">LG EXAONE — 무료 · 국산 (글만 읽음)</option>' +
     '</select>' +
     '<label>API 키</label>' +
     '<input type="password" id="key" placeholder="키를 붙여넣으세요">' +
@@ -355,16 +356,18 @@ function renderAi(b, done) {
   var hints = {
     gemini: '<a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> → Create API key. AIza 로 시작합니다.',
     openai: '<a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a> → Create new secret key. sk- 로 시작합니다. 선불 충전이 필요합니다.',
-    anthropic: '<a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a> → API keys. sk-ant- 로 시작합니다. 선불 충전이 필요합니다.'
+    anthropic: '<a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a> → API keys. sk-ant- 로 시작합니다. 선불 충전이 필요합니다.',
+    exaone: '<a href="https://docs.exaone.ai" target="_blank">docs.exaone.ai</a> → API Key 발급하기. <b>무료</b>입니다(1초에 1번 · 1분에 60번). 글만 읽습니다(PDF · 사진 불가).<br><b>쓰기 전에 꼭</b>: 그 사이트 My profile › 동의 및 알림 관리에서 <b>[학습 이용]을 꺼 두세요</b>. 약관상 비영리로만 쓸 수 있고 타인의 개인정보는 넣지 않아야 합니다 — 이 도구는 이름을 가려 보내지만, 자료 칸에 이름 · 연락처를 적지 마세요.'
   };
   var guessOf = function (m) {
     m = String(m || '').trim().toLowerCase();
     if (/^(gemini|learnlm)/.test(m)) return 'gemini';
     if (/^claude/.test(m)) return 'anthropic';
     if (/^(gpt|chatgpt|o\d)/.test(m)) return 'openai';
+    if (/^(k-)?exaone/.test(m)) return 'exaone';
     return '';
   };
-  var defs = ST.providerDefaults || { gemini: 'gemini-flash-latest', openai: 'gpt-6-luna', anthropic: 'claude-haiku-5-5' };
+  var defs = ST.providerDefaults || { gemini: 'gemini-flash-latest', openai: 'gpt-6-luna', anthropic: 'claude-haiku-5-5', exaone: 'k-exaone_v2.5' };
   var links = ST.links || {};
   var typed = false;
   $('model').addEventListener('input', function () { typed = true; });
@@ -390,7 +393,7 @@ function renderAi(b, done) {
   };
   $('prov').onchange = function () { typed = false; upd(); };
   // 이미 키가 있으면 아직 안 넣은 회사를 먼저 보여 준다 (두 번째 키 넣기)
-  if (ST.hasKey) { var rest = ['gemini', 'openai', 'anthropic'].filter(function (k) { return ST.keyNames.indexOf(k) < 0; }); if (rest.length) $('prov').value = rest[0]; }
+  if (ST.hasKey) { var rest = ['gemini', 'openai', 'anthropic', 'exaone'].filter(function (k) { return ST.keyNames.indexOf(k) < 0; }); if (rest.length) $('prov').value = rest[0]; }
   upd();
 
   $('bKey').onclick = function () {

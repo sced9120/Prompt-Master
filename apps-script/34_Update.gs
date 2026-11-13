@@ -148,7 +148,7 @@ function importFromOld(url) {
   summarizeOldBook_(book);
 
   var lock = LockService.getDocumentLock();
-  if (!lock.tryLock(30000)) throw new Error('다른 작업이 실행 중입니다. 잠시 후 다시 시도하세요.');
+  if (!lock.tryLock(30000)) throw new Error('다른 작업이 아직 끝나지 않았습니다. 1~2분 뒤 다시 눌러 주세요.');
   var rep = { roster: 0, activities: [], skipped: [], compile: [], style: 0, settings: [], models: 0,
               records: [], subjects: [], common: [], rules: 0, extra: [], failed: [] };
   var step = function (label, fn) { try { fn(); } catch (e) { rep.failed.push(label + ' — ' + e.message); } };
@@ -156,7 +156,7 @@ function importFromOld(url) {
     if (!sh_(APP.SH.ACTIVITY) || !sh_(APP.SH.RECORD) || !sh_(APP.SH.ROSTER)) {
       lock.releaseLock();
       installCore_();
-      if (!lock.tryLock(30000)) throw new Error('다른 작업이 실행 중입니다.');
+      if (!lock.tryLock(30000)) throw new Error('다른 작업이 아직 끝나지 않았습니다. 1~2분 뒤 다시 눌러 주세요.');
     }
     step('⚙️ 설정', function () { importConfig_(book, rep); });
     step('🧩 기록종류', function () { importKeyed_(book, APP.SH.RECORD, rep.records, PRESET_RECORD_TYPES,

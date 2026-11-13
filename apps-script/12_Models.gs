@@ -23,6 +23,7 @@ function guessProvider(m) {
   if (/^(gemini|learnlm)/.test(m)) return 'gemini';
   if (/^claude/.test(m)) return 'anthropic';
   if (/^(gpt|chatgpt|o\d|ft:gpt|ft:o\d)/.test(m)) return 'openai';
+  if (/^(k-)?exaone/.test(m)) return 'exaone';
   return '';
 }
 
@@ -33,11 +34,12 @@ function companyToProvider(label) {
   if (/gemini|google|구글|제미나이/.test(s)) return 'gemini';
   if (/openai|gpt|오픈/.test(s)) return 'openai';
   if (/claude|anthropic|클로드|앤트로픽/.test(s)) return 'anthropic';
+  if (/exaone|엑사원/.test(s)) return 'exaone';
   return '';
 }
 
 function providerLabel(p) {
-  return { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude', subscription: 'Gemini(구독)' }[p] || '?';
+  return { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude', exaone: 'EXAONE', subscription: 'Gemini(구독)' }[p] || '?';
 }
 
 /**
@@ -119,6 +121,7 @@ function isTextModel(provider, id) {
   if (provider === 'gemini') return /^gemini/.test(m);
   if (provider === 'openai') return /^(gpt|chatgpt|o\d)/.test(m) && !/instruct|codex|oss|babbage|davinci/.test(m);
   if (provider === 'anthropic') return /^claude/.test(m);
+  if (provider === 'exaone') return /exaone/.test(m) && !/tabular/.test(m);
   return false;
 }
 
@@ -156,6 +159,7 @@ function modelStatusText(res, stamp) {
  *   Gemini 2.5 Flash 계열 : thinkingBudget 0      (끄기)
  *   Gemini 2.5 Pro        : thinkingBudget 128    (끌 수 없어 최소값)
  *   OpenAI gpt-5·gpt-6·o  : reasoning_effort 'low' (gpt-5.x 기본은 medium)
+ *   K-EXAONE              : reasoning_effort 'low' (기본은 max — 늘 추론을 거치는 모델이라 끌 수는 없다)
  */
 function thinkingFor(provider, model) {
   var m = normModel(model).toLowerCase();
@@ -171,6 +175,7 @@ function thinkingFor(provider, model) {
     if (/^(gpt-5|gpt-6|gpt-7|o\d)/.test(m) && !/chat-latest/.test(m)) return { reasoning_effort: 'low' };
     return null;
   }
+  if (provider === 'exaone') return { reasoning_effort: 'low' };
   return null;
 }
 

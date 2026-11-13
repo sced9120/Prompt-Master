@@ -138,7 +138,7 @@ function readXlsxParts(parts) {
   var p = {};
   Object.keys(parts || {}).forEach(function (k) { p[String(k).replace(/^\/+/, '')] = parts[k]; });
   var wb = p['xl/workbook.xml'];
-  if (!wb) throw new Error('엑셀 파일 모양이 아닙니다(workbook.xml 없음).');
+  if (!wb) throw new Error('엑셀 파일을 읽지 못했습니다(workbook.xml 없음). .xlsx 로 저장한 파일인지 확인해 주세요.');
   var rels = {}, rm, relRe = /<Relationship\b([^>]*)\/?>/g;
   while ((rm = relRe.exec(p['xl/_rels/workbook.xml.rels'] || ''))) {
     var id = (rm[1].match(/\bId="([^"]+)"/) || [])[1], target = (rm[1].match(/\bTarget="([^"]+)"/) || [])[1];

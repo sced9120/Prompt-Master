@@ -19,7 +19,7 @@ function pickExampleActivity_(title) {
   var act = activityOfExampleSheet_(cur) || activityOfSheet_(cur);
   if (act) return act;
   var acts = getActivities_();
-  if (!acts.length) { ui_().alert(APP.MENU, '먼저 활동을 만드세요.', ui_().ButtonSet.OK); return null; }
+  if (!acts.length) { ui_().alert(APP.MENU, '먼저 활동을 만드세요. 🖥️ 작성실의 [＋ 활동], 또는 메뉴 [④⑤ 활동 · 예시 · 보고서 · 설문지] > [④ 활동 만들기].', ui_().ButtonSet.OK); return null; }
   if (acts.length === 1) return acts[0];
   var list = acts.map(function (a, i) { return (i + 1) + '. ' + a.key + ' — ' + a.name; }).join('\n');
   var ans = promptText_(title || '활동 선택', '어느 활동인가요? 번호를 입력하세요.\n\n' + list);
@@ -65,7 +65,7 @@ function validateExamples() {
   }
   var limit = bytesFor_(act);
   var rows = readExampleRows_(act);
-  if (!rows.length) { toast_('채워진 예시가 없습니다.'); return; }
+  if (!rows.length) { toast_('채워진 예시가 없습니다. 예시 시트(○○ ▸예시)에 한 줄 이상 적은 뒤 다시 눌러 주세요.'); return; }
 
   var bad = 0, warn = 0;
   rows.forEach(function (e) {

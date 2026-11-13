@@ -672,5 +672,56 @@ t('다른 시트·다른 칸을 고치면 아무 일도 없음', () => {
   eq(s.getRange(row, 5).getValue(), '그대로');
 });
 
+console.log('\n[LG EXAONE]');
+t('이름 · 회사 칸 · 표시 이름 · 글쓰기 모델 가리기', () => {
+  eq(M.guessProvider('k-exaone_v2.5'), 'exaone'); eq(M.guessProvider('EXAONE-4.0'), 'exaone');
+  eq(M.companyToProvider('EXAONE'), 'exaone'); eq(M.companyToProvider('엑사원'), 'exaone');
+  eq(M.providerLabel('exaone'), 'EXAONE');
+  ok(M.isTextModel('exaone', 'k-exaone_v2.5') && !M.isTextModel('exaone', 'exaone-tabular'), '글쓰기 모델');
+  eq(M.thinkingFor('exaone', 'k-exaone_v2.5').reasoning_effort, 'low');
+});
+t('api.exaone.ai 로 OpenAI 형식 요청 · 키는 머리글 · 추론은 low · 답의 앞 줄바꿈 정리', () => {
+  const C = boot(); C.installCore_(); C.setKey_('exaone', 'ex-key');
+  let seen = null;
+  C.__fetch.handler = (url, opt) => { seen = { url, opt };
+    return { code: 200, body: { choices: [{ finish_reason: 'stop', message: { content: '\n\n자료를 정리함.', reasoning_content: '생각' } }],
+                                usage: { prompt_tokens: 10, completion_tokens: 20, reasoning_tokens: 15 } } }; };
+  eq(C.callAI_('규칙', '자료', 'k-exaone_v2.5'), '자료를 정리함.');
+  eq(seen.url, 'https://api.exaone.ai/v1/chat/completions');
+  eq(seen.opt.headers.Authorization, 'Bearer ex-key');
+  ok(seen.url.indexOf('ex-key') < 0, '주소에 키');
+  const body = JSON.parse(seen.opt.payload);
+  eq(body.model, 'k-exaone_v2.5'); eq(body.reasoning_effort, 'low');
+  eq(body.messages[1].content, '자료');
+});
+t('글만 읽는 모델 — 첨부 파일은 보내지 않고 그 사실을 적음', () => {
+  const C = boot();
+  const u = C.userContent_('exaone', '자료', [{ mime: 'application/pdf', b64: 'AAAA', name: 'a.pdf' }]);
+  ok(typeof u === 'string' && /글만 읽어/.test(u) && u.indexOf('AAAA') < 0, String(u));
+  eq(C.userContent_('exaone', '자료'), '자료');
+});
+t('키 저장 · 키가 하나라도 있는지 · 쓸 수 있는 모델 목록(인터넷에 묻지 않음)', () => {
+  const C = boot(); C.installCore_();
+  ok(!C.anyKey_(), '처음엔 키 없음');
+  C.saveKeys({ exaone: 'ex-key' });
+  ok(C.keyStatus_().exaone && C.anyKey_(), '저장');
+  let calls = 0; C.__fetch.handler = () => { calls++; return { code: 500, body: '' }; };
+  const r = C.listAvailableModels();
+  eq(r.exaone.models.join(','), 'k-exaone_v2.5'); eq(calls, 0);
+  ok(C.PRESET_MODELS.some(x => x.model === 'k-exaone_v2.5') && /^https:/.test(C.MODEL_LINKS.exaone), '기본 목록 · 주소');
+  ok(C.COMPANY_CHOICES.indexOf('EXAONE') > 0, '회사 고르기');
+});
+t('오류 본문(result_code · description)도 사람 말로 — 401 키 · 429 한도', () => {
+  eq(M.explainApiError(401, '{"result_code":401,"description":"Unauthorized"}').kind, 'key');
+  const r = M.explainApiError(429, '{"result_code":429,"description":"Too Many Requests"}');
+  ok(r.kind === 'rate' && r.retry, JSON.stringify(r));
+});
+t('키 넣는 창 두 곳에 EXAONE 칸과 학습 이용 끄기 안내', () => {
+  ['UI_ApiKey.html', 'UI_Onboard.html'].forEach(f => {
+    const h = fs.readFileSync(path.join(dir, f), 'utf8');
+    ok(/exaone/.test(h) && /학습 이용/.test(h) && /docs\.exaone\.ai/.test(h), f);
+  });
+});
+
 console.log('\n' + (fail ? `실패 ${fail}개 / ` : '') + `통과 ${pass}개`);
 process.exit(fail ? 1 : 0);

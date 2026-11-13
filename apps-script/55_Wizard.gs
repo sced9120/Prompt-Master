@@ -25,7 +25,7 @@ function wizardContext() {
     defaultSubject: String(cfg_('기본 교과영역', '공통')),
     models: modelChoices_(),
     defaultModel: normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL,
-    hasKey: !!(getKey_('openai') || getKey_('gemini') || getKey_('anthropic')),
+    hasKey: anyKey_(),
     columnSets: PRESET_COLUMN_SETS,
     activities: getActivities_().map(function (a) {
       return { key: a.key, name: a.name, columns: parseColumns(a.columns), desc: a.desc,

@@ -51,7 +51,7 @@ function neisXmlOf_(parts) {
 /** 시트의 학생 줄: A열(반 또는 학년-반) · 번호 · 이름 · [최종본] · [검증] */
 function neisSourceRows_(sheetName) {
   var s = sh_(sheetName);
-  if (!s) throw new Error('시트를 찾을 수 없습니다: ' + sheetName);
+  if (!s) throw new Error('[' + sheetName + '] 시트를 찾을 수 없습니다. 시트 이름이 바뀌었거나 지워졌습니다. 창을 닫았다가 다시 열어 주세요.');
   var cF = colOf_(s, APP.HEAD_ROW, '최종본'), cV = colOf_(s, APP.HEAD_ROW, '검증');
   if (!cF) throw new Error('[' + sheetName + '] 에 [최종본] 칸이 없습니다.');
   var last = s.getLastRow();

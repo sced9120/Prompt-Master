@@ -13,12 +13,15 @@ var SUBSCRIPTION_MODEL = 'Gemini(구독)';
  * 붙여 넣고, 받은 답을 다시 창에 붙여 넣는다. 키·비용·구독이 필요 없어 모든 계정에서 늘 고를 수 있다.
  */
 var MANUAL_MODEL = '키 없이(복사·붙여넣기)';
-var PROVIDERS = ['gemini', 'openai', 'anthropic'];
+var PROVIDERS = ['gemini', 'openai', 'anthropic', 'exaone'];
+/** OpenAI 와 같은 형식으로 받는 회사 — 주소와 이름만 다르다 */
+var OPENAI_API = { provider: 'openai', label: 'OpenAI', url: 'https://api.openai.com/v1/chat/completions' };
+var EXAONE_API = { provider: 'exaone', label: 'EXAONE', url: 'https://api.exaone.ai/v1/chat/completions' };
 // [⚙️ 설정]의 항목|값|설명 열 폭에 맞춰 순서를 정했다 (C열이 넓은 설명 칸)
 var MODEL_HEAD = ['모델명', '수준', '언제 쓰나', '회사', '연결 확인'];
 var MODEL_FIELDS = ['model', 'level', 'memo', 'company', 'status'];
 function modelCol_(field) { return MODEL_FIELDS.indexOf(field) + 1; }
-var COMPANY_CHOICES = ['자동', 'Gemini', 'OpenAI', 'Claude'];
+var COMPANY_CHOICES = ['자동', 'Gemini', 'OpenAI', 'Claude', 'EXAONE'];
 var TEST_SYSTEM = '짧게 답한다.';
 var TEST_USER = '연결 확인입니다. "확인"이라고만 답하세요.';
 
@@ -194,7 +197,12 @@ function setKey_(p, v) {
   if (v) props_().setProperty('KEY_' + p, v);
   else props_().deleteProperty('KEY_' + p);
 }
-/** 회사별 키 보관 여부 + 구독 사용 여부 {gemini:true, openai:false, anthropic:false, subscription:false} */
+/** API 키가 하나라도 있는가 (구독 · 키 없이 쓰기는 세지 않는다) */
+function anyKey_(has) {
+  has = has || keyStatus_();
+  return PROVIDERS.some(function (p) { return !!has[p]; });
+}
+/** 회사별 키 보관 여부 + 구독 사용 여부 {gemini:true, openai:false, anthropic:false, exaone:false, subscription:false} */
 function keyStatus_() {
   var has = {};
   PROVIDERS.forEach(function (p) { has[p] = !!getKey_(p); });
@@ -331,7 +339,7 @@ function saveKeys(obj) {
  */
 function saveModelSettings(p) {
   var s = sh_(APP.SH.CONFIG);
-  if (!s) throw new Error('[⚙️ 설정] 시트가 없습니다. 메뉴 ① 처음 설치 / 구조 복구 를 먼저 실행하세요.');
+  if (!s) throw new Error('[⚙️ 설정] 시트가 없습니다. 메뉴 [①②③ 준비] > [① 처음 설치 / 구조 복구]를 누르면 다시 만들어집니다(적어 둔 내용은 그대로 둡니다).');
   var seen = {}, rows = [];
   (p.rows || []).forEach(function (r) {
     var m = normModel(r.model);
@@ -520,6 +528,8 @@ function listAvailableModels() {
         var o = fetchJson_('https://api.openai.com/v1/models',
           { method: 'get', headers: { Authorization: 'Bearer ' + key }, muteHttpExceptions: true }, 'OpenAI');
         (o.data || []).forEach(function (x) { ids.push(normModel(x.id)); });
+      } else if (p === 'exaone') {
+        ids.push(PROVIDER_DEFAULT_MODEL.exaone);   // 모델 목록 주소가 없다 — 글쓰기 모델은 하나
       } else {
         var a = fetchJson_('https://api.anthropic.com/v1/models?limit=100',
           { method: 'get', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, muteHttpExceptions: true }, 'Anthropic');
@@ -561,6 +571,7 @@ function callAI_(system, user, model, provider, opts) {
   if (opts.thinking === undefined) opts.thinking = thinkLow_();
 
   if (p === 'openai') return callOpenAI_(key, m, system, user, opts);
+  if (p === 'exaone') return callOpenAI_(key, m, system, user, opts, EXAONE_API);
   if (p === 'gemini') return callGemini_(key, m, system, user, opts);
   return callAnthropic_(key, m, system, user, opts);
 }
@@ -655,33 +666,34 @@ function fetchJson_(url, options, label) {
 /** 400 오류가 특정 옵션 때문인지 */
 function rejects_(e, re) { return e && e.code === 400 && re.test(String(e.message || '')); }
 
-function callOpenAI_(key, model, system, user, opts) {
+function callOpenAI_(key, model, system, user, opts, api) {
   opts = opts || {};
+  api = api || OPENAI_API;
   var body = {
     model: model,
-    messages: [{ role: 'system', content: system }, { role: 'user', content: userContent_('openai', user, opts.parts) }]
+    messages: [{ role: 'system', content: system }, { role: 'user', content: userContent_(api.provider, user, opts.parts) }]
   };
-  var think = opts.thinking && !__noThink[model] ? thinkingFor('openai', model) : null;
+  var think = opts.thinking && !__noThink[model] ? thinkingFor(api.provider, model) : null;
   if (think) body.reasoning_effort = think.reasoning_effort;
   if (opts.json && !__noJsonMode[model]) body.response_format = { type: 'json_object' };
   var json;
   try {
-    json = fetchJson_('https://api.openai.com/v1/chat/completions', {
+    json = fetchJson_(api.url, {
       method: 'post', contentType: 'application/json',
       headers: { Authorization: 'Bearer ' + key },
       payload: JSON.stringify(body), muteHttpExceptions: true
-    }, 'OpenAI');
+    }, api.label);
   } catch (e) {
-    if (think && rejects_(e, /reasoning/i)) { __noThink[model] = true; return callOpenAI_(key, model, system, user, opts); }
-    if (body.response_format && rejects_(e, /response_format|json/i)) { __noJsonMode[model] = true; return callOpenAI_(key, model, system, user, opts); }
+    if (think && rejects_(e, /reasoning/i)) { __noThink[model] = true; return callOpenAI_(key, model, system, user, opts, api); }
+    if (body.response_format && rejects_(e, /response_format|json/i)) { __noJsonMode[model] = true; return callOpenAI_(key, model, system, user, opts, api); }
     throw e;
   }
   var u = json.usage || {};
   usageAdd_(u.prompt_tokens, u.completion_tokens, u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens);
   var c = json.choices && json.choices[0];
   var txt = c && c.message && c.message.content;
-  if (c && c.finish_reason === 'length') throw truncatedError_('OpenAI');
-  if (!txt) throw new Error('OpenAI 응답이 비었습니다.');
+  if (c && c.finish_reason === 'length') throw truncatedError_(api.label);
+  if (!txt) throw new Error(api.label + ' 응답이 비었습니다.');
   return String(txt).trim();
 }
 
@@ -721,7 +733,7 @@ function callGemini_(key, model, system, user, opts) {
   var txt = '';
   if (parts) parts.forEach(function (p) { if (p.text && !p.thought) txt += p.text; });
   if (cand && cand.finishReason === 'MAX_TOKENS') throw truncatedError_('Gemini');
-  if (!txt) throw new Error('Gemini 응답이 비었습니다. (안전 필터 또는 모델명 확인)');
+  if (!txt) throw new Error('Gemini 가 빈 답을 보냈습니다(안전 필터에 걸렸거나 모델 이름이 틀렸을 수 있습니다). 한 번 더 눌러 보고, 계속되면 [② AI 연결 · 모델 설정]에서 다른 모델을 골라 주세요.');
   return txt.trim();
 }
 
@@ -744,7 +756,7 @@ function callAnthropic_(key, model, system, user, opts) {
   var txt = '';
   (json.content || []).forEach(function (b) { if (b.type === 'text') txt += b.text; });
   if (json.stop_reason === 'max_tokens') throw truncatedError_('Anthropic');
-  if (!txt) throw new Error('Anthropic 응답이 비었습니다.');
+  if (!txt) throw new Error('Claude 가 빈 답을 보냈습니다. 한 번 더 눌러 보고, 계속되면 [② AI 연결 · 모델 설정]에서 다른 모델을 골라 주세요.');
   return txt.trim();
 }
 
@@ -755,6 +767,10 @@ var CLAUDE_IMAGE_MAX = 5 * 1024 * 1024;
  * HEIC 사진은 Gemini 만 읽는다 — 다른 회사면 빼고 그 사실을 글에 적는다.
  */
 function userContent_(provider, user, parts) {
+  // K-EXAONE 은 글만 읽는다 — 파일은 보내지 않고 그 사실을 글에 적는다
+  if (provider === 'exaone') {
+    return user + (parts && parts.length ? '\n(이 모델은 글만 읽어 첨부 파일 ' + parts.length + '개는 보내지 않았습니다. 파일을 읽으려면 Gemini 같은 다른 모델을 고르세요.)' : '');
+  }
   if (!parts || !parts.length) return provider === 'gemini' ? [{ text: user }] : user;
   var skipped = [];
   var ok = parts.filter(function (f) {

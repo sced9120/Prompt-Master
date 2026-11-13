@@ -128,7 +128,7 @@ function homeState() {
   try { st.consent = consentOk_(); } catch (e) {}
   try {
     var k = keyStatus_();
-    var names = { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude' };
+    var names = { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude', exaone: 'EXAONE' };
     var on = PROVIDERS.filter(function (p) { return k[p]; }).map(function (p) { return names[p] || p; });
     if (k.subscription) on.push('Gemini 구독');
     st.ai = on.length ? on.join(' · ') : '';

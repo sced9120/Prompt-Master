@@ -8,7 +8,7 @@
  */
 
 var APP = {
-  VERSION: 'v3.0.3',
+  VERSION: 'v3.2.0',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -456,7 +456,8 @@ var DEFAULT_MODEL = 'gemini-flash-latest';
 var PROVIDER_DEFAULT_MODEL = {
   gemini: 'gemini-flash-latest',
   openai: 'gpt-6-luna',
-  anthropic: 'claude-haiku-5-5'
+  anthropic: 'claude-haiku-5-5',
+  exaone: 'k-exaone_v2.5'
 };
 
 var PRESET_MODELS = [
@@ -475,7 +476,9 @@ var PRESET_MODELS = [
   { model: 'claude-haiku-5-5', level: '충분',
     memo: 'Claude 키를 쓸 때의 기본. 세특 작성에 충분합니다.' },
   { model: 'claude-sonnet-5-5', level: '고급',
-    memo: 'Claude 상위 모델. 압축본 품질을 더 올리고 싶을 때.' }
+    memo: 'Claude 상위 모델. 압축본 품질을 더 올리고 싶을 때.' },
+  { model: 'k-exaone_v2.5', level: '무료 · 국산',
+    memo: 'LG K-EXAONE 2.5. 키만 받으면 무료이고 한국어에 강합니다(1초에 1번 · 1분에 60번). 글만 읽으므로 보고서 PDF · 사진 읽기에는 쓸 수 없습니다. 쓰기 전에 docs.exaone.ai 의 My profile > 동의 및 알림 관리에서 [학습 이용]을 꺼 두세요.' }
 ];
 
 /** 옛 번호 v3.0.x 의 기본값 — 설치/복구 때 선생님이 손대지 않은 값이면 새 기본값으로 올린다 */
@@ -485,7 +488,8 @@ var OLD_DEFAULT_MODELS = { '활동용 모델': 'gemini-2.5-flash', '합본용 �
 var MODEL_LINKS = {
   gemini: 'https://ai.google.dev/gemini-api/docs/models',
   openai: 'https://platform.openai.com/docs/models',
-  anthropic: 'https://platform.claude.com/docs/en/models/overview'
+  anthropic: 'https://platform.claude.com/docs/en/models/overview',
+  exaone: 'https://docs.exaone.ai/ko/docs/models'
 };
 
 /* ============================================================ 입력 항목 */

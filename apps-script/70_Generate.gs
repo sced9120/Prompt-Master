@@ -30,7 +30,7 @@ function generateChecked() {
     return;
   }
   var rows = checkedRows_(sheet);
-  if (!rows.length) { toast_('[생성] 체크된 행이 없습니다.'); return; }
+  if (!rows.length) { toast_('[생성]이 체크된 학생이 없습니다. 쓸 학생 줄의 [생성] 칸을 체크한 뒤 다시 눌러 주세요.'); return; }
   autoRulesCheck_();
   autoUpdateCheck_();
   runGeneration_(act, sheet, rows);
@@ -41,7 +41,7 @@ function generateSelection() {
   var act = activityOfSheet_(sheet.getName());
   if (!act) { ui_().alert(APP.MENU, '활동 입력 시트에서 실행하세요.', ui_().ButtonSet.OK); return; }
   var rows = selectedRows_(sheet);
-  if (!rows.length) { toast_('데이터 행을 선택하세요.'); return; }
+  if (!rows.length) { toast_('학생 줄(4행부터)을 선택한 뒤 다시 눌러 주세요.'); return; }
   runGeneration_(act, sheet, rows);
 }
 
@@ -202,7 +202,7 @@ function runGeneration_(act, sheet, rows, opt) {
     var tail = styleTail_();
     var styleRef = styleReference_(act);
     var has = keyStatus_();
-    var anyApi = has.gemini || has.openai || has.anthropic;
+    var anyApi = anyKey_(has);
     usageReset_();
     var read = rowReader_(sheet, rows);
 

@@ -132,8 +132,33 @@ function fillTokens(tpl, map) {
  *   o.styleSamples 예전에 쓴 세특 몇 편(쓰는 방식만 참고) · common.STYLE_CARD 내 문체 카드
  * @return {string}
  */
-/** 한 장면을 잇는 순서 — 학생부 사례 분석에서 흔한 좋은 문장의 뼈대. 메모에 없는 칸은 건너뛴다 */
-var SENTENCE_FRAME = '- 한 장면은 교과 개념 → 활동 과정 → 관찰 근거(자료 · 산출물 · 발언) → 피드백 뒤 고친 점 → 변화 순서로 잇고, 메모에 없는 칸은 건너뛴다.';
+/**
+ * 서술 흐름 — 대학이 공개한 합격생 학생부 발췌(서울대 아로리 '나도 입학사정관')에서 되풀이되는 짜임.
+ *   장면은 수업 속 계기 한 구절 → 학생이 직접 한 과정(측정 · 조사 · 계산 · 비교) → 다른 단원 · 과목으로 이어간 탐구 → 결론이나 제안.
+ *   끝맺음은 학생이 한 일 · 낸 결론이고, 깨달음 · 성장 · 평가어로 맺지 않는다. 개념과 방법은 이름으로 쓴다.
+ * 메모에 없는 단계는 건너뛴다(지어내지 않는다).
+ * 2027 서울대 학생부종합전형 안내(서류평가)도 같은 쪽이다 — 세특에서 '자기주도적 학습에 의한 변화와 성장', '성취를 점검하고 더 필요한 공부를 고민한 경험'을,
+ * 창체 · 행발에서 '경험의 유무나 활동의 양'이 아니라 '맡은 역할과 활동 내용'을 본다. 그래서 달라진 점은 행동으로, 역할은 직책 이름보다 한 일로 쓴다.
+ */
+var FRAME_STUDY = [
+  '- 한 장면은 계기(수업 속 질문) → 직접 한 과정(조사 · 측정 · 계산 · 고친 점) → 이어간 탐구 → 결론 순서로 잇고, 메모에 없는 단계는 건너뛴다.',
+  '- 개념과 방법은 이름으로 쓰고, 계기는 메모에 있는 사실로 한 구절만 쓴다. 처음과 달라진 점이 메모에 있으면 행동으로 쓴다.'
+];
+var FRAME_ROLE = [
+  '- 한 장면은 맡은 역할 → 그 자리에서 직접 한 일(뜻밖의 상황에 대처한 방식 포함) → 결과 순서로 잇고, 메모에 없는 단계는 건너뛴다. 직책 이름이나 횟수보다 한 일을 쓴다.'
+];
+var FRAME_BEHAVIOR = [
+  '- 행동 특성은 여러 장면에서 되풀이해 본 행동으로 쓰고, 한 번 있었던 일로 단정하지 않는다. 부족했던 점은 그 뒤 달라진 행동과 함께 쓴다.'
+];
+var FRAME_END = '- 문장은 학생이 한 일이나 낸 결론으로 끝맺는다.';
+
+/** 기록 영역에 맞는 서술 흐름 줄 */
+function sentenceFrame(recKey) {
+  var k = String(recKey || '');
+  var lines = k === '행발' ? FRAME_BEHAVIOR : (k === '자율' || k === '진로') ? FRAME_ROLE : FRAME_STUDY;
+  return lines.concat([FRAME_END]).join('\n');
+}
+var SENTENCE_FRAME = sentenceFrame('과세특');   // 예전 이름 — 과세특 흐름
 
 var AMOUNTS = ['메모만큼', '보통', '넉넉히'];
 
@@ -214,7 +239,7 @@ function buildPrompt(o) {
   P.push(ctx.join('\n'));
 
   // ③ 서술 규칙 (+ 피할 표현 — AI 글에 흔한 번역투·상투어)
-  if (com.WRITING_RULES) P.push('# 서술 규칙\n' + com.WRITING_RULES + '\n' + SENTENCE_FRAME);
+  if (com.WRITING_RULES) P.push('# 서술 규칙\n' + com.WRITING_RULES + '\n' + sentenceFrame(rec.key || act.recordKey));
   if (com.AVOID_RULES && String(com.AVOID_RULES).trim()) P.push('# 피할 표현\n' + String(com.AVOID_RULES).trim());
 
   // ④ 기재 금지사항 (+ 이 기록 항목에만 해당하는 기재 주의)
@@ -375,6 +400,6 @@ if (typeof module !== 'undefined' && module.exports) {
     activityBytes: activityBytes, splitBytes: splitBytes, byteBudget: byteBudget, exampleValuesFrom: exampleValuesFrom,
     buildRole: buildRole, buildStudentBlock: buildStudentBlock,
     validateResult: validateResult, formatIssues: formatIssues,
-    AMOUNTS: AMOUNTS, activityAmount: activityAmount, amountLines: amountLines
+    AMOUNTS: AMOUNTS, activityAmount: activityAmount, amountLines: amountLines, sentenceFrame: sentenceFrame
   };
 }

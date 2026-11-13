@@ -26,7 +26,7 @@ function shOrCreate_(name) {
 /** 시트 필수 — 없으면 안내 후 예외 */
 function shRequire_(name) {
   var s = sh_(name);
-  if (!s) throw new Error('[' + name + '] 시트가 없습니다. 메뉴 > 처음 설치/복구 를 실행하세요.');
+  if (!s) throw new Error('[' + name + '] 시트가 없습니다. 메뉴 [①②③ 준비] > [① 처음 설치 / 구조 복구]를 누르면 다시 만들어집니다(적어 둔 내용은 그대로 둡니다).');
   return s;
 }
 

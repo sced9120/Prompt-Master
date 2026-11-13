@@ -34,10 +34,11 @@ const prompt = (k, ex) => P.buildPrompt({ activity: { name: '탐구', recordKey:
 const cellOf = (s, key) => { const v = s.getRange(1, 1, s.getLastRow(), 3).getValues(); for (let i = 0; i < v.length; i++) if (v[i][0] === key) return { row: i + 1, text: v[i][2] }; return null; };
 
 console.log('\n[프롬프트 길이]');
-t('예시 없는 과세특 프롬프트가 5,700바이트 안 (v3.8 은 6,956바이트 · v3.0.1 문장 뼈대 한 줄 포함)', () => {
+t('예시 없는 과세특 프롬프트가 5,900바이트 안 (v3.8 은 6,956바이트 · v3.2.0 서술 흐름 세 줄 포함)', () => {
   const b = P.byteLen(prompt('과세특'));
-  ok(b < 5700, b + '바이트');
-  ok(/교과 개념 → 활동 과정 → 관찰 근거/.test(prompt('과세특')), '문장 뼈대');
+  ok(b < 5900, b + '바이트');
+  ok(prompt('과세특').includes('계기(수업 속 질문) → 직접 한 과정') && prompt('자율').includes('맡은 역할 → 그 자리에서 직접 한 일') && prompt('행발').includes('여러 장면에서 되풀이해 본 행동'), '서술 흐름 — 영역마다');
+  ok(/한 일이나 낸 결론으로 끝맺는다/.test(prompt('행발')), '끝맺음');
 });
 t('검사기가 잡는 금지 항목은 프롬프트에 짧게 남음 (대회 · 어학시험 · 자격증 · 모의고사 · MOOC · 방과후 · 대학명 · 부모)', () => {
   const n = COM.NEIS_RULES;

@@ -110,7 +110,7 @@ function readActiveCell() {
 /** 가져왔던 바로 그 셀에 다시 넣는다 */
 function writeBackCell(p) {
   var s = sh_(p.sheet);
-  if (!s) throw new Error('시트를 찾을 수 없습니다: ' + p.sheet);
+  if (!s) throw new Error('[' + p.sheet + '] 시트를 찾을 수 없습니다. 시트 이름이 바뀌었거나 지워졌습니다. 창을 닫았다가 다시 열어 주세요.');
   var c = s.getRange(p.a1);
   if (c.getFormula()) throw new Error('수식이 든 셀(' + p.a1 + ')에는 넣지 않습니다. [최종본] 칸에 넣어 주세요.');
   c.setValue(String(p.text || ''));

@@ -4,19 +4,16 @@
 
 function onOpen() {
   var ui = ui_();
-  // 화면이 작은 노트북에서도 메뉴가 아래로 잘리지 않게, 자주 쓰는 것만 맨 위에 두고 나머지는 하위 메뉴로 묶는다.
+  // 화면이 작은 노트북에서도 메뉴가 아래로 잘리지 않게, 맨 위에는 네 가지만 두고 나머지는 일하는 순서대로 하위 메뉴로 묶는다(v3.2.0).
   // 항목 이름의 ①~⑧ 번호는 안내문·오류 메시지가 가리키는 이름이라 그대로 둔다.
   var m = ui.createMenu(APP.MENU);
-  m.addItem('🖥️ 작성실 — 큰 창에서 학생별로 쓰기 (담임 · 교과)', 'openDesk');
-  m.addItem('🧭 작업판 — 한 화면에서 (준비 → 쓰기 → 점검 → 나이스)', 'openHome');
+  // 맨 위에는 날마다 누르는 네 가지만 — 작성실에서 명단 · 쓰기 · 취합 · 나이스까지 다 한다.
+  m.addItem('🖥️ 작성실 — 여기서 시작 (큰 창에서 학생별로 쓰기)', 'openDesk');
   m.addItem('🚀 시작하기 (처음이면 여기)', 'openOnboard');
-  m.addItem('✍️ 바로 쓰기 · 📄 보고서 시트 추가', 'openQuickSheetDialog');
   m.addItem('🔍 맞춤법 · 금지어 검사', 'openCheckSidebar');
-  m.addSeparator();
-  m.addItem('⑥ 체크된 행 생성', 'generateChecked');
-  m.addItem('⑦ 최종취합 시트 생성/갱신', 'buildCompile');
   m.addItem('📤 나이스 업로드 파일 만들기 (나이스 양식에 최종본 채우기)', 'openNeisDialog');
   m.addSeparator();
+  // 아래는 일하는 순서대로 — 준비 → 활동 → 시트에서 쓰기 → 점검 → 도움말
   m.addSubMenu(ui.createMenu('①②③ 준비 — 설치 · AI 연결 · 학생 명단')
     .addItem('① 처음 설치 / 구조 복구', 'installAll')
     .addItem('🔒 개인정보 · 보안 안내와 동의 (처음 한 번)', 'openConsentDialog')
@@ -28,13 +25,12 @@ function onOpen() {
     .addItem('📥 이전 파일에서 가져오기 (새 버전으로 옮길 때)', 'openImportDialog'));
   m.addSubMenu(ui.createMenu('④⑤ 활동 · 예시 · 보고서 · 설문지')
     .addItem('④ 활동 만들기 · 입력 항목 바꾸기 ★', 'openWizard')
-    .addItem('📝 구글 설문지 연결 (응답 → 시트, 파일 업로드 포함)', 'openFormDialog')
-    .addItem('📚 새 교과 만들기 (교과 역량 · 입력 항목 초안)', 'openSubjectDialog')
-    .addItem('📏 활동별 바이트 한도 (한 칸을 여러 활동이 나눌 때)', 'openBytesDialog')
-    .addItem('🧪 세특 프롬프트 공방 (설계하며 프롬프트 보기 · 복사)', 'openStudio')
     .addItem('   활동 직접 추가 (질문에 답하기)', 'addActivityDialog')
     .addItem('   활동 복제', 'duplicateActivityDialog')
     .addItem('   활동 삭제', 'deleteActivityDialog')
+    .addItem('📏 활동별 바이트 한도 (한 칸을 여러 활동이 나눌 때)', 'openBytesDialog')
+    .addItem('📚 새 교과 만들기 (교과 역량 · 입력 항목 초안)', 'openSubjectDialog')
+    .addItem('🧪 세특 프롬프트 공방 (설계하며 프롬프트 보기 · 복사)', 'openStudio')
     .addSeparator()
     .addItem('⑤ 예시 더 만들기 (AI)', 'generateMoreExamples')
     .addItem('   예시 칸 늘리기', 'addExampleRows')
@@ -42,19 +38,27 @@ function onOpen() {
     .addItem('⭐ 선택한 학생 글을 예시로 등록', 'promoteToExample')
     .addSeparator()
     .addItem('📄 보고서 요점 뽑기 (선택한 행)', 'extractReportPoints')
-    .addItem('   보고서 폴더에서 파일 가져오기 (파일 이름으로 학생 찾기)', 'importReportFolder'));
-  m.addSubMenu(ui.createMenu('⑥ 생성 더 보기')
-    .addItem('📋 키 없이 — 프롬프트 복사 · 답 붙여넣기 (체크된 행)', 'openManualForChecked')
+    .addItem('   보고서 폴더에서 파일 가져오기 (파일 이름으로 학생 찾기)', 'importReportFolder')
+    .addSeparator()
+    .addItem('📝 구글 설문지 연결 (응답 → 시트, 파일 업로드 포함)', 'openFormDialog')
+    .addItem('   구글 설문지 응답 지금 받아 오기 (연결해 둔 것 모두)', 'syncFormResponses'));
+  m.addSubMenu(ui.createMenu('⑥⑦ 시트에서 쓰기 — 생성 · 취합 · 압축')
+    .addItem('⑥ 체크된 행 생성', 'generateChecked')
     .addItem('   선택한 행만 생성', 'generateSelection')
+    .addItem('📋 키 없이 — 프롬프트 복사 · 답 붙여넣기 (체크된 행)', 'openManualForChecked')
     .addItem('   자동 생성(체크 즉시) 켜기', 'enableAutoTrigger')
     .addItem('   자동 생성 끄기', 'disableAutoTrigger')
     .addSeparator()
-    .addItem('⑦ 최종 압축본 생성 (체크된 행)', 'compileChecked'));
+    .addItem('⑦ 최종취합 시트 생성/갱신', 'buildCompile')
+    .addItem('⑦ 최종 압축본 생성 (체크된 행)', 'compileChecked')
+    .addSeparator()
+    .addItem('✍️ 바로 쓰기 · 📄 보고서 시트 추가', 'openQuickSheetDialog')
+    .addItem('🧭 작업판 — 시트 옆에서 순서대로 (준비 → 쓰기 → 점검 → 나이스)', 'openHome'));
   m.addSubMenu(ui.createMenu('⑧ 점검 · 기재요령 2026')
-    .addItem('🔍 맞춤법 · 금지어 검사', 'openCheckSidebar')
-    .addItem('   근거 확인 — AI 결과가 학생 자료에 있는 내용인지 (선택한 행)', 'groundCheckSelection')
+    .addItem('근거 확인 — AI 결과가 학생 자료에 있는 내용인지 (선택한 행)', 'groundCheckSelection')
     .addItem('   결과 전체 재검증', 'revalidateAll')
     .addItem('⚖️ 학생 간 같은 문장 · 분량 격차 점검 (연 시트의 [최종본])', 'menuEquityCheck')
+    .addSeparator()
     .addItem('⑧ 프롬프트 미리보기', 'previewPrompt')
     .addItem('   AI 앱용 지침 내보내기 (Gemini Gem · Claude 스킬)', 'openExportDialog')
     .addSeparator()
@@ -64,25 +68,25 @@ function onOpen() {
     .addItem('📏 기재요령 규칙 보기 · 고치기', 'openRulesSheet')
     .addItem('   기재요령 규칙 업데이트 확인', 'checkRulesUpdate'));
   m.addSubMenu(ui.createMenu('도움말 · 부가 기능')
+    .addItem('📖 사용법 시트 열기', 'openHelpSheet')
+    .addItem('🧪 체험 예시로 채워 보기 (가상 학생 3명 · 활동 하나)', 'menuDemoFill')
+    .addItem('   체험 예시 지우기', 'menuDemoClear')
+    .addSeparator()
     .addItem('🧹 간단히 보기 (설정 · 규칙 · 예시 시트 숨기기)', 'viewSimple')
     .addItem('   모든 시트 보기', 'viewAll')
     .addSeparator()
     .addItem('🔄 새 버전 확인 · 이전 파일에서 가져오기', 'openUpdateDialog')
+    .addItem('   버전 정보', 'showVersion')
     .addSeparator()
-    .addItem('📄 스캔 문서 → 엑셀 사용 설명서 (업무 대시보드)', 'openOcrGuide')
-    .addItem('📖 사용법 시트 열기', 'openHelpSheet')
-    .addSeparator()
-    .addItem('🧪 체험 예시로 채워 보기 (가상 학생 3명 · 활동 하나)', 'menuDemoFill')
-    .addItem('   체험 예시 지우기', 'menuDemoClear')
-    .addSeparator()
-    .addItem('구글 설문지 응답 지금 받아 오기 (연결해 둔 것 모두)', 'syncFormResponses')
     .addItem('수업관찰 기록 열기', 'openObserve')
-    .addItem('수업관찰 웹앱 배포 안내', 'observeDeployHelp')
-    .addItem('예시 시트 구조 복구', 'repairExampleSheet')
-    .addItem('사용법 시트 갱신', 'buildHelp')
-    .addItem('시작하기 시트 다시 만들기 (버튼 포함)', 'rebuildStart')
-    .addItem('시작하기 안내 다시 켜기', 'onboardReset')
-    .addItem('버전 정보', 'showVersion'));
+    .addItem('   수업관찰 웹앱 배포 안내', 'observeDeployHelp')
+    .addItem('📄 스캔 문서 → 엑셀 사용 설명서 (업무 대시보드)', 'openOcrGuide')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('🛠 고장 났을 때')
+      .addItem('예시 시트 구조 복구', 'repairExampleSheet')
+      .addItem('사용법 시트 갱신', 'buildHelp')
+      .addItem('시작하기 시트 다시 만들기 (버튼 포함)', 'rebuildStart')
+      .addItem('시작하기 안내 다시 켜기', 'onboardReset')));
   m.addToUi();
 
   // 아직 설정을 끝내지 않은 사본이면 [🚀 시작하기] 탭을 열어 준다.
@@ -91,7 +95,7 @@ function onOpen() {
     if (needsOnboarding_()) {
       var st = sh_(APP.SH.START);
       if (st) goSheet_(st);
-      ss_().toast('메뉴 [' + APP.MENU + '] > [🚀 시작하기] 를 눌러 시작하세요.', APP.MENU, 10);
+      ss_().toast('메뉴 [' + APP.MENU + '] > [🖥️ 작성실] 을 누르면 창 안에서 명단 → 활동 → 쓰기 순서로 안내합니다. (단계별 마법사는 [🚀 시작하기])', APP.MENU, 12);
     }
   } catch (e) {}
   // 코드를 새로 붙여 넣은 뒤에도 시트 머리의 판 번호가 옛것으로 남지 않게(보기 전용으로 연 사람은 못 고침 — 조용히 넘어감)
@@ -156,7 +160,7 @@ function installAll() {
  */
 function installCore_() {
   var lock = LockService.getDocumentLock();
-  if (!lock.tryLock(30000)) throw new Error('다른 작업이 실행 중입니다. 잠시 후 다시 시도하세요.');
+  if (!lock.tryLock(30000)) throw new Error('다른 작업이 아직 끝나지 않았습니다. 1~2분 뒤 다시 눌러 주세요.');
   var steps = [
     ['🚀 시작하기', buildStart], ['⚙️ 설정', buildConfig], ['🧩 기록종류', buildRecordTypes],
     ['📚 교과영역', buildSubjects], ['📐 공통규칙', buildCommonRules], ['📏 기재요령', buildRulesSheet],

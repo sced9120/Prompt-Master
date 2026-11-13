@@ -53,7 +53,7 @@ function openManualDialog_(p) {
  */
 function manualApply(p) {
   var s = sh_(p.sheet);
-  if (!s) throw new Error('시트를 찾을 수 없습니다: ' + p.sheet);
+  if (!s) throw new Error('[' + p.sheet + '] 시트를 찾을 수 없습니다. 시트 이름이 바뀌었거나 지워졌습니다. 창을 닫았다가 다시 열어 주세요.');
   var cT = colOf_(s, APP.HEAD_ROW, p.target);
   if (!cT) throw new Error('[' + p.target + '] 칸이 없습니다. 시트 구조를 확인하세요.');
   var cV = colOf_(s, APP.HEAD_ROW, '검증');

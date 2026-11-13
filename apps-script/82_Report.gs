@@ -207,7 +207,7 @@ function importReportFolder() {
     (r.kept ? '\n이미 [보고서]에 내용이 있어 건너뛴 학생: ' + r.kept + '명' : '') +
     (r.unmatched.length ? '\n\n누구 것인지 모르는 파일 ' + r.unmatched.length + '개:\n· ' + r.unmatched.slice(0, 12).join('\n· ') + (r.unmatched.length > 12 ? '\n…' : '') : '') +
     (r.noFile ? '\n\n파일을 못 찾은 학생: ' + r.noFile + '명' : '') +
-    '\n\n다음: 학생 줄을 고르고 메뉴 ⑥ 생성 더 보기 > [📄 보고서 요점 뽑기].', ui_().ButtonSet.OK);
+    '\n\n다음: 학생 줄을 고르고 메뉴 [④⑤ 활동 · 예시 · 보고서 · 설문지] > [📄 보고서 요점 뽑기].', ui_().ButtonSet.OK);
 }
 
 function importReportFolderCore_(sheet, url) {

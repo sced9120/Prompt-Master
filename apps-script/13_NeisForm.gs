@@ -37,7 +37,7 @@ function colLetterOf(i) {
 function neisSheetPath_(parts) {
   var wb = parts['xl/workbook.xml'] || '';
   var sm = wb.match(/<sheet\b([^>]*)\/?>/);
-  if (!sm) throw new Error('엑셀 파일 모양이 아닙니다(시트가 없음).');
+  if (!sm) throw new Error('엑셀 파일을 읽지 못했습니다(시트가 없음). 나이스에서 내려받은 .xlsx 파일을 고치지 말고 그대로 골라 주세요.');
   var name = xmlUnescape((sm[1].match(/\bname="([^"]*)"/) || [])[1] || '');
   var rid = (sm[1].match(/\br:id="([^"]+)"/) || [])[1];
   var path = 'xl/worksheets/sheet1.xml', rm, relRe = /<Relationship\b([^>]*)\/?>/g;
@@ -61,7 +61,7 @@ function readNeisForm(parts) {
   Object.keys(parts || {}).forEach(function (k) { p[String(k).replace(/^\/+/, '')] = parts[k]; });
   var sp = neisSheetPath_(p);
   var grid = parseSheetXml(p[sp.path] || '', parseSharedStrings(p['xl/sharedStrings.xml'] || ''));
-  if (!grid.length) throw new Error('양식에 줄이 없습니다.');
+  if (!grid.length) throw new Error('양식에 학생 줄이 없습니다. 나이스에서 학생이 들어 있는 양식을 다시 내려받아 주세요.');
   var head = (grid[0] || []).map(function (h) { return String(h === null || h === undefined ? '' : h); });
   var H = head.map(neisHead_);
   var at = function (name) { return H.indexOf(name); };

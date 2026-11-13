@@ -1,5 +1,5 @@
 /******************************************************************************
- * 세특 작성 도우미 v3.0.3 — 설치용 합본
+ * 세특 작성 도우미 v3.2.0 — 설치용 합본
  *
  * 이 파일 하나에 모든 스크립트가 들어 있습니다.
  * Apps Script 편집기에서 Code.gs 의 내용을 전부 지우고 이 파일을 통째로 붙여넣으세요.
@@ -10,7 +10,7 @@
  * 고칠 때는 apps-script/ 의 해당 파일을 고치고 node tools/build.js 를 다시 돌리세요.
  * 이 파일을 직접 고치면 다음 빌드 때 덮어써집니다.
  *
- * 빌드: 2026-11-09  ·  원본 42개 파일
+ * 빌드: 2026-11-13  ·  원본 42개 파일
  *****************************************************************************/
 
 /* ==========================================================================
@@ -27,7 +27,7 @@
  */
 
 var APP = {
-  VERSION: 'v3.0.3',
+  VERSION: 'v3.2.0',
   MENU: '세특 도우미 v3',
   // 시트 이름 (바꾸려면 여기만 고치면 됩니다)
   SH: {
@@ -475,7 +475,8 @@ var DEFAULT_MODEL = 'gemini-flash-latest';
 var PROVIDER_DEFAULT_MODEL = {
   gemini: 'gemini-flash-latest',
   openai: 'gpt-6-luna',
-  anthropic: 'claude-haiku-5-5'
+  anthropic: 'claude-haiku-5-5',
+  exaone: 'k-exaone_v2.5'
 };
 
 var PRESET_MODELS = [
@@ -494,7 +495,9 @@ var PRESET_MODELS = [
   { model: 'claude-haiku-5-5', level: '충분',
     memo: 'Claude 키를 쓸 때의 기본. 세특 작성에 충분합니다.' },
   { model: 'claude-sonnet-5-5', level: '고급',
-    memo: 'Claude 상위 모델. 압축본 품질을 더 올리고 싶을 때.' }
+    memo: 'Claude 상위 모델. 압축본 품질을 더 올리고 싶을 때.' },
+  { model: 'k-exaone_v2.5', level: '무료 · 국산',
+    memo: 'LG K-EXAONE 2.5. 키만 받으면 무료이고 한국어에 강합니다(1초에 1번 · 1분에 60번). 글만 읽으므로 보고서 PDF · 사진 읽기에는 쓸 수 없습니다. 쓰기 전에 docs.exaone.ai 의 My profile > 동의 및 알림 관리에서 [학습 이용]을 꺼 두세요.' }
 ];
 
 /** 옛 번호 v3.0.x 의 기본값 — 설치/복구 때 선생님이 손대지 않은 값이면 새 기본값으로 올린다 */
@@ -504,7 +507,8 @@ var OLD_DEFAULT_MODELS = { '활동용 모델': 'gemini-2.5-flash', '합본용 �
 var MODEL_LINKS = {
   gemini: 'https://ai.google.dev/gemini-api/docs/models',
   openai: 'https://platform.openai.com/docs/models',
-  anthropic: 'https://platform.claude.com/docs/en/models/overview'
+  anthropic: 'https://platform.claude.com/docs/en/models/overview',
+  exaone: 'https://docs.exaone.ai/ko/docs/models'
 };
 
 /* ============================================================ 입력 항목 */
@@ -675,8 +679,33 @@ function fillTokens(tpl, map) {
  *   o.styleSamples 예전에 쓴 세특 몇 편(쓰는 방식만 참고) · common.STYLE_CARD 내 문체 카드
  * @return {string}
  */
-/** 한 장면을 잇는 순서 — 학생부 사례 분석에서 흔한 좋은 문장의 뼈대. 메모에 없는 칸은 건너뛴다 */
-var SENTENCE_FRAME = '- 한 장면은 교과 개념 → 활동 과정 → 관찰 근거(자료 · 산출물 · 발언) → 피드백 뒤 고친 점 → 변화 순서로 잇고, 메모에 없는 칸은 건너뛴다.';
+/**
+ * 서술 흐름 — 대학이 공개한 합격생 학생부 발췌(서울대 아로리 '나도 입학사정관')에서 되풀이되는 짜임.
+ *   장면은 수업 속 계기 한 구절 → 학생이 직접 한 과정(측정 · 조사 · 계산 · 비교) → 다른 단원 · 과목으로 이어간 탐구 → 결론이나 제안.
+ *   끝맺음은 학생이 한 일 · 낸 결론이고, 깨달음 · 성장 · 평가어로 맺지 않는다. 개념과 방법은 이름으로 쓴다.
+ * 메모에 없는 단계는 건너뛴다(지어내지 않는다).
+ * 2027 서울대 학생부종합전형 안내(서류평가)도 같은 쪽이다 — 세특에서 '자기주도적 학습에 의한 변화와 성장', '성취를 점검하고 더 필요한 공부를 고민한 경험'을,
+ * 창체 · 행발에서 '경험의 유무나 활동의 양'이 아니라 '맡은 역할과 활동 내용'을 본다. 그래서 달라진 점은 행동으로, 역할은 직책 이름보다 한 일로 쓴다.
+ */
+var FRAME_STUDY = [
+  '- 한 장면은 계기(수업 속 질문) → 직접 한 과정(조사 · 측정 · 계산 · 고친 점) → 이어간 탐구 → 결론 순서로 잇고, 메모에 없는 단계는 건너뛴다.',
+  '- 개념과 방법은 이름으로 쓰고, 계기는 메모에 있는 사실로 한 구절만 쓴다. 처음과 달라진 점이 메모에 있으면 행동으로 쓴다.'
+];
+var FRAME_ROLE = [
+  '- 한 장면은 맡은 역할 → 그 자리에서 직접 한 일(뜻밖의 상황에 대처한 방식 포함) → 결과 순서로 잇고, 메모에 없는 단계는 건너뛴다. 직책 이름이나 횟수보다 한 일을 쓴다.'
+];
+var FRAME_BEHAVIOR = [
+  '- 행동 특성은 여러 장면에서 되풀이해 본 행동으로 쓰고, 한 번 있었던 일로 단정하지 않는다. 부족했던 점은 그 뒤 달라진 행동과 함께 쓴다.'
+];
+var FRAME_END = '- 문장은 학생이 한 일이나 낸 결론으로 끝맺는다.';
+
+/** 기록 영역에 맞는 서술 흐름 줄 */
+function sentenceFrame(recKey) {
+  var k = String(recKey || '');
+  var lines = k === '행발' ? FRAME_BEHAVIOR : (k === '자율' || k === '진로') ? FRAME_ROLE : FRAME_STUDY;
+  return lines.concat([FRAME_END]).join('\n');
+}
+var SENTENCE_FRAME = sentenceFrame('과세특');   // 예전 이름 — 과세특 흐름
 
 var AMOUNTS = ['메모만큼', '보통', '넉넉히'];
 
@@ -757,7 +786,7 @@ function buildPrompt(o) {
   P.push(ctx.join('\n'));
 
   // ③ 서술 규칙 (+ 피할 표현 — AI 글에 흔한 번역투·상투어)
-  if (com.WRITING_RULES) P.push('# 서술 규칙\n' + com.WRITING_RULES + '\n' + SENTENCE_FRAME);
+  if (com.WRITING_RULES) P.push('# 서술 규칙\n' + com.WRITING_RULES + '\n' + sentenceFrame(rec.key || act.recordKey));
   if (com.AVOID_RULES && String(com.AVOID_RULES).trim()) P.push('# 피할 표현\n' + String(com.AVOID_RULES).trim());
 
   // ④ 기재 금지사항 (+ 이 기록 항목에만 해당하는 기재 주의)
@@ -918,7 +947,7 @@ if (typeof module !== 'undefined' && module.exports) {
     activityBytes: activityBytes, splitBytes: splitBytes, byteBudget: byteBudget, exampleValuesFrom: exampleValuesFrom,
     buildRole: buildRole, buildStudentBlock: buildStudentBlock,
     validateResult: validateResult, formatIssues: formatIssues,
-    AMOUNTS: AMOUNTS, activityAmount: activityAmount, amountLines: amountLines
+    AMOUNTS: AMOUNTS, activityAmount: activityAmount, amountLines: amountLines, sentenceFrame: sentenceFrame
   };
 }
 
@@ -952,6 +981,7 @@ function guessProvider(m) {
   if (/^(gemini|learnlm)/.test(m)) return 'gemini';
   if (/^claude/.test(m)) return 'anthropic';
   if (/^(gpt|chatgpt|o\d|ft:gpt|ft:o\d)/.test(m)) return 'openai';
+  if (/^(k-)?exaone/.test(m)) return 'exaone';
   return '';
 }
 
@@ -962,11 +992,12 @@ function companyToProvider(label) {
   if (/gemini|google|구글|제미나이/.test(s)) return 'gemini';
   if (/openai|gpt|오픈/.test(s)) return 'openai';
   if (/claude|anthropic|클로드|앤트로픽/.test(s)) return 'anthropic';
+  if (/exaone|엑사원/.test(s)) return 'exaone';
   return '';
 }
 
 function providerLabel(p) {
-  return { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude', subscription: 'Gemini(구독)' }[p] || '?';
+  return { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude', exaone: 'EXAONE', subscription: 'Gemini(구독)' }[p] || '?';
 }
 
 /**
@@ -1048,6 +1079,7 @@ function isTextModel(provider, id) {
   if (provider === 'gemini') return /^gemini/.test(m);
   if (provider === 'openai') return /^(gpt|chatgpt|o\d)/.test(m) && !/instruct|codex|oss|babbage|davinci/.test(m);
   if (provider === 'anthropic') return /^claude/.test(m);
+  if (provider === 'exaone') return /exaone/.test(m) && !/tabular/.test(m);
   return false;
 }
 
@@ -1085,6 +1117,7 @@ function modelStatusText(res, stamp) {
  *   Gemini 2.5 Flash 계열 : thinkingBudget 0      (끄기)
  *   Gemini 2.5 Pro        : thinkingBudget 128    (끌 수 없어 최소값)
  *   OpenAI gpt-5·gpt-6·o  : reasoning_effort 'low' (gpt-5.x 기본은 medium)
+ *   K-EXAONE              : reasoning_effort 'low' (기본은 max — 늘 추론을 거치는 모델이라 끌 수는 없다)
  */
 function thinkingFor(provider, model) {
   var m = normModel(model).toLowerCase();
@@ -1100,6 +1133,7 @@ function thinkingFor(provider, model) {
     if (/^(gpt-5|gpt-6|gpt-7|o\d)/.test(m) && !/chat-latest/.test(m)) return { reasoning_effort: 'low' };
     return null;
   }
+  if (provider === 'exaone') return { reasoning_effort: 'low' };
   return null;
 }
 
@@ -1359,7 +1393,7 @@ function colLetterOf(i) {
 function neisSheetPath_(parts) {
   var wb = parts['xl/workbook.xml'] || '';
   var sm = wb.match(/<sheet\b([^>]*)\/?>/);
-  if (!sm) throw new Error('엑셀 파일 모양이 아닙니다(시트가 없음).');
+  if (!sm) throw new Error('엑셀 파일을 읽지 못했습니다(시트가 없음). 나이스에서 내려받은 .xlsx 파일을 고치지 말고 그대로 골라 주세요.');
   var name = xmlUnescape((sm[1].match(/\bname="([^"]*)"/) || [])[1] || '');
   var rid = (sm[1].match(/\br:id="([^"]+)"/) || [])[1];
   var path = 'xl/worksheets/sheet1.xml', rm, relRe = /<Relationship\b([^>]*)\/?>/g;
@@ -1383,7 +1417,7 @@ function readNeisForm(parts) {
   Object.keys(parts || {}).forEach(function (k) { p[String(k).replace(/^\/+/, '')] = parts[k]; });
   var sp = neisSheetPath_(p);
   var grid = parseSheetXml(p[sp.path] || '', parseSharedStrings(p['xl/sharedStrings.xml'] || ''));
-  if (!grid.length) throw new Error('양식에 줄이 없습니다.');
+  if (!grid.length) throw new Error('양식에 학생 줄이 없습니다. 나이스에서 학생이 들어 있는 양식을 다시 내려받아 주세요.');
   var head = (grid[0] || []).map(function (h) { return String(h === null || h === undefined ? '' : h); });
   var H = head.map(neisHead_);
   var at = function (name) { return H.indexOf(name); };
@@ -1876,7 +1910,7 @@ function readXlsxParts(parts) {
   var p = {};
   Object.keys(parts || {}).forEach(function (k) { p[String(k).replace(/^\/+/, '')] = parts[k]; });
   var wb = p['xl/workbook.xml'];
-  if (!wb) throw new Error('엑셀 파일 모양이 아닙니다(workbook.xml 없음).');
+  if (!wb) throw new Error('엑셀 파일을 읽지 못했습니다(workbook.xml 없음). .xlsx 로 저장한 파일인지 확인해 주세요.');
   var rels = {}, rm, relRe = /<Relationship\b([^>]*)\/?>/g;
   while ((rm = relRe.exec(p['xl/_rels/workbook.xml.rels'] || ''))) {
     var id = (rm[1].match(/\bId="([^"]+)"/) || [])[1], target = (rm[1].match(/\bTarget="([^"]+)"/) || [])[1];
@@ -3292,7 +3326,7 @@ function shOrCreate_(name) {
 /** 시트 필수 — 없으면 안내 후 예외 */
 function shRequire_(name) {
   var s = sh_(name);
-  if (!s) throw new Error('[' + name + '] 시트가 없습니다. 메뉴 > 처음 설치/복구 를 실행하세요.');
+  if (!s) throw new Error('[' + name + '] 시트가 없습니다. 메뉴 [①②③ 준비] > [① 처음 설치 / 구조 복구]를 누르면 다시 만들어집니다(적어 둔 내용은 그대로 둡니다).');
   return s;
 }
 
@@ -3688,19 +3722,16 @@ function openConsentDialog(back) {
 
 function onOpen() {
   var ui = ui_();
-  // 화면이 작은 노트북에서도 메뉴가 아래로 잘리지 않게, 자주 쓰는 것만 맨 위에 두고 나머지는 하위 메뉴로 묶는다.
+  // 화면이 작은 노트북에서도 메뉴가 아래로 잘리지 않게, 맨 위에는 네 가지만 두고 나머지는 일하는 순서대로 하위 메뉴로 묶는다(v3.2.0).
   // 항목 이름의 ①~⑧ 번호는 안내문·오류 메시지가 가리키는 이름이라 그대로 둔다.
   var m = ui.createMenu(APP.MENU);
-  m.addItem('🖥️ 작성실 — 큰 창에서 학생별로 쓰기 (담임 · 교과)', 'openDesk');
-  m.addItem('🧭 작업판 — 한 화면에서 (준비 → 쓰기 → 점검 → 나이스)', 'openHome');
+  // 맨 위에는 날마다 누르는 네 가지만 — 작성실에서 명단 · 쓰기 · 취합 · 나이스까지 다 한다.
+  m.addItem('🖥️ 작성실 — 여기서 시작 (큰 창에서 학생별로 쓰기)', 'openDesk');
   m.addItem('🚀 시작하기 (처음이면 여기)', 'openOnboard');
-  m.addItem('✍️ 바로 쓰기 · 📄 보고서 시트 추가', 'openQuickSheetDialog');
   m.addItem('🔍 맞춤법 · 금지어 검사', 'openCheckSidebar');
-  m.addSeparator();
-  m.addItem('⑥ 체크된 행 생성', 'generateChecked');
-  m.addItem('⑦ 최종취합 시트 생성/갱신', 'buildCompile');
   m.addItem('📤 나이스 업로드 파일 만들기 (나이스 양식에 최종본 채우기)', 'openNeisDialog');
   m.addSeparator();
+  // 아래는 일하는 순서대로 — 준비 → 활동 → 시트에서 쓰기 → 점검 → 도움말
   m.addSubMenu(ui.createMenu('①②③ 준비 — 설치 · AI 연결 · 학생 명단')
     .addItem('① 처음 설치 / 구조 복구', 'installAll')
     .addItem('🔒 개인정보 · 보안 안내와 동의 (처음 한 번)', 'openConsentDialog')
@@ -3712,13 +3743,12 @@ function onOpen() {
     .addItem('📥 이전 파일에서 가져오기 (새 버전으로 옮길 때)', 'openImportDialog'));
   m.addSubMenu(ui.createMenu('④⑤ 활동 · 예시 · 보고서 · 설문지')
     .addItem('④ 활동 만들기 · 입력 항목 바꾸기 ★', 'openWizard')
-    .addItem('📝 구글 설문지 연결 (응답 → 시트, 파일 업로드 포함)', 'openFormDialog')
-    .addItem('📚 새 교과 만들기 (교과 역량 · 입력 항목 초안)', 'openSubjectDialog')
-    .addItem('📏 활동별 바이트 한도 (한 칸을 여러 활동이 나눌 때)', 'openBytesDialog')
-    .addItem('🧪 세특 프롬프트 공방 (설계하며 프롬프트 보기 · 복사)', 'openStudio')
     .addItem('   활동 직접 추가 (질문에 답하기)', 'addActivityDialog')
     .addItem('   활동 복제', 'duplicateActivityDialog')
     .addItem('   활동 삭제', 'deleteActivityDialog')
+    .addItem('📏 활동별 바이트 한도 (한 칸을 여러 활동이 나눌 때)', 'openBytesDialog')
+    .addItem('📚 새 교과 만들기 (교과 역량 · 입력 항목 초안)', 'openSubjectDialog')
+    .addItem('🧪 세특 프롬프트 공방 (설계하며 프롬프트 보기 · 복사)', 'openStudio')
     .addSeparator()
     .addItem('⑤ 예시 더 만들기 (AI)', 'generateMoreExamples')
     .addItem('   예시 칸 늘리기', 'addExampleRows')
@@ -3726,19 +3756,27 @@ function onOpen() {
     .addItem('⭐ 선택한 학생 글을 예시로 등록', 'promoteToExample')
     .addSeparator()
     .addItem('📄 보고서 요점 뽑기 (선택한 행)', 'extractReportPoints')
-    .addItem('   보고서 폴더에서 파일 가져오기 (파일 이름으로 학생 찾기)', 'importReportFolder'));
-  m.addSubMenu(ui.createMenu('⑥ 생성 더 보기')
-    .addItem('📋 키 없이 — 프롬프트 복사 · 답 붙여넣기 (체크된 행)', 'openManualForChecked')
+    .addItem('   보고서 폴더에서 파일 가져오기 (파일 이름으로 학생 찾기)', 'importReportFolder')
+    .addSeparator()
+    .addItem('📝 구글 설문지 연결 (응답 → 시트, 파일 업로드 포함)', 'openFormDialog')
+    .addItem('   구글 설문지 응답 지금 받아 오기 (연결해 둔 것 모두)', 'syncFormResponses'));
+  m.addSubMenu(ui.createMenu('⑥⑦ 시트에서 쓰기 — 생성 · 취합 · 압축')
+    .addItem('⑥ 체크된 행 생성', 'generateChecked')
     .addItem('   선택한 행만 생성', 'generateSelection')
+    .addItem('📋 키 없이 — 프롬프트 복사 · 답 붙여넣기 (체크된 행)', 'openManualForChecked')
     .addItem('   자동 생성(체크 즉시) 켜기', 'enableAutoTrigger')
     .addItem('   자동 생성 끄기', 'disableAutoTrigger')
     .addSeparator()
-    .addItem('⑦ 최종 압축본 생성 (체크된 행)', 'compileChecked'));
+    .addItem('⑦ 최종취합 시트 생성/갱신', 'buildCompile')
+    .addItem('⑦ 최종 압축본 생성 (체크된 행)', 'compileChecked')
+    .addSeparator()
+    .addItem('✍️ 바로 쓰기 · 📄 보고서 시트 추가', 'openQuickSheetDialog')
+    .addItem('🧭 작업판 — 시트 옆에서 순서대로 (준비 → 쓰기 → 점검 → 나이스)', 'openHome'));
   m.addSubMenu(ui.createMenu('⑧ 점검 · 기재요령 2026')
-    .addItem('🔍 맞춤법 · 금지어 검사', 'openCheckSidebar')
-    .addItem('   근거 확인 — AI 결과가 학생 자료에 있는 내용인지 (선택한 행)', 'groundCheckSelection')
+    .addItem('근거 확인 — AI 결과가 학생 자료에 있는 내용인지 (선택한 행)', 'groundCheckSelection')
     .addItem('   결과 전체 재검증', 'revalidateAll')
     .addItem('⚖️ 학생 간 같은 문장 · 분량 격차 점검 (연 시트의 [최종본])', 'menuEquityCheck')
+    .addSeparator()
     .addItem('⑧ 프롬프트 미리보기', 'previewPrompt')
     .addItem('   AI 앱용 지침 내보내기 (Gemini Gem · Claude 스킬)', 'openExportDialog')
     .addSeparator()
@@ -3748,25 +3786,25 @@ function onOpen() {
     .addItem('📏 기재요령 규칙 보기 · 고치기', 'openRulesSheet')
     .addItem('   기재요령 규칙 업데이트 확인', 'checkRulesUpdate'));
   m.addSubMenu(ui.createMenu('도움말 · 부가 기능')
+    .addItem('📖 사용법 시트 열기', 'openHelpSheet')
+    .addItem('🧪 체험 예시로 채워 보기 (가상 학생 3명 · 활동 하나)', 'menuDemoFill')
+    .addItem('   체험 예시 지우기', 'menuDemoClear')
+    .addSeparator()
     .addItem('🧹 간단히 보기 (설정 · 규칙 · 예시 시트 숨기기)', 'viewSimple')
     .addItem('   모든 시트 보기', 'viewAll')
     .addSeparator()
     .addItem('🔄 새 버전 확인 · 이전 파일에서 가져오기', 'openUpdateDialog')
+    .addItem('   버전 정보', 'showVersion')
     .addSeparator()
-    .addItem('📄 스캔 문서 → 엑셀 사용 설명서 (업무 대시보드)', 'openOcrGuide')
-    .addItem('📖 사용법 시트 열기', 'openHelpSheet')
-    .addSeparator()
-    .addItem('🧪 체험 예시로 채워 보기 (가상 학생 3명 · 활동 하나)', 'menuDemoFill')
-    .addItem('   체험 예시 지우기', 'menuDemoClear')
-    .addSeparator()
-    .addItem('구글 설문지 응답 지금 받아 오기 (연결해 둔 것 모두)', 'syncFormResponses')
     .addItem('수업관찰 기록 열기', 'openObserve')
-    .addItem('수업관찰 웹앱 배포 안내', 'observeDeployHelp')
-    .addItem('예시 시트 구조 복구', 'repairExampleSheet')
-    .addItem('사용법 시트 갱신', 'buildHelp')
-    .addItem('시작하기 시트 다시 만들기 (버튼 포함)', 'rebuildStart')
-    .addItem('시작하기 안내 다시 켜기', 'onboardReset')
-    .addItem('버전 정보', 'showVersion'));
+    .addItem('   수업관찰 웹앱 배포 안내', 'observeDeployHelp')
+    .addItem('📄 스캔 문서 → 엑셀 사용 설명서 (업무 대시보드)', 'openOcrGuide')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('🛠 고장 났을 때')
+      .addItem('예시 시트 구조 복구', 'repairExampleSheet')
+      .addItem('사용법 시트 갱신', 'buildHelp')
+      .addItem('시작하기 시트 다시 만들기 (버튼 포함)', 'rebuildStart')
+      .addItem('시작하기 안내 다시 켜기', 'onboardReset')));
   m.addToUi();
 
   // 아직 설정을 끝내지 않은 사본이면 [🚀 시작하기] 탭을 열어 준다.
@@ -3775,7 +3813,7 @@ function onOpen() {
     if (needsOnboarding_()) {
       var st = sh_(APP.SH.START);
       if (st) goSheet_(st);
-      ss_().toast('메뉴 [' + APP.MENU + '] > [🚀 시작하기] 를 눌러 시작하세요.', APP.MENU, 10);
+      ss_().toast('메뉴 [' + APP.MENU + '] > [🖥️ 작성실] 을 누르면 창 안에서 명단 → 활동 → 쓰기 순서로 안내합니다. (단계별 마법사는 [🚀 시작하기])', APP.MENU, 12);
     }
   } catch (e) {}
   // 코드를 새로 붙여 넣은 뒤에도 시트 머리의 판 번호가 옛것으로 남지 않게(보기 전용으로 연 사람은 못 고침 — 조용히 넘어감)
@@ -3840,7 +3878,7 @@ function installAll() {
  */
 function installCore_() {
   var lock = LockService.getDocumentLock();
-  if (!lock.tryLock(30000)) throw new Error('다른 작업이 실행 중입니다. 잠시 후 다시 시도하세요.');
+  if (!lock.tryLock(30000)) throw new Error('다른 작업이 아직 끝나지 않았습니다. 1~2분 뒤 다시 눌러 주세요.');
   var steps = [
     ['🚀 시작하기', buildStart], ['⚙️ 설정', buildConfig], ['🧩 기록종류', buildRecordTypes],
     ['📚 교과영역', buildSubjects], ['📐 공통규칙', buildCommonRules], ['📏 기재요령', buildRulesSheet],
@@ -4228,7 +4266,7 @@ function onboardStatus() {
   try {
     st.installed = !!(sh_(APP.SH.CONFIG) && sh_(APP.SH.RECORD) && sh_(APP.SH.ACTIVITY) && sh_(APP.SH.ROSTER));
   } catch (e) {}
-  ['gemini', 'openai', 'anthropic'].forEach(function (p) {
+  PROVIDERS.forEach(function (p) {
     if (getKey_(p)) { st.hasKey = true; st.keyNames.push(p); }
   });
   try { st.subscription = subOn_(); } catch (e) { st.subscription = false; }
@@ -4794,7 +4832,7 @@ function homeState() {
   try { st.consent = consentOk_(); } catch (e) {}
   try {
     var k = keyStatus_();
-    var names = { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude' };
+    var names = { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude', exaone: 'EXAONE' };
     var on = PROVIDERS.filter(function (p) { return k[p]; }).map(function (p) { return names[p] || p; });
     if (k.subscription) on.push('Gemini 구독');
     st.ai = on.length ? on.join(' · ') : '';
@@ -5006,7 +5044,7 @@ function importFromOld(url) {
   summarizeOldBook_(book);
 
   var lock = LockService.getDocumentLock();
-  if (!lock.tryLock(30000)) throw new Error('다른 작업이 실행 중입니다. 잠시 후 다시 시도하세요.');
+  if (!lock.tryLock(30000)) throw new Error('다른 작업이 아직 끝나지 않았습니다. 1~2분 뒤 다시 눌러 주세요.');
   var rep = { roster: 0, activities: [], skipped: [], compile: [], style: 0, settings: [], models: 0,
               records: [], subjects: [], common: [], rules: 0, extra: [], failed: [] };
   var step = function (label, fn) { try { fn(); } catch (e) { rep.failed.push(label + ' — ' + e.message); } };
@@ -5014,7 +5052,7 @@ function importFromOld(url) {
     if (!sh_(APP.SH.ACTIVITY) || !sh_(APP.SH.RECORD) || !sh_(APP.SH.ROSTER)) {
       lock.releaseLock();
       installCore_();
-      if (!lock.tryLock(30000)) throw new Error('다른 작업이 실행 중입니다.');
+      if (!lock.tryLock(30000)) throw new Error('다른 작업이 아직 끝나지 않았습니다. 1~2분 뒤 다시 눌러 주세요.');
     }
     step('⚙️ 설정', function () { importConfig_(book, rep); });
     step('🧩 기록종류', function () { importKeyed_(book, APP.SH.RECORD, rep.records, PRESET_RECORD_TYPES,
@@ -5299,13 +5337,13 @@ function buildHelp() {
   P('교과 세특뿐 아니라 자율·동아리·진로·행동특성 및 종합의견까지 같은 방식으로 씁니다.');
   P('⚠️ ' + AI_NOTICE_2026);
 
-  H('메뉴 한눈에 보기 (화면이 작아도 잘리지 않게 묶었습니다)');
-  P('  맨 위: 🚀 시작하기 · ✍️ 바로 쓰기 · 📄 보고서 시트 추가 · 📝 구글 설문지 연결 · 🔍 맞춤법·금지어 검사 · ⑥ 체크된 행 생성 · ⑦ 최종취합');
+  H('메뉴 한눈에 보기 (맨 위 네 가지 + 일하는 순서대로 묶음)');
+  P('  맨 위: 🖥️ 작성실(여기서 시작 — 명단 · 쓰기 · 취합 · 나이스까지) · 🚀 시작하기 · 🔍 맞춤법·금지어 검사 · 📤 나이스 업로드 파일 만들기');
   P('  ①②③ 준비 — 처음 설치 / AI 연결 · 모델 설정 / 학생 명단');
-  P('  ④⑤ 활동 · 예시 · 보고서 — 활동 만들기 · 📚 새 교과 만들기 · 📏 활동별 바이트 한도 · 🧪 세특 프롬프트 공방 · 복제 · 삭제 / 예시 더 만들기 · 늘리기 · 검증 / ⭐ 예시로 등록 / 📄 보고서 요점 뽑기 · 폴더에서 가져오기');
-  P('  ⑥ 생성 더 보기 — 📋 키 없이(복사·붙여넣기) · 선택한 행만 · 자동 생성 켜기/끄기 · 최종 압축본');
-  P('  ⑧ 점검 · 기재요령 2026 — 검사 · 근거 확인 · 재검증 · 프롬프트 미리보기 · AI 앱용 지침 내보내기 · ✒️ 내 문체 카드 · 📏 기재요령 규칙');
-  P('  도움말 · 부가 기능 — 📄 스캔 문서 → 엑셀 사용 설명서 · 사용법 · 설문지 응답 지금 받아 오기 · 수업관찰 · 구조 복구 · 버전');
+  P('  ④⑤ 활동 · 예시 · 보고서 · 설문지 — 활동 만들기 · 복제 · 삭제 · 📏 활동별 바이트 한도 · 📚 새 교과 만들기 · 🧪 세특 프롬프트 공방 / 예시 더 만들기 · 늘리기 · 검증 · ⭐ 예시로 등록 / 📄 보고서 요점 뽑기 · 폴더에서 가져오기 / 📝 구글 설문지 연결 · 응답 지금 받아 오기');
+  P('  ⑥⑦ 시트에서 쓰기 — ⑥ 체크된 행 생성 · 선택한 행만 · 📋 키 없이(복사·붙여넣기) · 자동 생성 켜기/끄기 / ⑦ 최종취합 · 최종 압축본 / ✍️ 바로 쓰기 · 📄 보고서 시트 추가 · 🧭 작업판');
+  P('  ⑧ 점검 · 기재요령 2026 — 근거 확인 · 재검증 · ⚖️ 학생 간 점검 · 프롬프트 미리보기 · AI 앱용 지침 내보내기 · ✒️ 내 문체 카드 · 📏 기재요령 규칙');
+  P('  도움말 · 부가 기능 — 📖 사용법 · 🧪 체험 예시 · 🧹 간단히 보기 · 🔄 새 버전 확인 · 수업관찰 · 📄 스캔 문서 → 엑셀 설명서 · 🛠 고장 났을 때(구조 복구)');
   P('  [🚀 시작하기] 시트 위쪽 버튼 10개로도 같은 창을 엽니다.');
 
   H('0. 이 도구의 핵심 — 프롬프트를 직접 쓰지 않습니다');
@@ -5384,7 +5422,7 @@ function buildHelp() {
   P('[프롬프트 미리보기]를 누르면 실제로 AI에게 갈 문장을 확인할 수 있습니다.');
 
   H('2-1. ✍️ 바로 쓰기 시트 — 입력 항목을 정하지 않고 바로');
-  P('메뉴 맨 위 [✍️ 바로 쓰기 시트 추가] 또는 [🚀 시작하기] 시트의 버튼. 시트 이름 · 기록 항목 · 교과만 고르면 됩니다. 몇 개든 만들 수 있습니다.');
+  P('메뉴 [⑥⑦ 시트에서 쓰기] > [✍️ 바로 쓰기 · 📄 보고서 시트 추가] 또는 [🚀 시작하기] 시트의 버튼. 시트 이름 · 기록 항목 · 교과만 고르면 됩니다. 몇 개든 만들 수 있습니다.');
   P('  · 학생마다 [관찰 메모] 한 칸에 자유롭게 적고 [생성] → AI 초안 (키가 없으면 복사·붙여넣기 창)');
   P('  · 또는 [최종본]에 직접 쓰면 [검증] 칸이 바로 금지어·어미·맞춤법·바이트를 검사합니다(AI를 부르지 않음).');
   P('  · 최종취합·검토는 보통 활동과 똑같이 됩니다. 학생 명단이 없으면 반·번호·이름을 직접 적어도 되고, 나중에 명단을 넣어도 적어 둔 줄은 지워지지 않습니다.');
@@ -5573,12 +5611,12 @@ function buildHelp() {
   H('12. 📝 구글 설문지 연결');
   P('① 구글 설문지 편집 화면 → [응답] → [Sheets에 연결] → "기존 스프레드시트 선택" → 이 파일. 응답이 "설문지 응답 시트1" 탭으로 들어옵니다.');
   P('   학생 문항은 학번(또는 반·번호)과 이름을 단답형으로. 순서는 상관없고 이메일 수집을 켜도 됩니다. 보고서는 [파일 업로드] 문항으로.');
-  P('② 메뉴 맨 위 [📝 구글 설문지 연결] → 응답 시트 · 학생 칸 · 보낼 곳(있는 시트, 새 📄 보고서 · ✍️ 바로 쓰기 · 새 활동) · 문항 → 칸을 고르고 [연결하고 지금 받아 오기].');
+  P('② 메뉴 [④⑤ 활동 · 예시 · 보고서 · 설문지] > [📝 구글 설문지 연결] → 응답 시트 · 학생 칸 · 보낼 곳(있는 시트, 새 📄 보고서 · ✍️ 바로 쓰기 · 새 활동) · 문항 → 칸을 고르고 [연결하고 지금 받아 오기].');
   P('   · 문항은 이름으로 맞춥니다(순서를 바꿔도 됨). 여러 문항을 한 칸으로 보내면 "문항: 답"으로 이어 붙입니다.');
   P('   · 같은 학생이 여러 번 내면 마지막 응답을 씁니다. 명단에 없는 학생은 줄을 더하거나(선택) 목록으로 알려 줍니다.');
   P('   · 선생님이 시트에서 고친 칸은 다시 받아 와도 덮어쓰지 않습니다(칸 메모 "📝 설문지에서 가져옴"으로 알아봄).');
   P('   · [응답이 오면 저절로 받아 오기]를 켜면 제출 때마다 받아 오고, [바로 세특 생성]을 켜면 그 학생만 생성합니다(API 키 필요).');
-  P('   · 한 번에 다시 받으려면 [도움말 · 부가 기능] > [구글 설문지 응답 지금 받아 오기].');
+  P('   · 한 번에 다시 받으려면 [④⑤ 활동 · 예시 · 보고서 · 설문지] > [구글 설문지 응답 지금 받아 오기].');
 
   H('13. 함께 쓰면 좋은 도구 — 📄 스캔 문서 → 엑셀');
   P('업무 인수인계 대시보드(윈도우 프로그램, 같은 만든이)의 기능입니다. 손글씨 활동지·신청서를 스캔하면 AI가 글자 그대로 표로 읽어 엑셀로 저장합니다.');
@@ -5682,15 +5720,53 @@ function deskContext() {
   return {
     version: APP.VERSION, activities: acts, classes: classes, homeroom: deskHomeroom_(),
     consent: (function () { try { return consentOk_(); } catch (e) { return true; } })(),
-    api: !!(k.gemini || k.openai || k.anthropic), manualOnly: deskManualOnly_(k),
-    hasHomeroomActs: acts.some(function (a) { return a.mode === 'homeroom'; })
+    api: anyKey_(k), manualOnly: deskManualOnly_(k),
+    hasHomeroomActs: acts.some(function (a) { return a.mode === 'homeroom'; }),
+    guide: deskGuide()
   };
+}
+
+/**
+ * 창 맨 위 길잡이 줄의 숫자 — 어디까지 했는지(명단 · 활동 · AI 연결 · 쓰기 · 취합). 이름이나 글은 담지 않는다.
+ * written / slots = [최종본]이 있는 칸 / 학생 × 활동 칸.
+ */
+function deskGuide() {
+  var g = { installed: !!sh_(APP.SH.ACTIVITY), students: 0, acts: 0, written: 0, slots: 0, compiled: 0, consent: true, api: false };
+  try { g.students = sh_(APP.SH.ROSTER) ? getRoster_().length : 0; } catch (e) { logSoft_('deskGuide roster', e); }
+  if (g.installed) {
+    try {
+      getActivities_().forEach(function (a) {
+        var s = sh_(a.inSheet); if (!s) return;
+        var p = activityProgress_(s);
+        g.acts++; g.slots += p.students; g.written += p.done;
+      });
+    } catch (e) { logSoft_('deskGuide acts', e); }
+  }
+  try { g.compiled = compileSheets_().length; } catch (e) {}
+  try { g.consent = consentOk_(); } catch (e) {}
+  try { g.api = anyKey_(keyStatus_()); } catch (e) {}
+  try { var d = demoState_(); g.demo = { filled: d.filled, canFill: d.canFill }; } catch (e) { g.demo = { filled: false, canFill: false }; }
+  return g;
+}
+
+/** 창에서 체험 예시 넣기 — 가상 학생 3명 · 활동 하나(명단에 실제 학생이 있으면 넣지 않는다) */
+function deskDemo() {
+  var r = demoFill();
+  var ctx = deskContext();
+  ctx.demoKey = DEMO_KEY; ctx.demoSheet = r.inSheet;
+  return ctx;
+}
+
+/** 창에서 체험 예시 지우기 — 체험 활동과 체험 학생만 */
+function deskDemoClear() {
+  demoClear();
+  return deskContext();
 }
 
 /** API 키가 없거나, 설정의 활동용 모델이 [키 없이]면 창 안에서 복사 · 붙여넣기로 */
 function deskManualOnly_(k) {
   k = k || keyStatus_();
-  if (!(k.gemini || k.openai || k.anthropic) && !k.subscription) return true;
+  if (!anyKey_(k) && !k.subscription) return true;
   try { return providerOf_(normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL) === 'manual'; } catch (e) { return false; }
 }
 
@@ -5783,7 +5859,7 @@ function deskReadRow_(ctx, row) {
 function deskSave(p) {
   var ctx = deskAct_(p.key);
   var row = deskFindRow_(ctx, Number(p.row), String(p.id));
-  if (!row) throw new Error('이 학생의 줄을 시트에서 찾지 못했습니다. 명단 동기화 뒤 다시 열어 주세요.');
+  if (!row) throw new Error('이 학생의 줄을 시트에서 찾지 못했습니다. [⚙ 설정] > 학생 명단 > [시트에서 고친 명단 반영]을 누른 뒤 다시 해 주세요.');
   var s = ctx.sheet;
   if (p.inputs && ctx.nCols) {
     var vals = [];
@@ -5803,8 +5879,8 @@ function deskSave(p) {
 
 /** 오른쪽 검증 — 저장하지 않고 글만 검사 */
 function deskInspect(p) {
-  var act = getActivity_(p.key);
-  var limit = act ? bytesFor_(act) : 1500;
+  var act = p.rec ? null : getActivity_(p.key);
+  var limit = p.rec ? deskArea_(p.rec).limit : act ? bytesFor_(act) : 1500;
   var v = inspect_(String(p.text || ''), limit);
   return { bytes: v.bytes, limit: limit, ok: v.ok,
            issues: v.issues.map(function (x) { return { level: x.level, label: x.label, hit: x.hit || '', fix: x.fix || '', why: x.why || '' }; }) };
@@ -5822,7 +5898,7 @@ function deskGenerate(p) {
     var r = deskFindRow_(ctx, Number((p.rows || [])[n]), String(id));
     if (r) rows.push(r);
   });
-  if (!rows.length) throw new Error('쓸 학생을 시트에서 찾지 못했습니다.');
+  if (!rows.length) throw new Error('쓸 학생을 시트에서 찾지 못했습니다. [⚙ 설정] > 학생 명단 > [시트에서 고친 명단 반영]을 누른 뒤 다시 해 주세요.');
   // 자료가 빈 학생은 미리 빼서 알려 준다(AI 를 부르지 않음)
   var read = rowReader_(ctx.sheet, rows);
   var empty = rows.filter(function (r) {
@@ -5868,6 +5944,500 @@ function deskMakeHomeroomSheets() {
   var ctx = deskContext();
   ctx.made = made;
   return ctx;
+}
+
+/* ------------------------------------------------------------------ 표 보기 (v3.1.0) */
+
+/**
+ * 표 보기 저장 — 고친 학생 줄을 한 번에 쓴다(시트를 한 번만 읽고, 줄마다 입력 항목 · 최종본 · 검증을 쓴다).
+ * inputs 의 null 칸은 건드리지 않는다. 줄 번호가 그 학생이 아니면 학생 id 로 다시 찾는다.
+ * @param {{key:string, rows:Array<{id:string, row:number, inputs?:Array<?string>, final?:string}>}} p
+ * @return {{rows:Object[], missing:string[]}}  missing = 시트에서 찾지 못한 학생 id
+ */
+function deskSaveRows(p) {
+  var ctx = deskAct_(p.key), s = ctx.sheet, c = ctx.cols;
+  var items = p.rows || [], out = [], missing = [];
+  var last = s.getLastRow();
+  if (last < APP.DATA_ROW) return { rows: [], missing: items.map(function (it) { return String(it.id); }) };
+  var v = s.getRange(APP.DATA_ROW, 1, last - APP.DATA_ROW + 1, Math.max(s.getLastColumn(), 4)).getValues();
+  var idOf = function (r) { return String(r[0]).trim() + '-' + String(r[1]).trim(); };
+  var at = {};
+  v.forEach(function (r, i) { var id = idOf(r); if (!at.hasOwnProperty(id)) at[id] = i; });
+  var limit = bytesFor_(ctx.act);
+  items.forEach(function (it) {
+    var id = String(it.id), i = Number(it.row) - APP.DATA_ROW;
+    if (!(i >= 0 && i < v.length && idOf(v[i]) === id)) i = at.hasOwnProperty(id) ? at[id] : -1;
+    if (i < 0) { missing.push(id); return; }
+    var r = v[i], row = APP.DATA_ROW + i;
+    if (it.inputs && ctx.nCols) {
+      var vals = [];
+      for (var k = 0; k < ctx.nCols; k++) {
+        var x = it.inputs[k];
+        vals.push(x == null ? r[4 + k] : String(x));
+        r[4 + k] = vals[k];
+      }
+      s.getRange(row, 5, 1, ctx.nCols).setValues([vals]);
+    }
+    if (it.final != null && c.fin) { r[c.fin - 1] = String(it.final); s.getRange(row, c.fin).setValue(r[c.fin - 1]); }
+    if (c.check) {
+      var fin = String(c.fin ? r[c.fin - 1] || '' : '').trim();
+      var t = fin || String(c.ai ? r[c.ai - 1] || '' : '').trim();
+      if (t.indexOf('⚠') !== 0) {
+        r[c.check - 1] = t ? formatIssues(inspect_(t, limit)) + (fin ? '\n(최종본 기준)' : '') : '';
+        s.getRange(row, c.check).setValue(r[c.check - 1]);
+      }
+    }
+    out.push(deskRowOf_(r, row, ctx.nCols, c));
+  });
+  return { rows: out, missing: missing };
+}
+
+/**
+ * 표 보기에서 입력 열 고치기 — 이름 바꾸기 · 더하기 · 지우기 · 순서 바꾸기를 한 번에.
+ * from 은 그 열의 옛 이름(새 열이면 ''). 이름만 바꾼 열은 학생 자료가 그대로 따라온다.
+ * 지우는 열에 자료가 있으면 force 없이는 쓰지 않고 몇 명인지 돌려준다.
+ * @param {{key:string, columns:Array<{name:string, from?:string}>, force?:boolean}} p
+ * @return {{needConfirm:true, removed:string[], lost:number} | {context:Object, added:string[], removed:string[], renamed:string[]}}
+ */
+function deskSetColumns(p) {
+  var ctx = deskAct_(p.key);
+  var old = parseColumns(ctx.act.columns);
+  var items = (p.columns || []).map(function (c) {
+    return { name: String((c && c.name) || '').trim(), from: String((c && c.from) || '').trim() };
+  }).filter(function (c) { return c.name; });
+  var names = validateColumns_(items.map(function (c) { return c.name; }));
+  var used = {};
+  items.forEach(function (c) {
+    if (c.from && (old.indexOf(c.from) < 0 || used[c.from])) c.from = '';
+    if (c.from) used[c.from] = true;
+  });
+  var removed = old.filter(function (c) { return !used[c]; });
+  var s = ctx.sheet, last = s.getLastRow();
+
+  if (removed.length && !p.force && last >= APP.DATA_ROW) {
+    var idx = removed.map(function (c) { return old.indexOf(c); });
+    var lost = s.getRange(APP.DATA_ROW, 5, last - APP.DATA_ROW + 1, old.length).getValues().filter(function (r) {
+      return idx.some(function (i) { return String(r[i]).trim() !== ''; });
+    }).length;
+    if (lost) return { needConfirm: true, removed: removed, lost: lost };
+  }
+
+  // 머리글을 먼저 새 이름으로 — updateActivity_ 가 머리글 이름으로 자료를 옮긴다. 지울 열은 겹치지 않는 이름으로.
+  var to = {};
+  items.forEach(function (c) { if (c.from && c.from !== c.name) to[c.from] = c.name; });
+  removed.forEach(function (c, i) { to[c] = '(지운 열 ' + (i + 1) + ')'; });
+  var renamed = items.filter(function (c) { return c.from && c.from !== c.name; }).map(function (c) { return c.from + ' → ' + c.name; });
+  if (Object.keys(to).length) {
+    [s, sh_(ctx.act.exSheet)].forEach(function (sheet) {
+      if (!sheet) return;
+      var lc = sheet.getLastColumn();
+      if (lc < 1) return;
+      var rng = sheet.getRange(APP.HEAD_ROW, 1, 1, lc);
+      var head = rng.getValues()[0];
+      var hit = false;
+      var next = head.map(function (h) {
+        var k = String(h).trim();
+        if (old.indexOf(k) >= 0 && to.hasOwnProperty(k)) { hit = true; return to[k]; }
+        return h;
+      });
+      if (hit) rng.setValues([next]);
+    });
+  }
+  var r = updateActivity_(p.key, { columns: names });
+  return { context: deskContext(), added: items.filter(function (c) { return !c.from; }).map(function (c) { return c.name; }),
+           removed: removed, renamed: renamed, rows: r.rows };
+}
+
+/* ------------------------------------------------------------------ 창 안에서 활동 · 프롬프트 · 설정 (v3.1.1) */
+
+/** [＋ 활동] · [⚙ 설정] 창에 필요한 목록과 지금 설정값 (키 자체는 보내지 않고 있는지만) */
+function deskSetup() {
+  var num = function (k, d) { return Number(cfg_(k, d)) || d; };
+  var rosterCount = 0;
+  try { rosterCount = getRoster_().length; } catch (e) { logSoft_('deskSetup roster', e); }
+  var style = { samples: 0, card: '' };
+  try { style = { samples: styleSampleTexts_(20).length, card: String(getCommon_().STYLE_CARD || '') }; } catch (e) { logSoft_('deskSetup style', e); }
+  return {
+    records: getRecordTypes_().map(function (r) {
+      return { key: r.key, name: r.name, cap: r.chars * 3, mode: deskModeOf_({ recordKey: r.key }) };
+    }),
+    subjects: getSubjects_().map(function (s) { return { key: s.key, name: s.name, kind: s.kind }; }),
+    defaultSubject: String(cfg_('기본 교과영역', '공통')),
+    columnSets: PRESET_COLUMN_SETS,
+    amounts: AMOUNTS,
+    providers: PROVIDERS,
+    settings: {
+      has: keyStatus_(), models: modelChoices_(),
+      model: normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL,
+      compile: normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL,
+      backup: normModel(cfg_('예비 모델', '')),
+      batch: Math.max(1, Math.min(10, num('한 번에 묶을 학생 수', 5))),
+      thinkingLow: cfgBool_('생각 줄이기', true), mask: maskName_(),
+      autoRepair: cfgBool_('자동 고쳐쓰기', true), ground: cfgBool_('근거 자동 확인', false),
+      style: styleOn_(), styleSamples: style.samples, styleCard: style.card,
+      years: num('교사 경력(년)', 15),
+      consent: consentState(), rosterCount: rosterCount, rosterMode: rosterMode_()
+    }
+  };
+}
+
+/**
+ * 창에서 활동 만들기.
+ * kind 'quick' = 관찰 메모 한 칸(예시 시트 없음), 'cols' = 입력 항목을 정해서(예시 시트 있음).
+ * @param {{name:string, recordKey:string, subjectKey?:string, kind:'quick'|'cols', columns?:string[], desc?:string, bytes?:number}} p
+ * @return {{context:Object, key:string}}
+ */
+function deskAddActivity(p) {
+  p = p || {};
+  var name = String(p.name || '').trim();
+  if (!name) throw new Error('활동 이름을 적어 주세요.');
+  var recs = getRecordTypes_();
+  var rec = findByKey(recs, p.recordKey);
+  if (!rec) throw new Error('기록 영역을 골라 주세요.');
+  var quick = p.kind !== 'cols';
+  var made = createActivity_({
+    key: name, name: name, recordKey: rec.key,
+    subjectKey: p.subjectKey || (rec.key === '과세특' ? cfg_('기본 교과영역', '공통') : '공통'),
+    bytes: Number(p.bytes) || 0,
+    columns: quick ? [QUICK_COLUMN] : p.columns,
+    desc: String(p.desc || '').trim(),
+    mode: quick ? '바로쓰기' : '자동', noExamples: quick
+  });
+  try { if (compileSheets_().length) buildCompileCore_(); } catch (e) { logSoft_('deskAddActivity compile', e); }
+  return { context: deskContext(), key: made.key };
+}
+
+/** [⚙ 활동 설정] 창 — 이름 · 개요 · 바이트 · 분량 · 예시 · 지금 조립되는 프롬프트 */
+function deskActivityInfo(key) {
+  var act = getActivity_(key);
+  if (!act) throw new Error('활동을 찾지 못했습니다: ' + key);
+  var rec = findByKey(getRecordTypes_(), act.recordKey);
+  var prompt = '', tokens = 0;
+  try { prompt = promptFor_(act); tokens = estimateTokens(prompt); } catch (e) { logSoft_('deskActivityInfo prompt', e); prompt = '프롬프트를 만들지 못했습니다: ' + redactSecrets(String((e && e.message) || e)); }
+  return {
+    key: act.key, name: act.name || act.key, recordKey: act.recordKey, recordName: rec ? rec.name : act.recordKey,
+    subjectKey: act.subjectKey, mode: act.mode, quick: act.mode === '바로쓰기',
+    bytes: bytesFor_(act), cap: (rec ? rec.chars : 500) * 3,
+    desc: act.desc, amount: act.amount || '보통', columns: parseColumns(act.columns),
+    hasExamples: !!(act.exSheet && sh_(act.exSheet)),
+    examples: readExampleRows_(act).map(function (e) { return { values: e.values, result: e.result }; }),
+    exampleMax: EXAMPLE_MAX,
+    prompt: prompt, tokens: tokens, promptBytes: byteLen(prompt)
+  };
+}
+
+/**
+ * 활동 설정 저장 — 준 것만 바꾼다. 입력 항목(열)은 표 보기의 [열 고치기](deskSetColumns)에서.
+ * @param {{key:string, name?:string, desc?:string, bytes?:number, amount?:string, subjectKey?:string,
+ *          examples?:Array<{values:string[], result:string}>}} p
+ * @return {{context:Object, info:Object}}
+ */
+function deskSaveActivity(p) {
+  p = p || {};
+  var act = getActivity_(p.key);
+  if (!act) throw new Error('활동을 찾지 못했습니다: ' + p.key);
+  var name = p.name === undefined ? act.name : String(p.name).trim();
+  if (!name) throw new Error('활동 이름을 적어 주세요.');
+  var desc = p.desc === undefined ? act.desc : String(p.desc).trim();
+  if (name !== act.name || desc !== act.desc) updateActivity_(p.key, { name: name, columns: parseColumns(act.columns), desc: desc });
+
+  var list = shRequire_(APP.SH.ACTIVITY);
+  if (p.subjectKey !== undefined && String(p.subjectKey) !== act.subjectKey) {
+    if (!findByKey(getSubjects_(), p.subjectKey)) throw new Error('교과영역을 찾지 못했습니다: ' + p.subjectKey);
+    var cs = colOf_(list, 2, '교과영역');
+    if (cs) list.getRange(act.__row, cs).setValue(String(p.subjectKey));
+  }
+  if (p.amount !== undefined) {
+    if (AMOUNTS.indexOf(String(p.amount)) < 0) throw new Error('분량 맞추기는 ' + AMOUNTS.join(' · ') + ' 가운데 하나입니다.');
+    var ca = ensureAmountCol_();
+    var amount = p.amount === '보통' ? '' : String(p.amount);
+    if (ca && amount !== act.amount) list.getRange(act.__row, ca).setValue(amount);
+  }
+  if (p.bytes !== undefined) bytesSave([{ key: p.key, bytes: p.bytes }]);
+
+  if (p.examples) {
+    var exS = act.exSheet && sh_(act.exSheet);
+    if (!exS) throw new Error('이 활동은 예시 시트가 없습니다(바로 쓰기).');
+    var cols = parseColumns(act.columns);
+    var rows = p.examples.map(function (e) {
+      return { values: cols.map(function (c, i) { return String((e.values || [])[i] || '').trim(); }), result: String(e.result || '').trim() };
+    }).filter(function (e) { return e.result || e.values.some(String); });
+    if (rows.length > EXAMPLE_MAX) throw new Error('예시는 ' + EXAMPLE_MAX + '개까지 프롬프트에 들어갑니다. ' + EXAMPLE_MAX + '개 이하로 줄여 주세요.');
+    exS.clear();
+    exampleLayout_(exS, name, cols);
+    writeExampleRows_(exS, cols, rows, APP.DATA_ROW, Math.max(EXAMPLE_ROWS_DEFAULT, rows.length));
+  }
+  return { context: deskContext(), info: deskActivityInfo(p.key) };
+}
+
+/**
+ * 활동 지우기 — 시트(입력 · 예시)와 활동목록 줄. 학생 자료가 함께 사라지므로 활동 이름을 그대로 적어야 한다.
+ * @param {{key:string, confirm:string}} p
+ */
+function deskDeleteActivity(p) {
+  p = p || {};
+  var act = getActivity_(p.key);
+  if (!act) throw new Error('활동을 찾지 못했습니다: ' + p.key);
+  if (String(p.confirm || '').trim() !== (act.name || act.key)) throw new Error('지우려면 활동 이름 "' + (act.name || act.key) + '" 을 그대로 적어 주세요.');
+  [act.inSheet, act.exSheet].forEach(function (n) { var s = n && sh_(n); if (s) ss_().deleteSheet(s); });
+  shRequire_(APP.SH.ACTIVITY).deleteRow(act.__row);
+  try { if (compileSheets_().length) buildCompileCore_(); } catch (e) { logSoft_('deskDeleteActivity compile', e); }
+  return { context: deskContext() };
+}
+
+/** 모든 활동에 함께 들어가는 프롬프트 글([📐 공통규칙]) */
+function deskCommon() {
+  var s = shRequire_(APP.SH.COMMON);
+  return readTable_(s, 2).map(function (r) {
+    return { key: String(r['키'] || '').trim(), title: String(r['제목'] || ''), text: String(r['내용'] || '') };
+  }).filter(function (r) { return r.key; });
+}
+
+/**
+ * 공통 프롬프트 저장 — [내용] 칸만, 바뀐 줄만.
+ * @param {Array<{key:string, text:string}>} list
+ * @return {{saved:number, rows:Object[]}}
+ */
+function deskSaveCommon(list) {
+  var s = shRequire_(APP.SH.COMMON);
+  var c = colOf_(s, 2, '내용');
+  if (!c) throw new Error('[📐 공통규칙]에 [내용] 칸이 없습니다. 메뉴 [①②③ 준비] > [① 처음 설치 / 구조 복구]를 누르면 다시 만들어집니다(적어 둔 내용은 그대로 둡니다).');
+  var at = {};
+  readTable_(s, 2).forEach(function (r) { var k = String(r['키'] || '').trim(); if (k) at[k] = { row: r.__row, text: String(r['내용'] || '') }; });
+  var n = 0;
+  (list || []).forEach(function (x) {
+    var hit = at.hasOwnProperty(x.key) ? at[x.key] : null;
+    if (!hit) return;
+    var t = String(x.text == null ? '' : x.text);
+    if (t === hit.text) return;
+    s.getRange(hit.row, c).setValue(t);
+    n++;
+  });
+  return { saved: n, rows: deskCommon() };
+}
+
+/**
+ * 설정 저장 — 준 것만. API 키는 여기로 오지 않는다(saveKeys → UserProperties).
+ * @param {{model?:string, compile?:string, backup?:string, batch?:number, thinkingLow?:boolean, mask?:boolean,
+ *          autoRepair?:boolean, ground?:boolean, style?:boolean, years?:number}} p
+ * @return {{context:Object, setup:Object}}
+ */
+function deskSaveSettings(p) {
+  p = p || {};
+  if (!sh_(APP.SH.CONFIG)) throw new Error('[⚙️ 설정] 시트가 없습니다. 메뉴 [①②③ 준비] > [① 처음 설치 / 구조 복구]를 누르면 다시 만들어집니다(적어 둔 내용은 그대로 둡니다).');
+  var choices = modelChoices_();
+  var model = function (k, v, allowEmpty) {
+    if (v === undefined) return;
+    var m = normModel(v);
+    if (!m && allowEmpty) { setCfg_(k, ''); return; }
+    if (choices.indexOf(m) < 0) throw new Error('쓸 수 없는 모델입니다: ' + v + ' (그 회사의 API 키를 먼저 넣어 주세요)');
+    setCfg_(k, m);
+  };
+  model('활동용 모델', p.model);
+  model('합본용 모델', p.compile);
+  model('예비 모델', p.backup, true);
+  if (p.batch !== undefined) setCfg_('한 번에 묶을 학생 수', Math.max(1, Math.min(10, Math.floor(Number(p.batch)) || 1)));
+  if (p.years !== undefined) setCfg_('교사 경력(년)', Math.max(0, Math.min(45, Math.floor(Number(p.years)) || 0)));
+  var bool = { thinkingLow: '생각 줄이기', mask: '학생 이름 마스킹', autoRepair: '자동 고쳐쓰기', ground: '근거 자동 확인', style: '내 문체 적용' };
+  Object.keys(bool).forEach(function (k) { if (p[k] !== undefined) setCfg_(bool[k], p[k] === true); });
+  return { context: deskContext(), setup: deskSetup() };
+}
+
+/** 창에서 명단 저장(붙여넣기) — 저장하고 모든 활동 시트에 반영한 뒤, 창이 다시 그릴 목록을 돌려준다 */
+function deskRosterSave(p) {
+  var res = rosterSave(p);
+  return { count: res.count, mode: res.mode, warnings: res.warnings || [], context: deskContext() };
+}
+
+/** [👥 학생명단] 시트를 직접 고친 뒤 — 모든 활동 시트에 반영 */
+function deskSyncRoster() {
+  return { sheets: syncRosterAll_(), context: deskContext() };
+}
+
+/* ------------------------------------------------------------------ 취합 · 압축 · 점검 (v3.1.2) */
+
+/** 취합 시트 하나 — 기록 영역 · 한도 · 칸 위치 */
+function deskArea_(recKey) {
+  var s = sh_(compileSheetName_(recKey));
+  if (!s) throw new Error('[' + recKey + '] 취합이 아직 없습니다. [🔄 다시 모으기]를 눌러 주세요.');
+  var rec = findByKey(getRecordTypes_(), recKey);
+  var c = { merge: colOf_(s, APP.HEAD_ROW, '합본'), ai: colOf_(s, APP.HEAD_ROW, 'AI 압축결과'),
+            fin: colOf_(s, APP.HEAD_ROW, '최종본'), check: colOf_(s, APP.HEAD_ROW, '검증'), chk: colOf_(s, APP.HEAD_ROW, '압축') };
+  if (!c.merge || !c.fin) throw new Error('[' + s.getName() + '] 시트 구조가 올바르지 않습니다. [🔄 다시 모으기]를 눌러 주세요.');
+  return { sheet: s, recKey: recKey, rec: rec, limit: (rec ? rec.chars : 500) * 3, cols: c };
+}
+
+/** 취합 시트 한 줄 → 창에 보낼 모양 (parts = 활동별 글) */
+function deskAreaRowOf_(a, v, row) {
+  var c = a.cols, g = function (col) { return col ? String(v[col - 1] == null ? '' : v[col - 1]) : ''; };
+  return { row: row, cls: String(v[0]).trim(), no: String(v[1]).trim(), name: String(v[2] || ''),
+           id: String(v[0]).trim() + '-' + String(v[1]).trim(),
+           parts: v.slice(4, c.merge - 1).map(function (x) { return x == null ? '' : String(x); }),
+           merged: g(c.merge), ai: g(c.ai), final: g(c.fin), check: g(c.check) };
+}
+
+function deskAreaRows_(a) {
+  var s = a.sheet, last = s.getLastRow();
+  if (last < APP.DATA_ROW) return [];
+  var v = s.getRange(APP.DATA_ROW, 1, last - APP.DATA_ROW + 1, s.getLastColumn()).getValues();
+  var out = [];
+  v.forEach(function (r, i) {
+    if (!String(r[0]).trim() && !String(r[1]).trim()) return;
+    out.push(deskAreaRowOf_(a, r, APP.DATA_ROW + i));
+  });
+  return out;
+}
+
+/** 줄 번호가 그 학생이 아니면 학생 id 로 다시 찾는다 */
+function deskAreaFind_(a, items) {
+  var rows = deskAreaRows_(a), at = {};
+  rows.forEach(function (r) { if (!at.hasOwnProperty(r.id)) at[r.id] = r; });
+  var found = [], missing = [];
+  (items || []).forEach(function (it) {
+    var id = String(it.id), r = at[id];
+    if (r) found.push({ item: it, cur: r }); else missing.push(id);
+  });
+  return { found: found, missing: missing };
+}
+
+/** 합본용 모델을 창 안 복사 · 붙여넣기로 돌려야 하는가 */
+function deskCompileManual_() {
+  var has = keyStatus_();
+  var model = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
+  var prov = providerOf_(model);
+  return prov === 'manual' || prov === 'subscription' || !providerUsable(prov, has);
+}
+
+/**
+ * 취합 보기 — 기록 영역(과세특 · 동아리 · 자율 · 진로 · 행발)마다 활동 결과를 모은 표.
+ * refresh 이거나 취합 시트가 없으면 활동 결과를 다시 모은다([최종본]은 지키고, 합본이 한도 안이면 빈 최종본에 넣는다).
+ * @param {{refresh?:boolean}=} p
+ * @return {{areas:Array<{rec,name,mode,limit,sheet,acts:string[],rows:Object[]}>, manualOnly:boolean}}
+ */
+function deskCompile(p) {
+  p = p || {};
+  if (p.refresh || !compileSheets_().length) buildCompileCore_();
+  var recs = getRecordTypes_(), order = recs.map(function (r) { return r.key; });
+  var live = {};
+  getActivities_().forEach(function (x) { if (x.recordKey) live[x.recordKey] = true; });
+  var areas = [];
+  compileSheets_().forEach(function (s) {
+    var rk = recordKeyOfCompile_(s.getName());
+    if (!live[rk]) return;                         // 활동이 모두 지워진 영역은 보이지 않는다
+    var a;
+    try { a = deskArea_(rk); } catch (e) { logSoft_('deskCompile ' + rk, e); return; }
+    var head = s.getRange(APP.HEAD_ROW, 1, 1, s.getLastColumn()).getValues()[0];
+    areas.push({ rec: rk, name: a.rec ? a.rec.name : rk, mode: DESK_HOMEROOM_RECORDS.indexOf(rk) >= 0 ? 'homeroom' : 'subject',
+                 limit: a.limit, sheet: s.getName(), acts: head.slice(4, a.cols.merge - 1).map(String), rows: deskAreaRows_(a) });
+  });
+  areas.sort(function (x, y) { return order.indexOf(x.rec) - order.indexOf(y.rec); });
+  var manual = true;
+  try { manual = deskCompileManual_(); } catch (e) { logSoft_('deskCompile manual', e); }
+  return { areas: areas, manualOnly: manual };
+}
+
+/**
+ * 취합 최종본 저장 — 고친 학생 줄만. 저장 뒤 [검증]을 새로 쓴다.
+ * @param {{rec:string, rows:Array<{id:string, row:number, final:string}>}} p
+ * @return {{rows:Object[], missing:string[]}}
+ */
+function deskCompileSave(p) {
+  var a = deskArea_(p.rec), s = a.sheet;
+  var hit = deskAreaFind_(a, p.rows);
+  var out = [];
+  hit.found.forEach(function (f) {
+    var txt = String(f.item.final == null ? '' : f.item.final);
+    s.getRange(f.cur.row, a.cols.fin).setValue(txt);
+    var chk = txt.trim() ? formatIssues(inspect_(txt, a.limit)) : '';
+    if (a.cols.check) s.getRange(f.cur.row, a.cols.check).setValue(chk);
+    f.cur.final = txt; f.cur.check = chk;
+    out.push(f.cur);
+  });
+  SpreadsheetApp.flush();
+  return { rows: out, missing: hit.missing };
+}
+
+/** 압축본을 최종본으로 — 최종본이 비었거나, 합본 그대로이거나, 한도를 넘을 때만(선생님이 다듬은 글은 덮지 않는다) */
+function deskAdopt_(a, r) {
+  var ai = String(r.ai || '').trim();
+  if (!ai || ai.indexOf('⚠') === 0 || ai.indexOf('=') === 0) return r;
+  var fin = String(r.final || '').trim();
+  if (fin && fin !== String(r.merged || '').trim() && byteLen(fin) <= a.limit) return r;
+  a.sheet.getRange(r.row, a.cols.fin).setValue(ai);
+  var chk = formatIssues(inspect_(ai, a.limit)) + '\n(압축본)';
+  if (a.cols.check) a.sheet.getRange(r.row, a.cols.check).setValue(chk);
+  r.final = ai; r.check = chk; r.adopted = true;
+  return r;
+}
+
+/** 키 없이 답을 넣은 뒤(또는 다시 읽을 때) 그 학생 줄들. adopt 면 압축본을 최종본으로 옮긴다 */
+function deskCompileRows(p) {
+  var a = deskArea_(p.rec);
+  var want = {};
+  (p.rows || []).forEach(function (r) { want[Number(r)] = true; });
+  var out = deskAreaRows_(a).filter(function (r) { return want[r.row]; });
+  if (p.adopt) { out = out.map(function (r) { return deskAdopt_(a, r); }); SpreadsheetApp.flush(); }
+  return out;
+}
+
+/**
+ * 합본이 한도를 넘는 학생의 글을 한도 안으로 줄인다. 키가 있으면 바로, 없으면 복사 · 붙여넣기 요청문을 돌려준다.
+ * 보내는 것은 합본 글뿐이다(반 · 번호 · 이름은 보내지 않는다).
+ * @param {{rec:string, rows:Array<{id:string, row:number}>}} p
+ */
+function deskCompress(p) {
+  if (!consentOk_()) return { consent: false };
+  var a = deskArea_(p.rec), s = a.sheet;
+  var hit = deskAreaFind_(a, p.rows);
+  var jobs = hit.found.map(function (f) { return f.cur; }).filter(function (r) { return r.merged.trim() !== ''; });
+  var empty = hit.found.length - jobs.length;
+  if (!jobs.length) return { empty: empty, rows: [] };
+  var system = compressPrompt_(a.rec);
+  var title = (a.rec ? a.rec.name : a.recKey) + ' 압축';
+  if (deskCompileManual_()) {
+    var data = manualPayload_({ kind: 'compile', sheet: s.getName(), target: 'AI 압축결과', check: '압축', title: title,
+      limit: a.limit, system: system, heading: '통합할 문장들',
+      jobs: jobs.map(function (r) { return { row: r.row, user: r.merged, label: (r.cls ? r.cls + '반 ' : '') + r.no + '번' + (maskName_() ? '' : ' ' + r.name) }; }) });
+    return { manual: data, empty: empty };
+  }
+  var model = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
+  var okN = 0, errN = 0, left = 0, t0 = Date.now(), out = [];
+  usageReset_();
+  for (var k = 0; k < jobs.length; k++) {
+    var r = jobs[k];
+    if (!canStartCall_(t0)) { left = jobs.length - k; break; }
+    try {
+      var res = callWithBackup_(system, r.merged, model);
+      var txt = cleanResult_(res.text);
+      if (byteLen(txt) > a.limit) txt = trimToBytes(txt, a.limit);
+      if (a.cols.ai) s.getRange(r.row, a.cols.ai).setValue(txt);
+      r.ai = txt;
+      deskAdopt_(a, r);
+      okN++;
+    } catch (e) {
+      r.ai = '⚠ 실패: ' + redactSecrets(e.message);
+      if (a.cols.ai) s.getRange(r.row, a.cols.ai).setValue(r.ai);
+      errN++;
+    }
+    out.push(r);
+  }
+  SpreadsheetApp.flush();
+  return { done: { ok: okN, err: errN, left: left }, empty: empty, rows: out };
+}
+
+/**
+ * ⚖️ 학생 간 점검 — 같은 문장 · 분량 격차 · 빈 학생. 창 안에서만 보여 준다(AI 로 보내지 않는다).
+ * @param {{rec?:string, key?:string, cls?:string}} p  rec = 취합 영역, key = 활동 하나. cls 가 있으면 그 반만
+ */
+function deskEquity(p) {
+  p = p || {};
+  var name = p.rec ? compileSheetName_(p.rec) : deskAct_(p.key).act.inSheet;
+  var cls = String(p.cls || '').trim();
+  var rows = neisSourceRows_(name).filter(function (r) { return !cls || String(r.cls).trim() === cls; }).map(function (r) {
+    return { label: (cls ? '' : String(r.cls).trim() + '반 ') + r.no + '번 ' + r.name, text: r.text };
+  });
+  var rep = checkEquity(rows);
+  return { sheet: name, n: rep.n, filled: rep.filled, median: rep.median, similar: rep.similar, gaps: rep.gaps, empty: rep.empty };
 }
 
 
@@ -6943,7 +7513,7 @@ function pickExampleActivity_(title) {
   var act = activityOfExampleSheet_(cur) || activityOfSheet_(cur);
   if (act) return act;
   var acts = getActivities_();
-  if (!acts.length) { ui_().alert(APP.MENU, '먼저 활동을 만드세요.', ui_().ButtonSet.OK); return null; }
+  if (!acts.length) { ui_().alert(APP.MENU, '먼저 활동을 만드세요. 🖥️ 작성실의 [＋ 활동], 또는 메뉴 [④⑤ 활동 · 예시 · 보고서 · 설문지] > [④ 활동 만들기].', ui_().ButtonSet.OK); return null; }
   if (acts.length === 1) return acts[0];
   var list = acts.map(function (a, i) { return (i + 1) + '. ' + a.key + ' — ' + a.name; }).join('\n');
   var ans = promptText_(title || '활동 선택', '어느 활동인가요? 번호를 입력하세요.\n\n' + list);
@@ -6989,7 +7559,7 @@ function validateExamples() {
   }
   var limit = bytesFor_(act);
   var rows = readExampleRows_(act);
-  if (!rows.length) { toast_('채워진 예시가 없습니다.'); return; }
+  if (!rows.length) { toast_('채워진 예시가 없습니다. 예시 시트(○○ ▸예시)에 한 줄 이상 적은 뒤 다시 눌러 주세요.'); return; }
 
   var bad = 0, warn = 0;
   rows.forEach(function (e) {
@@ -7203,7 +7773,7 @@ function wizardContext() {
     defaultSubject: String(cfg_('기본 교과영역', '공통')),
     models: modelChoices_(),
     defaultModel: normModel(cfg_('활동용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL,
-    hasKey: !!(getKey_('openai') || getKey_('gemini') || getKey_('anthropic')),
+    hasKey: anyKey_(),
     columnSets: PRESET_COLUMN_SETS,
     activities: getActivities_().map(function (a) {
       return { key: a.key, name: a.name, columns: parseColumns(a.columns), desc: a.desc,
@@ -7386,12 +7956,15 @@ var SUBSCRIPTION_MODEL = 'Gemini(구독)';
  * 붙여 넣고, 받은 답을 다시 창에 붙여 넣는다. 키·비용·구독이 필요 없어 모든 계정에서 늘 고를 수 있다.
  */
 var MANUAL_MODEL = '키 없이(복사·붙여넣기)';
-var PROVIDERS = ['gemini', 'openai', 'anthropic'];
+var PROVIDERS = ['gemini', 'openai', 'anthropic', 'exaone'];
+/** OpenAI 와 같은 형식으로 받는 회사 — 주소와 이름만 다르다 */
+var OPENAI_API = { provider: 'openai', label: 'OpenAI', url: 'https://api.openai.com/v1/chat/completions' };
+var EXAONE_API = { provider: 'exaone', label: 'EXAONE', url: 'https://api.exaone.ai/v1/chat/completions' };
 // [⚙️ 설정]의 항목|값|설명 열 폭에 맞춰 순서를 정했다 (C열이 넓은 설명 칸)
 var MODEL_HEAD = ['모델명', '수준', '언제 쓰나', '회사', '연결 확인'];
 var MODEL_FIELDS = ['model', 'level', 'memo', 'company', 'status'];
 function modelCol_(field) { return MODEL_FIELDS.indexOf(field) + 1; }
-var COMPANY_CHOICES = ['자동', 'Gemini', 'OpenAI', 'Claude'];
+var COMPANY_CHOICES = ['자동', 'Gemini', 'OpenAI', 'Claude', 'EXAONE'];
 var TEST_SYSTEM = '짧게 답한다.';
 var TEST_USER = '연결 확인입니다. "확인"이라고만 답하세요.';
 
@@ -7567,7 +8140,12 @@ function setKey_(p, v) {
   if (v) props_().setProperty('KEY_' + p, v);
   else props_().deleteProperty('KEY_' + p);
 }
-/** 회사별 키 보관 여부 + 구독 사용 여부 {gemini:true, openai:false, anthropic:false, subscription:false} */
+/** API 키가 하나라도 있는가 (구독 · 키 없이 쓰기는 세지 않는다) */
+function anyKey_(has) {
+  has = has || keyStatus_();
+  return PROVIDERS.some(function (p) { return !!has[p]; });
+}
+/** 회사별 키 보관 여부 + 구독 사용 여부 {gemini:true, openai:false, anthropic:false, exaone:false, subscription:false} */
 function keyStatus_() {
   var has = {};
   PROVIDERS.forEach(function (p) { has[p] = !!getKey_(p); });
@@ -7704,7 +8282,7 @@ function saveKeys(obj) {
  */
 function saveModelSettings(p) {
   var s = sh_(APP.SH.CONFIG);
-  if (!s) throw new Error('[⚙️ 설정] 시트가 없습니다. 메뉴 ① 처음 설치 / 구조 복구 를 먼저 실행하세요.');
+  if (!s) throw new Error('[⚙️ 설정] 시트가 없습니다. 메뉴 [①②③ 준비] > [① 처음 설치 / 구조 복구]를 누르면 다시 만들어집니다(적어 둔 내용은 그대로 둡니다).');
   var seen = {}, rows = [];
   (p.rows || []).forEach(function (r) {
     var m = normModel(r.model);
@@ -7893,6 +8471,8 @@ function listAvailableModels() {
         var o = fetchJson_('https://api.openai.com/v1/models',
           { method: 'get', headers: { Authorization: 'Bearer ' + key }, muteHttpExceptions: true }, 'OpenAI');
         (o.data || []).forEach(function (x) { ids.push(normModel(x.id)); });
+      } else if (p === 'exaone') {
+        ids.push(PROVIDER_DEFAULT_MODEL.exaone);   // 모델 목록 주소가 없다 — 글쓰기 모델은 하나
       } else {
         var a = fetchJson_('https://api.anthropic.com/v1/models?limit=100',
           { method: 'get', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, muteHttpExceptions: true }, 'Anthropic');
@@ -7934,6 +8514,7 @@ function callAI_(system, user, model, provider, opts) {
   if (opts.thinking === undefined) opts.thinking = thinkLow_();
 
   if (p === 'openai') return callOpenAI_(key, m, system, user, opts);
+  if (p === 'exaone') return callOpenAI_(key, m, system, user, opts, EXAONE_API);
   if (p === 'gemini') return callGemini_(key, m, system, user, opts);
   return callAnthropic_(key, m, system, user, opts);
 }
@@ -8028,33 +8609,34 @@ function fetchJson_(url, options, label) {
 /** 400 오류가 특정 옵션 때문인지 */
 function rejects_(e, re) { return e && e.code === 400 && re.test(String(e.message || '')); }
 
-function callOpenAI_(key, model, system, user, opts) {
+function callOpenAI_(key, model, system, user, opts, api) {
   opts = opts || {};
+  api = api || OPENAI_API;
   var body = {
     model: model,
-    messages: [{ role: 'system', content: system }, { role: 'user', content: userContent_('openai', user, opts.parts) }]
+    messages: [{ role: 'system', content: system }, { role: 'user', content: userContent_(api.provider, user, opts.parts) }]
   };
-  var think = opts.thinking && !__noThink[model] ? thinkingFor('openai', model) : null;
+  var think = opts.thinking && !__noThink[model] ? thinkingFor(api.provider, model) : null;
   if (think) body.reasoning_effort = think.reasoning_effort;
   if (opts.json && !__noJsonMode[model]) body.response_format = { type: 'json_object' };
   var json;
   try {
-    json = fetchJson_('https://api.openai.com/v1/chat/completions', {
+    json = fetchJson_(api.url, {
       method: 'post', contentType: 'application/json',
       headers: { Authorization: 'Bearer ' + key },
       payload: JSON.stringify(body), muteHttpExceptions: true
-    }, 'OpenAI');
+    }, api.label);
   } catch (e) {
-    if (think && rejects_(e, /reasoning/i)) { __noThink[model] = true; return callOpenAI_(key, model, system, user, opts); }
-    if (body.response_format && rejects_(e, /response_format|json/i)) { __noJsonMode[model] = true; return callOpenAI_(key, model, system, user, opts); }
+    if (think && rejects_(e, /reasoning/i)) { __noThink[model] = true; return callOpenAI_(key, model, system, user, opts, api); }
+    if (body.response_format && rejects_(e, /response_format|json/i)) { __noJsonMode[model] = true; return callOpenAI_(key, model, system, user, opts, api); }
     throw e;
   }
   var u = json.usage || {};
   usageAdd_(u.prompt_tokens, u.completion_tokens, u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens);
   var c = json.choices && json.choices[0];
   var txt = c && c.message && c.message.content;
-  if (c && c.finish_reason === 'length') throw truncatedError_('OpenAI');
-  if (!txt) throw new Error('OpenAI 응답이 비었습니다.');
+  if (c && c.finish_reason === 'length') throw truncatedError_(api.label);
+  if (!txt) throw new Error(api.label + ' 응답이 비었습니다.');
   return String(txt).trim();
 }
 
@@ -8094,7 +8676,7 @@ function callGemini_(key, model, system, user, opts) {
   var txt = '';
   if (parts) parts.forEach(function (p) { if (p.text && !p.thought) txt += p.text; });
   if (cand && cand.finishReason === 'MAX_TOKENS') throw truncatedError_('Gemini');
-  if (!txt) throw new Error('Gemini 응답이 비었습니다. (안전 필터 또는 모델명 확인)');
+  if (!txt) throw new Error('Gemini 가 빈 답을 보냈습니다(안전 필터에 걸렸거나 모델 이름이 틀렸을 수 있습니다). 한 번 더 눌러 보고, 계속되면 [② AI 연결 · 모델 설정]에서 다른 모델을 골라 주세요.');
   return txt.trim();
 }
 
@@ -8117,7 +8699,7 @@ function callAnthropic_(key, model, system, user, opts) {
   var txt = '';
   (json.content || []).forEach(function (b) { if (b.type === 'text') txt += b.text; });
   if (json.stop_reason === 'max_tokens') throw truncatedError_('Anthropic');
-  if (!txt) throw new Error('Anthropic 응답이 비었습니다.');
+  if (!txt) throw new Error('Claude 가 빈 답을 보냈습니다. 한 번 더 눌러 보고, 계속되면 [② AI 연결 · 모델 설정]에서 다른 모델을 골라 주세요.');
   return txt.trim();
 }
 
@@ -8128,6 +8710,10 @@ var CLAUDE_IMAGE_MAX = 5 * 1024 * 1024;
  * HEIC 사진은 Gemini 만 읽는다 — 다른 회사면 빼고 그 사실을 글에 적는다.
  */
 function userContent_(provider, user, parts) {
+  // K-EXAONE 은 글만 읽는다 — 파일은 보내지 않고 그 사실을 글에 적는다
+  if (provider === 'exaone') {
+    return user + (parts && parts.length ? '\n(이 모델은 글만 읽어 첨부 파일 ' + parts.length + '개는 보내지 않았습니다. 파일을 읽으려면 Gemini 같은 다른 모델을 고르세요.)' : '');
+  }
   if (!parts || !parts.length) return provider === 'gemini' ? [{ text: user }] : user;
   var skipped = [];
   var ok = parts.filter(function (f) {
@@ -8209,7 +8795,7 @@ function generateChecked() {
     return;
   }
   var rows = checkedRows_(sheet);
-  if (!rows.length) { toast_('[생성] 체크된 행이 없습니다.'); return; }
+  if (!rows.length) { toast_('[생성]이 체크된 학생이 없습니다. 쓸 학생 줄의 [생성] 칸을 체크한 뒤 다시 눌러 주세요.'); return; }
   autoRulesCheck_();
   autoUpdateCheck_();
   runGeneration_(act, sheet, rows);
@@ -8220,7 +8806,7 @@ function generateSelection() {
   var act = activityOfSheet_(sheet.getName());
   if (!act) { ui_().alert(APP.MENU, '활동 입력 시트에서 실행하세요.', ui_().ButtonSet.OK); return; }
   var rows = selectedRows_(sheet);
-  if (!rows.length) { toast_('데이터 행을 선택하세요.'); return; }
+  if (!rows.length) { toast_('학생 줄(4행부터)을 선택한 뒤 다시 눌러 주세요.'); return; }
   runGeneration_(act, sheet, rows);
 }
 
@@ -8381,7 +8967,7 @@ function runGeneration_(act, sheet, rows, opt) {
     var tail = styleTail_();
     var styleRef = styleReference_(act);
     var has = keyStatus_();
-    var anyApi = has.gemini || has.openai || has.anthropic;
+    var anyApi = anyKey_(has);
     usageReset_();
     var read = rowReader_(sheet, rows);
 
@@ -8843,7 +9429,7 @@ function openManualDialog_(p) {
  */
 function manualApply(p) {
   var s = sh_(p.sheet);
-  if (!s) throw new Error('시트를 찾을 수 없습니다: ' + p.sheet);
+  if (!s) throw new Error('[' + p.sheet + '] 시트를 찾을 수 없습니다. 시트 이름이 바뀌었거나 지워졌습니다. 창을 닫았다가 다시 열어 주세요.');
   var cT = colOf_(s, APP.HEAD_ROW, p.target);
   if (!cT) throw new Error('[' + p.target + '] 칸이 없습니다. 시트 구조를 확인하세요.');
   var cV = colOf_(s, APP.HEAD_ROW, '검증');
@@ -9004,7 +9590,7 @@ function readActiveCell() {
 /** 가져왔던 바로 그 셀에 다시 넣는다 */
 function writeBackCell(p) {
   var s = sh_(p.sheet);
-  if (!s) throw new Error('시트를 찾을 수 없습니다: ' + p.sheet);
+  if (!s) throw new Error('[' + p.sheet + '] 시트를 찾을 수 없습니다. 시트 이름이 바뀌었거나 지워졌습니다. 창을 닫았다가 다시 열어 주세요.');
   var c = s.getRange(p.a1);
   if (c.getFormula()) throw new Error('수식이 든 셀(' + p.a1 + ')에는 넣지 않습니다. [최종본] 칸에 넣어 주세요.');
   c.setValue(String(p.text || ''));
@@ -9270,7 +9856,7 @@ function neisXmlOf_(parts) {
 /** 시트의 학생 줄: A열(반 또는 학년-반) · 번호 · 이름 · [최종본] · [검증] */
 function neisSourceRows_(sheetName) {
   var s = sh_(sheetName);
-  if (!s) throw new Error('시트를 찾을 수 없습니다: ' + sheetName);
+  if (!s) throw new Error('[' + sheetName + '] 시트를 찾을 수 없습니다. 시트 이름이 바뀌었거나 지워졌습니다. 창을 닫았다가 다시 열어 주세요.');
   var cF = colOf_(s, APP.HEAD_ROW, '최종본'), cV = colOf_(s, APP.HEAD_ROW, '검증');
   if (!cF) throw new Error('[' + sheetName + '] 에 [최종본] 칸이 없습니다.');
   var last = s.getLastRow();
@@ -9377,9 +9963,9 @@ function compileLimitOf_(sheetName) {
 /** 메뉴: 최종취합 시트 생성/갱신 */
 function buildCompile() {
   var acts = getActivities_();
-  if (!acts.length) { ui_().alert(APP.MENU, '먼저 활동을 만드세요.', ui_().ButtonSet.OK); return; }
+  if (!acts.length) { ui_().alert(APP.MENU, '먼저 활동을 만드세요. 🖥️ 작성실의 [＋ 활동], 또는 메뉴 [④⑤ 활동 · 예시 · 보고서 · 설문지] > [④ 활동 만들기].', ui_().ButtonSet.OK); return; }
   var roster = getRoster_();
-  if (!roster.length) { ui_().alert(APP.MENU, '[👤 학생명단]을 먼저 입력하세요.', ui_().ButtonSet.OK); return; }
+  if (!roster.length) { ui_().alert(APP.MENU, '학생 명단이 비어 있습니다. 🖥️ 작성실의 [⚙ 설정] > 학생 명단, 또는 메뉴 [①②③ 준비] > [③ 학생 명단 불러오기]로 먼저 넣어 주세요.', ui_().ButtonSet.OK); return; }
   var made = buildCompileCore_();
   toast_('최종취합 갱신: ' + made.join(', '), APP.MENU);
 }
@@ -9547,7 +10133,7 @@ function compileChecked(opt) {
   var cModel = colOf_(s, APP.HEAD_ROW, '모델');
   var cAi = colOf_(s, APP.HEAD_ROW, 'AI 압축결과');
   var cValid = colOf_(s, APP.HEAD_ROW, '검증');
-  if (!cChk || !cMerge) { ui_().alert(APP.MENU, '시트 구조가 올바르지 않습니다. 메뉴 ⑥으로 다시 생성하세요.', ui_().ButtonSet.OK); return; }
+  if (!cChk || !cMerge) { ui_().alert(APP.MENU, '이 취합 시트의 머리글이 바뀌어 읽을 수 없습니다. 메뉴 [⑥⑦ 시트에서 쓰기] > [⑦ 최종취합 시트 생성/갱신]을 눌러 다시 만드세요([최종본]에 적은 글은 그대로 둡니다).', ui_().ButtonSet.OK); return; }
 
   var last = s.getLastRow();
   var cnt = last - APP.DATA_ROW + 1;
@@ -9555,12 +10141,12 @@ function compileChecked(opt) {
   var chk = s.getRange(APP.DATA_ROW, cChk, cnt, 1).getValues();
   var rows = [];
   for (var i = 0; i < cnt; i++) if (chk[i][0] === true) rows.push(APP.DATA_ROW + i);
-  if (!rows.length) { toast_('[압축] 체크된 행이 없습니다.'); return; }
+  if (!rows.length) { toast_('[압축]이 체크된 학생이 없습니다. 합본이 한도를 넘는 학생 줄의 [압축] 칸을 체크한 뒤 다시 눌러 주세요.'); return; }
 
   var defModel = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
   var system = compressPrompt_(rec);
   var okN = 0, errN = 0, leftN = 0, backupN = 0, t0 = Date.now();
-  var has = keyStatus_(), anyApi = has.gemini || has.openai || has.anthropic, manualJobs = [];
+  var has = keyStatus_(), anyApi = anyKey_(has), manualJobs = [];
   usageReset_();
 
   for (var k = 0; k < rows.length; k++) {
@@ -9624,7 +10210,8 @@ function compressPrompt_(rec) {
          (rec ? rec.name : '특기사항') + '으로 통합한다.\n' +
          '- 내용을 새로 지어내지 않는다. 주어진 문장에 있는 사실만 쓴다.\n' +
          '- 같은 역량이 반복되면 한 번으로 합치고, 서로 다른 장면은 살린다.\n' +
-         '- 시간 순서 또는 역량의 흐름에 따라 자연스럽게 잇는다.');
+         '- 시간 순서 또는 역량의 흐름에 따라 자연스럽게 잇는다.\n' +
+         '- 장면마다 계기 → 직접 한 과정 → 이어간 탐구 → 결론의 흐름을 살리고, 문장은 한 일이나 결론으로 끝맺는다.');
   if (com.WRITING_RULES) P.push('# 서술 규칙\n' + com.WRITING_RULES);
   if (com.NEIS_RULES) P.push('# 학생부 기재 금지사항\n' + com.NEIS_RULES);
   P.push('# 분량\n- 반드시 ' + chars + '자(' + bytes + '바이트) 이내로 작성한다.\n' +
@@ -9847,7 +10434,7 @@ function importReportFolder() {
     (r.kept ? '\n이미 [보고서]에 내용이 있어 건너뛴 학생: ' + r.kept + '명' : '') +
     (r.unmatched.length ? '\n\n누구 것인지 모르는 파일 ' + r.unmatched.length + '개:\n· ' + r.unmatched.slice(0, 12).join('\n· ') + (r.unmatched.length > 12 ? '\n…' : '') : '') +
     (r.noFile ? '\n\n파일을 못 찾은 학생: ' + r.noFile + '명' : '') +
-    '\n\n다음: 학생 줄을 고르고 메뉴 ⑥ 생성 더 보기 > [📄 보고서 요점 뽑기].', ui_().ButtonSet.OK);
+    '\n\n다음: 학생 줄을 고르고 메뉴 [④⑤ 활동 · 예시 · 보고서 · 설문지] > [📄 보고서 요점 뽑기].', ui_().ButtonSet.OK);
 }
 
 function importReportFolderCore_(sheet, url) {

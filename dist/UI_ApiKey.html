@@ -84,7 +84,7 @@
   .keys a { margin-left:4px; }
   .pbadge { font-size:10.5px; font-weight:600; border-radius:4px; padding:2px 6px; width:54px; text-align:center; flex:none; }
   .p-gemini { background:#e3edf9; color:#1f4f8f; } .p-openai { background:#e6f2ec; color:#1f5f3f; }
-  .p-anthropic { background:#f6ece3; color:#7a4a1f; } .p-none { background:#f1f1f1; color:#888; }
+  .p-anthropic { background:#f6ece3; color:#7a4a1f; } .p-exaone { background:#fbe6ec; color:#8f1f45; } .p-none { background:#f1f1f1; color:#888; }
   .line2 { display:flex; gap:8px; align-items:center; margin:6px 0 4px; font-size:12.5px; }
   .line2 select { padding:5px 7px; }
   label.inline { display:flex; gap:6px; align-items:center; font-weight:400; font-size:12.5px; margin:6px 0 2px; }
@@ -133,6 +133,10 @@
   <label>Anthropic(Claude) API 키 <span id="has-anthropic"></span></label>
   <input class="full" type="password" id="k-anthropic" placeholder="sk-ant-...">
   <div class="hint"><a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a> → API keys (선불 충전 필요)</div>
+
+  <label>LG EXAONE API 키 <span id="has-exaone"></span></label>
+  <input class="full" type="password" id="k-exaone" placeholder="EXAONE API 키">
+  <div class="hint"><a href="https://docs.exaone.ai" target="_blank">docs.exaone.ai</a> → API Key 발급하기. <b>무료</b>입니다(1초에 1번 · 1분에 60번). 글만 읽습니다(PDF · 사진 불가).<br><b>쓰기 전에 꼭</b>: 그 사이트 My profile › 동의 및 알림 관리에서 <b>[학습 이용]을 꺼 두세요</b>. 약관상 비영리로만 쓸 수 있고 타인의 개인정보는 넣지 않아야 합니다 — 이 도구는 이름을 가려 보내지만, 자료 칸에 이름 · 연락처를 적지 마세요.</div>
 
   <div class="actions">
     <button class="primary" id="bSaveKeys">키 저장</button>
@@ -232,6 +236,7 @@
     <li><b>Gemini</b> · <a id="lg" target="_blank">ai.google.dev/gemini-api/docs/models</a> — 각 모델의 <b>Model code</b>를 복사합니다. 내 무료 한도는 <a href="https://aistudio.google.com/rate-limit" target="_blank">AI Studio › Rate limit</a></li>
     <li><b>OpenAI</b> · <a id="lo" target="_blank">platform.openai.com/docs/models</a></li>
     <li><b>Claude</b> · <a id="la" target="_blank">platform.claude.com/docs/en/models/overview</a> — 표의 <b>Claude API ID</b></li>
+    <li><b>EXAONE</b> · <a href="https://docs.exaone.ai/ko/docs/models" target="_blank">docs.exaone.ai/ko/docs/models</a> — <code>k-exaone_v2.5</code></li>
   </ul>
   <div class="hint">
     · 화면에 보이는 "Gemini 3.8 Flash" 같은 표시 이름이 아니라, 영문 소문자로 된 <b>모델 코드</b>(<code>gemini-3.8-flash</code>)를 그대로 적습니다.<br>
@@ -316,22 +321,22 @@ google.script.run.withSuccessHandler(function (s) {
 
 /* ---------- ① 키 */
 function drawKeys() {
-  ['gemini', 'openai', 'anthropic'].forEach(function (p) {
+  ['gemini', 'openai', 'anthropic', 'exaone'].forEach(function (p) {
     var h = S.has[p];
     $('has-' + p).innerHTML = h ? '<span class="saved">· 저장됨</span><button class="link-btn" data-del="' + p + '">지우기</button>' : '';
-    $('k-' + p).placeholder = h ? '(저장된 키 유지 — 바꾸려면 새로 입력)' : { gemini: 'AIza...', openai: 'sk-...', anthropic: 'sk-ant-...' }[p];
+    $('k-' + p).placeholder = h ? '(저장된 키 유지 — 바꾸려면 새로 입력)' : { gemini: 'AIza...', openai: 'sk-...', anthropic: 'sk-ant-...', exaone: 'EXAONE API 키' }[p];
   });
   [].forEach.call(document.querySelectorAll('[data-del]'), function (b) {
-    b.onclick = function () { var o = { gemini: '__KEEP__', openai: '__KEEP__', anthropic: '__KEEP__' }; o[b.dataset.del] = '__DELETE__'; sendKeys(o); };
+    b.onclick = function () { var o = { gemini: '__KEEP__', openai: '__KEEP__', anthropic: '__KEEP__', exaone: '__KEEP__' }; o[b.dataset.del] = '__DELETE__'; sendKeys(o); };
   });
-  $('keyChips').innerHTML = ['gemini', 'openai', 'anthropic'].map(function (p) {
+  $('keyChips').innerHTML = ['gemini', 'openai', 'anthropic', 'exaone'].map(function (p) {
     return '<span class="kc' + (S.has[p] ? ' on' : '') + '">' + label(p) + (S.has[p] ? ' ✓ 키 있음' : ' – 키 없음') + '</span>';
   }).join('') +
   '<span class="kc' + (S.has.subscription ? ' on' : '') + '">Gemini 구독' + (S.has.subscription ? ' ✓ 켜짐' : ' – 꺼짐') + '</span>' +
   '<a href="#" id="toKeys">키 · 구독 바꾸기</a>';
   $('toKeys').onclick = function (e) { e.preventDefault(); showTab('keys'); };
 }
-function hasAnyKey() { return !!(S && (S.has.gemini || S.has.openai || S.has.anthropic)); }
+function hasAnyKey() { return !!(S && (S.has.gemini || S.has.openai || S.has.anthropic || S.has.exaone)); }
 
 /* ---------- 구독 스위치 */
 var PROBE = null;
@@ -372,7 +377,7 @@ function sendKeys(o) {
     var fixed = fixSelections();
     noteFix(fixed);
     drawKeys(); drawRows(); fillDatalist();
-    ['gemini', 'openai', 'anthropic'].forEach(function (p) { $('k-' + p).value = ''; });
+    ['gemini', 'openai', 'anthropic', 'exaone'].forEach(function (p) { $('k-' + p).value = ''; });
     say('mKeys', esc(r.message) + ' 이 회사 모델들을 자동으로 확인합니다.' + (fixed ? '<br>' + esc(fixed) : ''), 'ok');
     // 새로 넣은(바꾼) 키의 모델은 바로 다시 확인
     var n = 0;
@@ -381,7 +386,7 @@ function sendKeys(o) {
     scheduleSave();
   }).withFailureHandler(function (e) { say('mKeys', e.message, 'err'); }).saveKeys(o);
 }
-$('bSaveKeys').onclick = function () { sendKeys({ gemini: kv('gemini'), openai: kv('openai'), anthropic: kv('anthropic') }); };
+$('bSaveKeys').onclick = function () { sendKeys({ gemini: kv('gemini'), openai: kv('openai'), anthropic: kv('anthropic'), exaone: kv('exaone') }); };
 
 /* ---------- ② 모델 */
 function guess(m) {
@@ -389,10 +394,11 @@ function guess(m) {
   if (/^(gemini|learnlm)/.test(m)) return 'gemini';
   if (/^claude/.test(m)) return 'anthropic';
   if (/^(gpt|chatgpt|o\d|ft:)/.test(m)) return 'openai';
+  if (/^(k-)?exaone/.test(m)) return 'exaone';
   return '';
 }
-function provOf(r) { return { 'Gemini': 'gemini', 'OpenAI': 'openai', 'Claude': 'anthropic' }[r.company] || guess(r.model); }
-function label(p) { return { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude' }[p] || '회사 모름'; }
+function provOf(r) { return { 'Gemini': 'gemini', 'OpenAI': 'openai', 'Claude': 'anthropic', 'EXAONE': 'exaone' }[r.company] || guess(r.model); }
+function label(p) { return { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude', exaone: 'EXAONE' }[p] || '회사 모름'; }
 
 /* ---------- 내가 키를 넣은 회사의 모델과 켜 둔 구독만 */
 function usable(r) { var p = provOf(r); return !!(p && S && S.has[p]); }
@@ -468,7 +474,7 @@ function drawRows() {
       '<span class="pbadge p-' + (p || 'none') + '" title="회사">' + (p ? label(p) : '?') + '</span>' +
       '<input class="name" list="dl" data-f="model" value="' + esc(r.model) + '" placeholder="모델명 (예: gemini-flash-latest)">' +
       '<input class="level" data-f="level" value="' + esc(r.level) + '" placeholder="수준">' +
-      '<select data-f="company" title="회사 — 보통은 자동">' + ['자동', 'Gemini', 'OpenAI', 'Claude'].map(function (c) {
+      '<select data-f="company" title="회사 — 보통은 자동">' + ['자동', 'Gemini', 'OpenAI', 'Claude', 'EXAONE'].map(function (c) {
         return '<option' + (r.company === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select>' +
       radio('act', '활동', ACT) + radio('cmp', '합본', CMP) +
       '<button class="del" title="목록에서 빼기" data-act="del">✕</button></div>' +

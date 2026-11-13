@@ -135,9 +135,9 @@ t('파일 열 때 저절로 열기 — 설치형 열기 트리거 하나만, 끄
   eq(B.homeSetAutoOpen(false).autoOpen, false);
   eq(B.__g.__triggers.length, 0);
 });
-t('메뉴 맨 위에 🧭 작업판 · 도움말에 간단히 보기 / 모든 시트 보기', () => {
+t('메뉴에 🧭 작업판(시트에서 쓰기 묶음) · 도움말에 간단히 보기 / 모든 시트 보기', () => {
   const src = fs.readFileSync(path.join(dir, '30_Setup.gs'), 'utf8');
-  ok(/m\.addItem\('🧭 작업판[^']*', 'openHome'\)/.test(src));
+  ok(/\.addItem\('🧭 작업판[^']*', 'openHome'\)/.test(src));
   ok(/'viewSimple'/.test(src) && /'viewAll'/.test(src));
 });
 t('작업판 창: charset · [hidden] · 학생 칸을 다루는 버튼은 활동 시트에서만', () => {

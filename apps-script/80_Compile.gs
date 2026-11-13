@@ -27,9 +27,9 @@ function compileLimitOf_(sheetName) {
 /** 메뉴: 최종취합 시트 생성/갱신 */
 function buildCompile() {
   var acts = getActivities_();
-  if (!acts.length) { ui_().alert(APP.MENU, '먼저 활동을 만드세요.', ui_().ButtonSet.OK); return; }
+  if (!acts.length) { ui_().alert(APP.MENU, '먼저 활동을 만드세요. 🖥️ 작성실의 [＋ 활동], 또는 메뉴 [④⑤ 활동 · 예시 · 보고서 · 설문지] > [④ 활동 만들기].', ui_().ButtonSet.OK); return; }
   var roster = getRoster_();
-  if (!roster.length) { ui_().alert(APP.MENU, '[👤 학생명단]을 먼저 입력하세요.', ui_().ButtonSet.OK); return; }
+  if (!roster.length) { ui_().alert(APP.MENU, '학생 명단이 비어 있습니다. 🖥️ 작성실의 [⚙ 설정] > 학생 명단, 또는 메뉴 [①②③ 준비] > [③ 학생 명단 불러오기]로 먼저 넣어 주세요.', ui_().ButtonSet.OK); return; }
   var made = buildCompileCore_();
   toast_('최종취합 갱신: ' + made.join(', '), APP.MENU);
 }
@@ -197,7 +197,7 @@ function compileChecked(opt) {
   var cModel = colOf_(s, APP.HEAD_ROW, '모델');
   var cAi = colOf_(s, APP.HEAD_ROW, 'AI 압축결과');
   var cValid = colOf_(s, APP.HEAD_ROW, '검증');
-  if (!cChk || !cMerge) { ui_().alert(APP.MENU, '시트 구조가 올바르지 않습니다. 메뉴 ⑥으로 다시 생성하세요.', ui_().ButtonSet.OK); return; }
+  if (!cChk || !cMerge) { ui_().alert(APP.MENU, '이 취합 시트의 머리글이 바뀌어 읽을 수 없습니다. 메뉴 [⑥⑦ 시트에서 쓰기] > [⑦ 최종취합 시트 생성/갱신]을 눌러 다시 만드세요([최종본]에 적은 글은 그대로 둡니다).', ui_().ButtonSet.OK); return; }
 
   var last = s.getLastRow();
   var cnt = last - APP.DATA_ROW + 1;
@@ -205,12 +205,12 @@ function compileChecked(opt) {
   var chk = s.getRange(APP.DATA_ROW, cChk, cnt, 1).getValues();
   var rows = [];
   for (var i = 0; i < cnt; i++) if (chk[i][0] === true) rows.push(APP.DATA_ROW + i);
-  if (!rows.length) { toast_('[압축] 체크된 행이 없습니다.'); return; }
+  if (!rows.length) { toast_('[압축]이 체크된 학생이 없습니다. 합본이 한도를 넘는 학생 줄의 [압축] 칸을 체크한 뒤 다시 눌러 주세요.'); return; }
 
   var defModel = normModel(cfg_('합본용 모델', DEFAULT_MODEL)) || DEFAULT_MODEL;
   var system = compressPrompt_(rec);
   var okN = 0, errN = 0, leftN = 0, backupN = 0, t0 = Date.now();
-  var has = keyStatus_(), anyApi = has.gemini || has.openai || has.anthropic, manualJobs = [];
+  var has = keyStatus_(), anyApi = anyKey_(has), manualJobs = [];
   usageReset_();
 
   for (var k = 0; k < rows.length; k++) {
@@ -274,7 +274,8 @@ function compressPrompt_(rec) {
          (rec ? rec.name : '특기사항') + '으로 통합한다.\n' +
          '- 내용을 새로 지어내지 않는다. 주어진 문장에 있는 사실만 쓴다.\n' +
          '- 같은 역량이 반복되면 한 번으로 합치고, 서로 다른 장면은 살린다.\n' +
-         '- 시간 순서 또는 역량의 흐름에 따라 자연스럽게 잇는다.');
+         '- 시간 순서 또는 역량의 흐름에 따라 자연스럽게 잇는다.\n' +
+         '- 장면마다 계기 → 직접 한 과정 → 이어간 탐구 → 결론의 흐름을 살리고, 문장은 한 일이나 결론으로 끝맺는다.');
   if (com.WRITING_RULES) P.push('# 서술 규칙\n' + com.WRITING_RULES);
   if (com.NEIS_RULES) P.push('# 학생부 기재 금지사항\n' + com.NEIS_RULES);
   P.push('# 분량\n- 반드시 ' + chars + '자(' + bytes + '바이트) 이내로 작성한다.\n' +
